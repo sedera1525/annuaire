@@ -4,3 +4,4 @@ duckdb>=0.10.0
 python-multipart>=0.0.9
 openai>=1.30.0
 python-dotenv>=1.0.0
+slowapi>=0.1.9

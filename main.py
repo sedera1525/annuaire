@@ -2,12 +2,7 @@
 Societies — Visualiseur de sociétés (données Google Business)
 """
 
-from fastapi import FastAPI, HTTPException, Query, Body, Request, Response, Form
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, List
-import duckdb
+import logging
 import os
 import io
 import csv as csv_mod
@@ -18,14 +13,75 @@ import sqlite3
 import hashlib
 import secrets
 import asyncio
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from dotenv import load_dotenv
 from datetime import datetime
+from typing import Optional, List
+
+from fastapi import FastAPI, HTTPException, Body, Request, Response, Form
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import duckdb
+from dotenv import load_dotenv
+
+from models import (
+    GenerateRequest, BatchRequest, AutoStartRequest,
+    UpdateFicheRequest, LicenseVerifyRequest,
+)
 
 load_dotenv()
 
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
 MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin",
              "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+
+BASE_DIR    = Path(__file__).parent
+CSV_PATH    = str(BASE_DIR / "0.csv")
+DB_PATH     = str(BASE_DIR / "societies.duckdb")
+FICHES_DB   = str(BASE_DIR / "fiches.db")
+STATIC_DIR  = BASE_DIR / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL   = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT", "30"))
+
+APP_USERNAME = os.getenv("APP_USERNAME", "admin")
+APP_PASSWORD = os.getenv("APP_PASSWORD", "changeme123")
+SECRET_KEY   = os.getenv("SECRET_KEY", secrets.token_hex(32))
+COOKIE_NAME  = "societies_session"
+
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:8090,http://localhost:8085").split(",")
+    if o.strip()
+]
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+logger = logging.getLogger("societies")
+logger.setLevel(logging.INFO)
+
+_fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+_fh  = RotatingFileHandler(LOG_DIR / "societies.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+_fh.setFormatter(_fmt)
+_ch  = logging.StreamHandler()
+_ch.setFormatter(_fmt)
+logger.addHandler(_fh)
+logger.addHandler(_ch)
+
 
 def format_date_fr(date_str: str) -> str:
     try:
@@ -34,23 +90,13 @@ def format_date_fr(date_str: str) -> str:
     except Exception:
         return ""
 
-BASE_DIR = Path(__file__).parent
-CSV_PATH = str(BASE_DIR / "0.csv")
-DB_PATH = str(BASE_DIR / "societies.duckdb")
-FICHES_DB = str(BASE_DIR / "fiches.db")
-STATIC_DIR = BASE_DIR / "static"
-STATIC_DIR.mkdir(exist_ok=True)
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+# =============================================================================
+# AUTH
+# =============================================================================
 
-APP_USERNAME = os.getenv("APP_USERNAME", "admin")
-APP_PASSWORD = os.getenv("APP_PASSWORD", "changeme123")
-SECRET_KEY   = os.getenv("SECRET_KEY", secrets.token_hex(32))
-COOKIE_NAME  = "societies_session"
-
-# Sessions en mémoire : token → True
-_sessions: dict = {}
+_sessions: dict      = {}
+_sessions_lock       = threading.Lock()
 
 
 def make_token() -> str:
@@ -63,19 +109,51 @@ def check_credentials(username: str, password: str) -> bool:
     return ok_user and ok_pass
 
 
+def add_session(token: str) -> None:
+    with _sessions_lock:
+        _sessions[token] = True
+
+
+def remove_session(token: str) -> None:
+    with _sessions_lock:
+        _sessions.pop(token, None)
+
+
 def is_authenticated(request: Request) -> bool:
     token = request.cookies.get(COOKIE_NAME)
-    return bool(token and _sessions.get(token))
+    if not token:
+        return False
+    with _sessions_lock:
+        return bool(_sessions.get(token))
 
-app = FastAPI(title="Societies", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# =============================================================================
+# APP + RATE LIMITER
+# =============================================================================
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+app     = FastAPI(title="Societies", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+# =============================================================================
+# GLOBAL STATE
+# =============================================================================
 
 db_state = {
-    "ready": False,
+    "ready":       False,
     "initializing": False,
-    "message": "En attente d'initialisation...",
-    "rows": 0,
-    "progress": 0,
+    "message":     "En attente d'initialisation...",
+    "rows":        0,
+    "progress":    0,
 }
 
 auto_state = {
@@ -90,25 +168,28 @@ auto_state = {
     "started_at":    None,
     "last_activity": None,
 }
-_auto_task: asyncio.Task = None
+_auto_task:         asyncio.Task       = None
+_head_pause_events: list[asyncio.Event] = []
 
 
 # =============================================================================
-# INITIALISATION DB
+# INITIALISATION DB — DuckDB
 # =============================================================================
+
 def init_db():
     global db_state
     db_state["initializing"] = True
-    db_state["message"] = "Chargement du fichier CSV dans la base de données..."
-    db_state["progress"] = 5
+    db_state["message"]      = "Chargement du fichier CSV dans la base de données..."
+    db_state["progress"]     = 5
+    logger.info("Initialisation DuckDB démarrée")
     try:
-        conn = duckdb.connect(DB_PATH)
+        conn    = duckdb.connect(DB_PATH)
         existing = conn.execute(
             "SELECT COUNT(*) FROM information_schema.tables WHERE table_name='companies'"
         ).fetchone()[0]
 
         if not existing:
-            db_state["message"] = "Création de la table (opération unique ~3 min)..."
+            db_state["message"]  = "Création de la table (opération unique ~3 min)..."
             db_state["progress"] = 15
             conn.execute(f"""
                 CREATE TABLE companies AS
@@ -144,35 +225,28 @@ def init_db():
                 WHERE title IS NOT NULL AND title != ''
             """)
             db_state["progress"] = 70
-            db_state["message"] = "Création des index..."
-            conn.execute("CREATE INDEX idx_city ON companies(city)")
-            conn.execute("CREATE INDEX idx_zip ON companies(zip_code)")
+            db_state["message"]  = "Création des index..."
+            conn.execute("CREATE INDEX idx_city     ON companies(city)")
+            conn.execute("CREATE INDEX idx_zip      ON companies(zip_code)")
             conn.execute("CREATE INDEX idx_category ON companies(category)")
             db_state["progress"] = 90
 
         rows = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
-        db_state["rows"] = rows
         conn.close()
-        db_state["ready"] = True
-        db_state["progress"] = 100
-        db_state["message"] = f"Base prête — {rows:,} entreprises"
+        db_state.update({"ready": True, "rows": rows, "progress": 100,
+                         "message": f"Base prête — {rows:,} entreprises"})
+        logger.info(f"DuckDB prête — {rows:,} entreprises")
     except Exception as e:
-        db_state["message"] = f"Erreur: {e}"
-        db_state["ready"] = False
-        db_state["progress"] = 0
-    db_state["initializing"] = False
+        logger.error(f"Erreur init DuckDB : {e}")
+        db_state.update({"message": f"Erreur: {e}", "ready": False, "progress": 0})
+    finally:
+        db_state["initializing"] = False
 
 
 def get_conn():
     if db_state["ready"] and os.path.exists(DB_PATH):
         return duckdb.connect(DB_PATH, read_only=True)
     raise HTTPException(status_code=503, detail="Base de données non disponible")
-
-
-def sanitize(s) -> str:
-    if not s:
-        return ""
-    return str(s).replace("'", "''").replace(";", "").replace("--", "")[:150]
 
 
 @app.on_event("startup")
@@ -184,6 +258,7 @@ async def startup():
             conn.close()
             db_state.update({"ready": True, "rows": rows, "progress": 100,
                              "message": f"Base prête — {rows:,} entreprises"})
+            logger.info(f"DuckDB déjà disponible — {rows:,} entreprises")
             return
         except Exception:
             pass
@@ -191,8 +266,249 @@ async def startup():
 
 
 # =============================================================================
-# AUTH
+# FICHES DB — SQLite
 # =============================================================================
+
+def init_fiches_db():
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fiches (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_title     TEXT UNIQUE NOT NULL,
+                status            TEXT DEFAULT 'pending',
+                qa_answered       TEXT,
+                qa_open           TEXT,
+                model             TEXT,
+                completion_tokens INTEGER,
+                generated_at      TEXT,
+                error             TEXT,
+                deleted_at        TEXT
+            )
+        """)
+        for col in ["qa_answered TEXT", "qa_open TEXT", "deleted_at TEXT", "intro_text TEXT"]:
+            try:
+                conn.execute(f"ALTER TABLE fiches ADD COLUMN {col}")
+            except Exception:
+                pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+init_fiches_db()
+
+
+def get_setting(key: str) -> str | None:
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key=?", [key]).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def set_setting(key: str, value: str):
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)", [key, value])
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _hash_key(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def get_fiche(title: str) -> dict | None:
+    conn = sqlite3.connect(FICHES_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM fiches WHERE company_title = ?", [title]).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def save_fiche(title: str, status: str, qa_answered: str = None,
+               qa_open: str = None, intro_text: str = None, model: str = None,
+               completion_tokens: int = 0, error: str = None):
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        conn.execute("BEGIN")
+        conn.execute("""
+            INSERT INTO fiches
+                (company_title, status, qa_answered, qa_open, intro_text, model, completion_tokens, generated_at, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
+            ON CONFLICT(company_title) DO UPDATE SET
+                status=excluded.status,
+                qa_answered=excluded.qa_answered,
+                qa_open=excluded.qa_open,
+                intro_text=excluded.intro_text,
+                model=excluded.model,
+                completion_tokens=excluded.completion_tokens,
+                generated_at=excluded.generated_at,
+                error=excluded.error
+        """, [title, status, qa_answered, qa_open, intro_text, model, completion_tokens, error])
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"save_fiche error for '{title}': {e}")
+        raise
+    finally:
+        conn.close()
+
+
+# =============================================================================
+# GÉNÉRATION OPENAI
+# =============================================================================
+
+OPEN_QUESTIONS_TEMPLATE = [
+    "Comment fonctionne réellement le service client de {nom} en cas de problème ?",
+    "Les clients fidèles de {nom} recommandent-ils vraiment leurs services ?",
+    "Les tarifs de {nom} sont-ils transparents ?",
+    "Les délais annoncés par {nom} sont-ils respectés ?",
+    "Le rapport qualité-prix de {nom} est-il intéressant ?",
+    "{nom} respecte-t-elle ses délais annoncés ?",
+]
+
+GENERATION_PROMPT = """Tu es un analyste de réputation spécialisé dans les entreprises françaises, au style journalistique.
+
+À partir des données ci-dessous, génère :
+1. Un texte introductif de EXACTEMENT 3 phrases sur ce que pensent les clients de cet établissement (avis, réputation, satisfaction globale).
+2. Les réponses aux 3 questions d'analyse (EXACTEMENT 2 phrases par réponse).
+
+Règles strictes :
+- Ne cite JAMAIS "{nom}" dans l'intro ni dans les réponses. Utilise "cet établissement", "cette enseigne", "ce prestataire", etc.
+- Style journalistique : factuel, nuancé, appuyé sur la note et le nombre d'avis.
+- EXACTEMENT 2 phrases par réponse (ni plus, ni moins).
+- EXACTEMENT 3 phrases pour l'intro.
+
+Entreprise : {nom}
+Secteur : {categorie}
+Ville : {ville} ({code_postal})
+Note clients : {note}
+
+Réponds UNIQUEMENT avec ce JSON valide, sans texte avant ou après :
+{{
+  "intro": "Phrase 1 sur la réputation générale. Phrase 2 nuancée. Phrase 3 de conclusion.",
+  "qa_answered": [
+    {{"q": "Que pensent réellement les clients de {nom} ?", "r": "Phrase 1. Phrase 2."}},
+    {{"q": "{nom} est-elle fiable ?", "r": "Phrase 1. Phrase 2."}},
+    {{"q": "Qu'est-ce qui surprend le plus les clients de {nom} ?", "r": "Phrase 1. Phrase 2."}}
+  ]
+}}"""
+
+
+async def call_openai(prompt: str) -> dict:
+    if not OPENAI_API_KEY:
+        raise ValueError("Clé API OpenAI manquante. Configurez OPENAI_API_KEY dans .env")
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT)
+    response = await client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=2000,
+    )
+    msg = response.choices[0].message.content.strip()
+    return {
+        "text":             msg,
+        "model":            response.model,
+        "prompt_tokens":    response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+    }
+
+
+def _sse(event_type: str, **kwargs) -> str:
+    return f"data: {json.dumps({'type': event_type, **kwargs}, ensure_ascii=False)}\n\n"
+
+
+async def stream_generate(title: str, company_data: dict):
+    """Async generator yielding SSE events for a single generation."""
+    if not OPENAI_API_KEY:
+        yield _sse("error", message="Clé API OpenAI manquante dans .env")
+        return
+
+    yield _sse("stage", message="Préparation du prompt...", percent=5)
+    prompt = GENERATION_PROMPT.format(
+        nom=title,
+        categorie=company_data.get("category") or "Non renseigné",
+        ville=company_data.get("city") or "Non renseignée",
+        code_postal=company_data.get("zip_code") or "",
+        note=f"{company_data.get('rating_value') or '?'}/5 ({company_data.get('rating_votes') or 0} avis)",
+    )
+    save_fiche(title, "generating")
+    yield _sse("stage", message="Connexion à OpenAI...", percent=10)
+
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT)
+        stream = await client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000,
+            stream=True,
+        )
+        yield _sse("stage", message="Génération en cours...", percent=15)
+
+        full_text      = ""
+        token_count    = 0
+        ESTIMATED_TOKENS = 900
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                full_text   += delta
+                token_count += 1
+                percent = min(15 + int(token_count / ESTIMATED_TOKENS * 70), 85)
+                yield _sse("token", token=delta, count=token_count, percent=percent)
+
+        yield _sse("stage", message="Analyse du JSON...", percent=88)
+        parsed = json.loads(full_text.strip())
+        if not isinstance(parsed, dict) or "qa_answered" not in parsed:
+            raise ValueError("Réponse inattendue (format JSON invalide)")
+
+        qa_answered    = parsed["qa_answered"]
+        intro          = parsed.get("intro", "")
+        open_questions = [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE]
+        date_fr        = format_date_fr(datetime.now().strftime("%Y-%m-%d"))
+
+        yield _sse("stage", message="Sauvegarde...", percent=95)
+        save_fiche(title, "done",
+                   qa_answered=json.dumps(qa_answered, ensure_ascii=False),
+                   intro_text=intro,
+                   model=OPENAI_MODEL,
+                   completion_tokens=token_count)
+
+        yield _sse("done",
+                   qa_answered=qa_answered,
+                   intro_text=intro,
+                   open_questions=open_questions,
+                   date_fr=date_fr,
+                   model=OPENAI_MODEL,
+                   completion_tokens=token_count,
+                   percent=100)
+        logger.info(f"Fiche générée (stream) : {title} — {token_count} tokens")
+
+    except Exception as e:
+        logger.error(f"stream_generate error for '{title}': {e}")
+        save_fiche(title, "error", error=str(e))
+        yield _sse("error", message=str(e))
+
+
+# =============================================================================
+# AUTH HTML + ENDPOINTS
+# =============================================================================
+
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -239,22 +555,28 @@ def login_page(request: Request):
 
 
 @app.post("/login")
-async def login(request: Request, response: Response,
+@limiter.limit("10/minute")
+async def login(request: Request,
                 username: str = Form(...), password: str = Form(...)):
     if check_credentials(username, password):
         token = make_token()
-        _sessions[token] = True
+        add_session(token)
+        logger.info(f"Connexion réussie : {username}")
         resp = RedirectResponse("/", status_code=302)
         resp.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax", max_age=86400 * 7)
         return resp
-    return HTMLResponse(LOGIN_HTML.replace("{error}", '<div class="error">Identifiant ou mot de passe incorrect.</div>'), status_code=401)
+    logger.warning(f"Tentative de connexion échouée : {username}")
+    return HTMLResponse(
+        LOGIN_HTML.replace("{error}", '<div class="error">Identifiant ou mot de passe incorrect.</div>'),
+        status_code=401,
+    )
 
 
 @app.get("/logout")
 def logout(request: Request):
     token = request.cookies.get(COOKIE_NAME)
     if token:
-        _sessions.pop(token, None)
+        remove_session(token)
     resp = RedirectResponse("/login", status_code=302)
     resp.delete_cookie(COOKIE_NAME)
     return resp
@@ -263,249 +585,25 @@ def logout(request: Request):
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    # Routes publiques (login, assets, vérification licence depuis WordPress)
     if path in ("/login", "/api/license/verify") or path.startswith("/static/"):
         return await call_next(request)
-    # POST /login
     if path == "/login" and request.method == "POST":
         return await call_next(request)
-    # Toutes les autres routes nécessitent l'auth
     if not is_authenticated(request):
         if path.startswith("/api/"):
-            return Response(content='{"detail":"Non authentifié"}', status_code=401, media_type="application/json")
+            return Response(
+                content='{"detail":"Non authentifié"}',
+                status_code=401,
+                media_type="application/json",
+            )
         return RedirectResponse("/login", status_code=302)
     return await call_next(request)
 
 
 # =============================================================================
-# FICHES DB (SQLite — stockage des Q&R générées)
+# ENDPOINTS — STATUS / SEARCH
 # =============================================================================
-def init_fiches_db():
-    conn = sqlite3.connect(FICHES_DB)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS fiches (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_title TEXT UNIQUE NOT NULL,
-            status TEXT DEFAULT 'pending',
-            qa_answered TEXT,
-            qa_open TEXT,
-            model TEXT,
-            completion_tokens INTEGER,
-            generated_at TEXT,
-            error TEXT,
-            deleted_at TEXT
-        )
-    """)
-    # Migrations
-    for col in ["qa_answered TEXT", "qa_open TEXT", "deleted_at TEXT", "intro_text TEXT"]:
-        try:
-            conn.execute(f"ALTER TABLE fiches ADD COLUMN {col}")
-        except Exception:
-            pass
-    # Table settings (licence, config)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS settings (
-            key   TEXT PRIMARY KEY,
-            value TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
 
-init_fiches_db()
-
-
-# ── Helpers settings ──────────────────────────────────────────────────────────
-def get_setting(key: str) -> str | None:
-    conn = sqlite3.connect(FICHES_DB)
-    row = conn.execute("SELECT value FROM settings WHERE key=?", [key]).fetchone()
-    conn.close()
-    return row[0] if row else None
-
-def set_setting(key: str, value: str):
-    conn = sqlite3.connect(FICHES_DB)
-    conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)", [key, value])
-    conn.commit()
-    conn.close()
-
-def _hash_key(raw: str) -> str:
-    """SHA-256 non-réversible d'une clé de licence."""
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def get_fiche(title: str) -> dict | None:
-    conn = sqlite3.connect(FICHES_DB)
-    conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM fiches WHERE company_title = ?", [title]).fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-
-def save_fiche(title: str, status: str, qa_answered: str = None,
-               qa_open: str = None, intro_text: str = None, model: str = None,
-               completion_tokens: int = 0, error: str = None):
-    conn = sqlite3.connect(FICHES_DB)
-    conn.execute("""
-        INSERT INTO fiches (company_title, status, qa_answered, qa_open, intro_text, model, completion_tokens, generated_at, error)
-        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
-        ON CONFLICT(company_title) DO UPDATE SET
-            status=excluded.status,
-            qa_answered=excluded.qa_answered,
-            qa_open=excluded.qa_open,
-            intro_text=excluded.intro_text,
-            model=excluded.model,
-            completion_tokens=excluded.completion_tokens,
-            generated_at=excluded.generated_at,
-            error=excluded.error
-    """, [title, status, qa_answered, qa_open, intro_text, model, completion_tokens, error])
-    conn.commit()
-    conn.close()
-
-
-# =============================================================================
-# GÉNÉRATION OPENAI
-# =============================================================================
-OPEN_QUESTIONS_TEMPLATE = [
-    "Comment fonctionne réellement le service client de {nom} en cas de problème ?",
-    "Les clients fidèles de {nom} recommandent-ils vraiment leurs services ?",
-    "Les tarifs de {nom} sont-ils transparents ?",
-    "Les délais annoncés par {nom} sont-ils respectés ?",
-    "Le rapport qualité-prix de {nom} est-il intéressant ?",
-    "{nom} respecte-t-elle ses délais annoncés ?",
-]
-
-GENERATION_PROMPT = """Tu es un analyste de réputation spécialisé dans les entreprises françaises, au style journalistique.
-
-À partir des données ci-dessous, génère :
-1. Un texte introductif de EXACTEMENT 3 phrases sur ce que pensent les clients de cet établissement (avis, réputation, satisfaction globale).
-2. Les réponses aux 3 questions d'analyse (EXACTEMENT 2 phrases par réponse).
-
-Règles strictes :
-- Ne cite JAMAIS "{nom}" dans l'intro ni dans les réponses. Utilise "cet établissement", "cette enseigne", "ce prestataire", etc.
-- Style journalistique : factuel, nuancé, appuyé sur la note et le nombre d'avis.
-- EXACTEMENT 2 phrases par réponse (ni plus, ni moins).
-- EXACTEMENT 3 phrases pour l'intro.
-
-Entreprise : {nom}
-Secteur : {categorie}
-Ville : {ville} ({code_postal})
-Note clients : {note}
-
-Réponds UNIQUEMENT avec ce JSON valide, sans texte avant ou après :
-{{
-  "intro": "Phrase 1 sur la réputation générale. Phrase 2 nuancée. Phrase 3 de conclusion.",
-  "qa_answered": [
-    {{"q": "Que pensent réellement les clients de {nom} ?", "r": "Phrase 1. Phrase 2."}},
-    {{"q": "{nom} est-elle fiable ?", "r": "Phrase 1. Phrase 2."}},
-    {{"q": "Qu'est-ce qui surprend le plus les clients de {nom} ?", "r": "Phrase 1. Phrase 2."}}
-  ]
-}}"""
-
-
-async def call_openai(prompt: str) -> dict:
-    if not OPENAI_API_KEY:
-        raise ValueError("Clé API OpenAI manquante. Configurez OPENAI_API_KEY dans .env")
-    from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-    response = await client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-        max_tokens=2000,
-    )
-    msg = response.choices[0].message.content.strip()
-    return {
-        "text": msg,
-        "model": response.model,
-        "prompt_tokens": response.usage.prompt_tokens,
-        "completion_tokens": response.usage.completion_tokens,
-    }
-
-
-def _sse(event_type: str, **kwargs) -> str:
-    return f"data: {json.dumps({'type': event_type, **kwargs}, ensure_ascii=False)}\n\n"
-
-
-async def stream_generate(title: str, company_data: dict):
-    """Async generator yielding SSE events for a single generation."""
-    if not OPENAI_API_KEY:
-        yield _sse("error", message="Clé API OpenAI manquante dans .env")
-        return
-
-    yield _sse("stage", message="Préparation du prompt...", percent=5)
-
-    prompt = GENERATION_PROMPT.format(
-        nom=title,
-        categorie=company_data.get("category") or "Non renseigné",
-        ville=company_data.get("city") or "Non renseignée",
-        code_postal=company_data.get("zip_code") or "",
-        note=f"{company_data.get('rating_value') or '?'}/5 ({company_data.get('rating_votes') or 0} avis)",
-    )
-
-    save_fiche(title, "generating")
-    yield _sse("stage", message="Connexion à OpenAI...", percent=10)
-
-    try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-        stream = await client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=2000,
-            stream=True,
-        )
-
-        yield _sse("stage", message="Génération en cours...", percent=15)
-
-        full_text = ""
-        token_count = 0
-        ESTIMATED_TOKENS = 900
-
-        async for chunk in stream:
-            delta = chunk.choices[0].delta.content or ""
-            if delta:
-                full_text += delta
-                token_count += 1
-                percent = min(15 + int(token_count / ESTIMATED_TOKENS * 70), 85)
-                yield _sse("token", token=delta, count=token_count, percent=percent)
-
-        yield _sse("stage", message="Analyse du JSON...", percent=88)
-
-        parsed = json.loads(full_text.strip())
-        if not isinstance(parsed, dict) or "qa_answered" not in parsed:
-            raise ValueError("Réponse inattendue (format JSON invalide)")
-
-        qa_answered = parsed["qa_answered"]
-        intro = parsed.get("intro", "")
-        open_questions = [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE]
-        date_fr = format_date_fr(datetime.now().strftime("%Y-%m-%d"))
-
-        yield _sse("stage", message="Sauvegarde...", percent=95)
-
-        save_fiche(title, "done",
-                   qa_answered=json.dumps(qa_answered, ensure_ascii=False),
-                   intro_text=intro,
-                   model=OPENAI_MODEL,
-                   completion_tokens=token_count)
-
-        yield _sse("done",
-                   qa_answered=qa_answered,
-                   intro_text=intro,
-                   open_questions=open_questions,
-                   date_fr=date_fr,
-                   model=OPENAI_MODEL,
-                   completion_tokens=token_count,
-                   percent=100)
-
-    except Exception as e:
-        save_fiche(title, "error", error=str(e))
-        yield _sse("error", message=str(e))
-
-
-# =============================================================================
-# ENDPOINTS
-# =============================================================================
 @app.get("/api/status")
 def get_status():
     return db_state
@@ -514,61 +612,73 @@ def get_status():
 @app.get("/api/categories")
 def list_categories():
     conn = get_conn()
-    rows = conn.execute("""
-        SELECT category, COUNT(*) AS cnt
-        FROM companies
-        WHERE category IS NOT NULL AND category != ''
-        GROUP BY category
-        ORDER BY cnt DESC
-        LIMIT 100
-    """).fetchall()
-    conn.close()
-    return [{"category": r[0], "count": r[1]} for r in rows]
+    try:
+        rows = conn.execute("""
+            SELECT category, COUNT(*) AS cnt
+            FROM companies
+            WHERE category IS NOT NULL AND category != ''
+            GROUP BY category
+            ORDER BY cnt DESC
+            LIMIT 100
+        """).fetchall()
+        return [{"category": r[0], "count": r[1]} for r in rows]
+    finally:
+        conn.close()
 
 
 @app.get("/api/cities")
 def list_cities(q: Optional[str] = None):
     conn = get_conn()
-    where = f"AND UPPER(city) LIKE UPPER('%{sanitize(q)}%')" if q else ""
-    rows = conn.execute(f"""
-        SELECT city, COUNT(*) AS cnt
-        FROM companies
-        WHERE city IS NOT NULL AND city != '' {where}
-        GROUP BY city
-        ORDER BY cnt DESC
-        LIMIT 50
-    """).fetchall()
-    conn.close()
-    return [{"city": r[0], "count": r[1]} for r in rows]
+    try:
+        params = []
+        where  = ""
+        if q:
+            where = "AND UPPER(city) LIKE UPPER(?)"
+            params.append(f"%{q[:100]}%")
+        rows = conn.execute(f"""
+            SELECT city, COUNT(*) AS cnt
+            FROM companies
+            WHERE city IS NOT NULL AND city != '' {where}
+            GROUP BY city
+            ORDER BY cnt DESC
+            LIMIT 50
+        """, params).fetchall()
+        return [{"city": r[0], "count": r[1]} for r in rows]
+    finally:
+        conn.close()
 
 
 @app.get("/api/search")
 def search(
-    q: Optional[str] = None,
-    city: Optional[str] = None,
-    zip_code: Optional[str] = None,
-    category: Optional[str] = None,
-    has_phone: Optional[bool] = None,
-    has_website: Optional[bool] = None,
-    no_web_with_email: bool = False,
-    no_web_no_email: bool = False,
-    page: int = 1,
+    q:                Optional[str]  = None,
+    city:             Optional[str]  = None,
+    zip_code:         Optional[str]  = None,
+    category:         Optional[str]  = None,
+    has_phone:        Optional[bool] = None,
+    has_website:      Optional[bool] = None,
+    no_web_with_email: bool          = False,
+    no_web_no_email:   bool          = False,
+    page:    int = 1,
     per_page: int = 50,
     sort_by: str = "rating",
 ):
-    conn = get_conn()
+    conn       = get_conn()
     conditions = []
+    params     = []
 
     if q:
-        sq = sanitize(q)
-        conditions.append(f"(UPPER(title) LIKE UPPER('%{sq}%') OR UPPER(city) LIKE UPPER('%{sq}%') OR UPPER(category) LIKE UPPER('%{sq}%'))")
+        pct = f"%{q[:150]}%"
+        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
+        params.extend([pct, pct, pct])
     if city:
-        conditions.append(f"UPPER(city) LIKE UPPER('%{sanitize(city)}%')")
+        conditions.append("UPPER(city) LIKE UPPER(?)")
+        params.append(f"%{city[:100]}%")
     if zip_code:
-        zp = sanitize(zip_code)
-        conditions.append(f"zip_code LIKE '{zp}%'")
+        conditions.append("zip_code LIKE ?")
+        params.append(f"{zip_code[:10]}%")
     if category:
-        conditions.append(f"UPPER(category) LIKE UPPER('%{sanitize(category)}%')")
+        conditions.append("UPPER(category) LIKE UPPER(?)")
+        params.append(f"%{category[:150]}%")
     if has_phone is True:
         conditions.append("phone != '' AND phone IS NOT NULL")
     if has_phone is False:
@@ -584,22 +694,21 @@ def search(
         conditions.append("(url = '' OR url IS NULL)")
         conditions.append("(contacts NOT LIKE '%\"type\":\"Mail\"%')")
 
-    where = " AND ".join(conditions) if conditions else "1=1"
+    where  = " AND ".join(conditions) if conditions else "1=1"
     offset = (page - 1) * per_page
+    order  = {
+        "rating": "rating_value DESC NULLS LAST, rating_votes DESC NULLS LAST",
+        "votes":  "rating_votes DESC NULLS LAST",
+        "name":   "title ASC",
+        "city":   "city ASC",
+    }.get(sort_by, "rating_value DESC NULLS LAST")
 
     try:
-        total = conn.execute(f"SELECT COUNT(*) FROM companies WHERE {where}").fetchone()[0]
+        total = conn.execute(f"SELECT COUNT(*) FROM companies WHERE {where}", params).fetchone()[0]
     except Exception:
         total = 0
 
-    order = {
-        "rating": "rating_value DESC NULLS LAST, rating_votes DESC NULLS LAST",
-        "votes": "rating_votes DESC NULLS LAST",
-        "name": "title ASC",
-        "city": "city ASC",
-    }.get(sort_by, "rating_value DESC NULLS LAST")
-
-    t0 = time.time()
+    t0   = time.time()
     rows = conn.execute(f"""
         SELECT
             title, category, phone, url, domain,
@@ -610,80 +719,82 @@ def search(
         FROM companies
         WHERE {where}
         ORDER BY {order}
-        LIMIT {per_page} OFFSET {offset}
-    """).fetchall()
-    cols = [d[0] for d in conn.description]
+        LIMIT {int(per_page)} OFFSET {int(offset)}
+    """, params).fetchall()
+    cols    = [d[0] for d in conn.description]
     elapsed = round(time.time() - t0, 3)
     conn.close()
 
     results = []
     for row in rows:
         d = dict(zip(cols, row))
-        # Parse contacts JSON for emails
-        emails = []
         try:
             contacts_data = json.loads(d.get("contacts") or "[]")
-            emails = [c["value"] for c in contacts_data if c.get("type") == "Mail"]
+            d["emails"]   = [c["value"] for c in contacts_data if c.get("type") == "Mail"]
         except Exception:
-            pass
-        d["emails"] = emails
+            d["emails"] = []
         results.append(d)
 
     return {
-        "results": results,
-        "total": total,
-        "page": page,
+        "results":  results,
+        "total":    total,
+        "page":     page,
         "per_page": per_page,
-        "pages": max(1, (total + per_page - 1) // per_page) if total > 0 else 1,
-        "elapsed": elapsed,
+        "pages":    max(1, (total + per_page - 1) // per_page) if total > 0 else 1,
+        "elapsed":  elapsed,
     }
 
 
 @app.get("/api/company/{title:path}")
 def get_company(title: str):
     conn = get_conn()
-    row = conn.execute("""
-        SELECT * FROM companies WHERE title = ? LIMIT 1
-    """, [title]).fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Entreprise non trouvée")
-    cols = [d[0] for d in conn.description]
-    conn.close()
-    d = dict(zip(cols, row))
     try:
-        contacts_data = json.loads(d.get("contacts") or "[]")
-        d["emails"] = [c["value"] for c in contacts_data if c.get("type") == "Mail"]
-        d["phones_extra"] = [c["value"] for c in contacts_data if c.get("type") == "Telephone"]
-    except Exception:
-        d["emails"] = []
-        d["phones_extra"] = []
-    return d
+        row = conn.execute("SELECT * FROM companies WHERE title = ? LIMIT 1", [title]).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Entreprise non trouvée")
+        cols = [d[0] for d in conn.description]
+        d    = dict(zip(cols, row))
+        try:
+            contacts_data    = json.loads(d.get("contacts") or "[]")
+            d["emails"]      = [c["value"] for c in contacts_data if c.get("type") == "Mail"]
+            d["phones_extra"] = [c["value"] for c in contacts_data if c.get("type") == "Telephone"]
+        except Exception:
+            d["emails"]      = []
+            d["phones_extra"] = []
+        return d
+    finally:
+        conn.close()
 
 
 @app.get("/api/export")
 def export(
-    q: Optional[str] = None,
-    city: Optional[str] = None,
-    zip_code: Optional[str] = None,
-    category: Optional[str] = None,
-    has_phone: Optional[bool] = None,
-    has_website: Optional[bool] = None,
-    no_web_with_email: bool = False,
-    no_web_no_email: bool = False,
+    q:                Optional[str]  = None,
+    city:             Optional[str]  = None,
+    zip_code:         Optional[str]  = None,
+    category:         Optional[str]  = None,
+    has_phone:        Optional[bool] = None,
+    has_website:      Optional[bool] = None,
+    no_web_with_email: bool          = False,
+    no_web_no_email:   bool          = False,
     limit: int = 2000,
 ):
-    conn = get_conn()
+    conn       = get_conn()
     conditions = []
+    params     = []
+
     if q:
-        sq = sanitize(q)
-        conditions.append(f"(UPPER(title) LIKE UPPER('%{sq}%') OR UPPER(city) LIKE UPPER('%{sq}%') OR UPPER(category) LIKE UPPER('%{sq}%'))")
+        pct = f"%{q[:150]}%"
+        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
+        params.extend([pct, pct, pct])
     if city:
-        conditions.append(f"UPPER(city) LIKE UPPER('%{sanitize(city)}%')")
+        conditions.append("UPPER(city) LIKE UPPER(?)")
+        params.append(f"%{city[:100]}%")
     if zip_code:
-        conditions.append(f"zip_code LIKE '{sanitize(zip_code)}%'")
+        conditions.append("zip_code LIKE ?")
+        params.append(f"{zip_code[:10]}%")
     if category:
-        conditions.append(f"UPPER(category) LIKE UPPER('%{sanitize(category)}%')")
+        conditions.append("UPPER(category) LIKE UPPER(?)")
+        params.append(f"%{category[:150]}%")
     if has_phone is True:
         conditions.append("phone != '' AND phone IS NOT NULL")
     if has_website is True:
@@ -696,27 +807,25 @@ def export(
         conditions.append("(contacts NOT LIKE '%\"type\":\"Mail\"%')")
 
     where = " AND ".join(conditions) if conditions else "1=1"
-    rows = conn.execute(f"""
+    rows  = conn.execute(f"""
         SELECT title, category, phone, url, addr_street, city, zip_code,
                rating_value, rating_votes, contacts
         FROM companies WHERE {where}
-        LIMIT {min(limit, 5000)}
-    """).fetchall()
+        LIMIT {min(int(limit), 5000)}
+    """, params).fetchall()
     cols = [d[0] for d in conn.description]
     conn.close()
 
     output = io.StringIO()
-    w = csv_mod.writer(output)
+    w      = csv_mod.writer(output)
     w.writerow(["Nom", "Catégorie", "Téléphone", "Site web", "Adresse", "Ville", "Code postal",
                 "Note", "Nb avis", "Emails"])
     for row in rows:
         d = dict(zip(cols, row))
-        emails = ""
         try:
-            contacts_data = json.loads(d.get("contacts") or "[]")
-            emails = "; ".join(c["value"] for c in contacts_data if c.get("type") == "Mail")
+            emails = "; ".join(c["value"] for c in json.loads(d.get("contacts") or "[]") if c.get("type") == "Mail")
         except Exception:
-            pass
+            emails = ""
         w.writerow([d["title"], d["category"], d["phone"], d["url"],
                     d["addr_street"], d["city"], d["zip_code"],
                     d["rating_value"], d["rating_votes"], emails])
@@ -729,28 +838,26 @@ def export(
 
 
 # =============================================================================
-# ENDPOINTS GÉNÉRATION
+# ENDPOINTS — GÉNÉRATION
 # =============================================================================
+
 @app.post("/api/generate/stream")
-async def generate_stream_endpoint(data: dict = Body(...)):
+@limiter.limit("30/minute")
+async def generate_stream_endpoint(request: Request, data: dict = Body(...)):
     """SSE streaming : génère une fiche et envoie les événements en temps réel."""
     title = data.get("title", "").strip()
     if not title:
         raise HTTPException(status_code=400, detail="title requis")
-
     return StreamingResponse(
         stream_generate(title, data),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 @app.get("/api/fiche/{title:path}")
 def get_fiche_endpoint(title: str):
-    """Récupère la fiche générée d'une entreprise (si elle existe)."""
+    """Récupère la fiche générée d'une entreprise."""
     fiche = get_fiche(title)
     if not fiche:
         return {"status": "none"}
@@ -765,18 +872,17 @@ def get_fiche_endpoint(title: str):
         if fiche.get("generated_at"):
             fiche["date_fr"] = format_date_fr(fiche["generated_at"])
         fiche["open_questions"] = [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE]
-    # Enrichir avec les infos de l'entreprise depuis DuckDB
     try:
         company = get_company(title)
         fiche["company_info"] = {
-            "category": company.get("category", ""),
-            "city": company.get("city", ""),
-            "zip_code": company.get("zip_code", ""),
-            "phone": company.get("phone", ""),
-            "url": company.get("url", ""),
+            "category":    company.get("category", ""),
+            "city":        company.get("city", ""),
+            "zip_code":    company.get("zip_code", ""),
+            "phone":       company.get("phone", ""),
+            "url":         company.get("url", ""),
             "rating_value": company.get("rating_value"),
             "rating_votes": company.get("rating_votes"),
-            "emails": company.get("emails", []),
+            "emails":      company.get("emails", []),
         }
     except Exception:
         fiche["company_info"] = None
@@ -784,13 +890,10 @@ def get_fiche_endpoint(title: str):
 
 
 @app.post("/api/generate")
-async def generate_fiche(data: dict = Body(...)):
+@limiter.limit("30/minute")
+async def generate_fiche(request: Request, data: GenerateRequest):
     """Génère les Q&R pour une entreprise via OpenAI."""
-    title = data.get("title", "").strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="title requis")
-
-    # Si déjà générée, retourner directement
+    title    = data.title.strip()
     existing = get_fiche(title)
     if existing and existing["status"] == "done":
         try:
@@ -802,72 +905,52 @@ async def generate_fiche(data: dict = Body(...)):
             pass
         return existing
 
-    # Marquer comme en cours
     save_fiche(title, "generating")
-
     prompt = GENERATION_PROMPT.format(
         nom=title,
-        categorie=data.get("category") or "Non renseigné",
-        ville=data.get("city") or "Non renseignée",
-        code_postal=data.get("zip_code") or "",
-        note=f"{data.get('rating_value') or '?'}/5 ({data.get('rating_votes') or 0} avis)",
+        categorie=data.category or "Non renseigné",
+        ville=data.city or "Non renseignée",
+        code_postal=data.zip_code or "",
+        note=f"{data.rating_value or '?'}/5 ({data.rating_votes or 0} avis)",
     )
-
     try:
         result = await call_openai(prompt)
         parsed = json.loads(result["text"])
         if not isinstance(parsed, dict) or "qa_answered" not in parsed:
             raise ValueError("Format inattendu")
         intro = parsed.get("intro", "")
-        save_fiche(
-            title, "done",
-            qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
-            intro_text=intro,
-            model=result["model"],
-            completion_tokens=result["completion_tokens"],
-        )
+        save_fiche(title, "done",
+                   qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
+                   intro_text=intro,
+                   model=result["model"],
+                   completion_tokens=result["completion_tokens"])
+        logger.info(f"Fiche générée : {title} — {result['completion_tokens']} tokens")
         return {
-            "status": "done",
-            "qa_answered": parsed["qa_answered"],
-            "intro_text": intro,
-            "open_questions": [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE],
-            "date_fr": format_date_fr(datetime.now().strftime("%Y-%m-%d")),
-            "model": result["model"],
+            "status":           "done",
+            "qa_answered":      parsed["qa_answered"],
+            "intro_text":       intro,
+            "open_questions":   [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE],
+            "date_fr":          format_date_fr(datetime.now().strftime("%Y-%m-%d")),
+            "model":            result["model"],
             "completion_tokens": result["completion_tokens"],
         }
     except Exception as e:
+        logger.error(f"generate_fiche error for '{title}': {e}")
         save_fiche(title, "error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/generate/batch")
-async def generate_batch(data: dict = Body(...)):
-    """Génère les Q&R pour une liste d'entreprises en parallèle.
+@limiter.limit("10/minute")
+async def generate_batch(request: Request, data: BatchRequest):
+    """Génère les Q&R pour une liste d'entreprises en parallèle."""
+    companies   = data.companies[:data.max]
+    concurrency = data.concurrency
 
-    Paramètres :
-      - companies   : liste d'objets {title, category, city, zip_code, rating_value}
-      - concurrency : nombre de têtes parallèles (défaut 6, max 20)
-      - max         : nombre max d'entreprises par appel (défaut 50, max 200)
-
-    Exemple :
-      POST /api/generate/batch
-      { "companies": [...], "concurrency": 6 }
-    """
-    companies   = data.get("companies", [])
-    concurrency = min(int(data.get("concurrency", 6)), 20)   # 6 têtes par défaut
-    max_items   = min(int(data.get("max", 50)), 200)
-
-    if not companies:
-        raise HTTPException(status_code=400, detail="Liste d'entreprises requise")
-    companies = companies[:max_items]
-
-    # Séparer les entreprises déjà traitées
-    results      = []
-    to_generate  = []
+    results     = []
+    to_generate = []
     for company in companies:
-        title = company.get("title", "").strip()
-        if not title:
-            continue
+        title    = company.title.strip()
         existing = get_fiche(title)
         if existing and existing["status"] == "done":
             results.append({"title": title, "status": "already_done"})
@@ -875,18 +958,17 @@ async def generate_batch(data: dict = Body(...)):
             save_fiche(title, "generating")
             to_generate.append(company)
 
-    # ── Génération parallèle avec semaphore ────────────────────────────────────
     semaphore = asyncio.Semaphore(concurrency)
 
-    async def _generate_one(company: dict) -> dict:
-        title = company.get("title", "").strip()
+    async def _generate_one(company: "CompanyItem") -> dict:
+        title = company.title.strip()
         async with semaphore:
             prompt = GENERATION_PROMPT.format(
                 nom=title,
-                categorie=company.get("category") or "Non renseigné",
-                ville=company.get("city") or "Non renseignée",
-                code_postal=company.get("zip_code") or "",
-                note=f"{company.get('rating_value') or '?'}/5",
+                categorie=company.category or "Non renseigné",
+                ville=company.city or "Non renseignée",
+                code_postal=company.zip_code or "",
+                note=f"{company.rating_value or '?'}/5",
             )
             try:
                 result = await call_openai(prompt)
@@ -901,6 +983,7 @@ async def generate_batch(data: dict = Body(...)):
                 return {"title": title, "status": "done",
                         "qa_answered_count": len(parsed["qa_answered"])}
             except Exception as e:
+                logger.error(f"batch error for '{title}': {e}")
                 save_fiche(title, "error", error=str(e))
                 return {"title": title, "status": "error", "error": str(e)}
 
@@ -909,13 +992,14 @@ async def generate_batch(data: dict = Body(...)):
 
     done_count  = sum(1 for r in results if r["status"] == "done")
     error_count = sum(1 for r in results if r["status"] == "error")
+    logger.info(f"Batch terminé : {done_count} ok / {error_count} erreurs")
     return {
-        "results":     results,
-        "total":       len(results),
-        "done":        done_count,
-        "errors":      error_count,
+        "results":      results,
+        "total":        len(results),
+        "done":         done_count,
+        "errors":       error_count,
         "already_done": len(results) - done_count - error_count,
-        "concurrency": concurrency,
+        "concurrency":  concurrency,
     }
 
 
@@ -923,26 +1007,20 @@ async def generate_batch(data: dict = Body(...)):
 # AUTO-GÉNÉRATION EN ARRIÈRE-PLAN (avec suivi par tête)
 # =============================================================================
 
-# Pause events : slot_id → asyncio.Event (set=actif, clear=en pause)
-_head_pause_events: list[asyncio.Event] = []
-
-
 async def _auto_generate_loop():
     global auto_state, _head_pause_events
     concurrency = auto_state["concurrency"]
     batch_size  = auto_state["batch_size"]
 
-    # Initialiser les têtes et leurs événements de pause
     _head_pause_events = [asyncio.Event() for _ in range(concurrency)]
     for e in _head_pause_events:
-        e.set()  # toutes actives au départ
+        e.set()
 
     auto_state["heads"] = [
         {"id": i, "status": "idle", "title": "", "done": 0, "errors": 0}
         for i in range(concurrency)
     ]
 
-    # File de slots disponibles (remplace le Semaphore pour avoir l'ID du slot)
     slot_queue: asyncio.Queue = asyncio.Queue()
     for i in range(concurrency):
         await slot_queue.put(i)
@@ -954,7 +1032,6 @@ async def _auto_generate_loop():
             auto_state["heads"][slot]["status"] = "working"
             auto_state["heads"][slot]["title"]  = title
 
-            # Attendre si en pause
             while not _head_pause_events[slot].is_set():
                 auto_state["heads"][slot]["status"] = "paused"
                 await asyncio.sleep(0.3)
@@ -981,6 +1058,7 @@ async def _auto_generate_loop():
         except asyncio.CancelledError:
             raise
         except Exception as e:
+            logger.error(f"auto_generate error for '{title}': {e}")
             save_fiche(title, "error", error=str(e))
             auto_state["heads"][slot]["errors"] += 1
             return "error"
@@ -993,7 +1071,7 @@ async def _auto_generate_loop():
     try:
         while auto_state["running"]:
             try:
-                conn = get_conn()
+                conn  = get_conn()
                 total = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
                 rows  = conn.execute(
                     "SELECT title, category, city, zip_code, rating_value "
@@ -1003,25 +1081,27 @@ async def _auto_generate_loop():
                 conn.close()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as e:
+                logger.warning(f"auto_generate batch fetch error: {e}")
                 await asyncio.sleep(5)
                 continue
 
             auto_state["total"] = total
-
             if not rows:
                 break
 
-            titles = [r[0] for r in rows]
+            titles       = [r[0] for r in rows]
             placeholders = ",".join("?" * len(titles))
             fc = sqlite3.connect(FICHES_DB)
-            already = {row[0] for row in fc.execute(
-                f"SELECT company_title FROM fiches "
-                f"WHERE company_title IN ({placeholders}) "
-                f"AND status IN ('done','generating') AND deleted_at IS NULL",
-                titles
-            ).fetchall()}
-            fc.close()
+            try:
+                already = {row[0] for row in fc.execute(
+                    f"SELECT company_title FROM fiches "
+                    f"WHERE company_title IN ({placeholders}) "
+                    f"AND status IN ('done','generating') AND deleted_at IS NULL",
+                    titles
+                ).fetchall()}
+            finally:
+                fc.close()
 
             to_generate = [
                 {"title": r[0], "category": r[1], "city": r[2],
@@ -1049,29 +1129,31 @@ async def _auto_generate_loop():
         for h in auto_state.get("heads", []):
             h["status"] = "idle"
             h["title"]  = ""
+        logger.info("Auto-génération terminée")
 
 
 @app.post("/api/auto-generate/start")
-async def auto_generate_start(data: dict = Body(default={})):
+async def auto_generate_start(data: AutoStartRequest):
     global _auto_task, auto_state
     if auto_state["running"]:
         return {"status": "already_running",
                 "concurrency": auto_state["concurrency"],
-                "processed": auto_state["processed"],
-                "done": auto_state["done"]}
+                "processed":   auto_state["processed"],
+                "done":        auto_state["done"]}
     auto_state.update({
         "running":       True,
-        "concurrency":   min(max(int(data.get("concurrency", 6)), 1), 20),
-        "batch_size":    min(max(int(data.get("batch_size", 50)), 10), 200),
+        "concurrency":   data.concurrency,
+        "batch_size":    data.batch_size,
         "processed":     0,
         "done":          0,
         "errors":        0,
-        "offset":        int(data.get("resume_offset", 0)),
+        "offset":        data.resume_offset,
         "heads":         [],
         "started_at":    datetime.now().isoformat(),
         "last_activity": None,
     })
     _auto_task = asyncio.create_task(_auto_generate_loop())
+    logger.info(f"Auto-génération démarrée : {data.concurrency} têtes, batch {data.batch_size}")
     return {"status": "started",
             "concurrency": auto_state["concurrency"],
             "batch_size":  auto_state["batch_size"]}
@@ -1087,6 +1169,7 @@ async def auto_generate_stop():
             await _auto_task
         except (asyncio.CancelledError, Exception):
             pass
+    logger.info(f"Auto-génération stoppée — {auto_state['done']} fiches générées")
     return {"status": "stopped",
             "processed": auto_state["processed"],
             "done":      auto_state["done"],
@@ -1133,91 +1216,103 @@ def auto_generate_status():
     }
 
 
+# =============================================================================
+# ENDPOINTS — FICHES (CRUD)
+# =============================================================================
+
 @app.get("/api/fiches/stats")
 def fiches_stats():
     conn = sqlite3.connect(FICHES_DB)
-    rows = conn.execute("SELECT status, COUNT(*) FROM fiches WHERE deleted_at IS NULL GROUP BY status").fetchall()
-    total_deleted = conn.execute("SELECT COUNT(*) FROM fiches WHERE deleted_at IS NOT NULL").fetchone()[0]
-    conn.close()
-    result = {r[0]: r[1] for r in rows}
-    result["deleted"] = total_deleted
-    return result
+    try:
+        rows          = conn.execute("SELECT status, COUNT(*) FROM fiches WHERE deleted_at IS NULL GROUP BY status").fetchall()
+        total_deleted = conn.execute("SELECT COUNT(*) FROM fiches WHERE deleted_at IS NOT NULL").fetchone()[0]
+        result        = {r[0]: r[1] for r in rows}
+        result["deleted"] = total_deleted
+        return result
+    finally:
+        conn.close()
 
 
 @app.get("/api/fiches")
 def list_fiches(
-    page: int = 1,
-    per_page: int = 30,
-    q: Optional[str] = None,
-    deleted: bool = False,
+    page:     int  = 1,
+    per_page: int  = 30,
+    q:        Optional[str] = None,
+    deleted:  bool = False,
 ):
     """Liste paginée des fiches (actives ou supprimées)."""
-    conn = sqlite3.connect(FICHES_DB)
+    conn   = sqlite3.connect(FICHES_DB)
     conn.row_factory = sqlite3.Row
-    where = "deleted_at IS NOT NULL" if deleted else "deleted_at IS NULL AND status = 'done'"
-    params = []
-    if q:
-        where += " AND LOWER(company_title) LIKE LOWER(?)"
-        params.append(f"%{q}%")
-    total = conn.execute(f"SELECT COUNT(*) FROM fiches WHERE {where}", params).fetchone()[0]
-    offset = (page - 1) * per_page
-    rows = conn.execute(
-        f"SELECT id, company_title, status, model, completion_tokens, generated_at, deleted_at, "
-        f"       LENGTH(qa_answered) as qa_a_len, LENGTH(qa_open) as qa_o_len "
-        f"FROM fiches WHERE {where} ORDER BY generated_at DESC LIMIT ? OFFSET ?",
-        params + [per_page, offset]
-    ).fetchall()
-    conn.close()
-    return {
-        "results": [dict(r) for r in rows],
-        "total": total,
-        "page": page,
-        "pages": max(1, (total + per_page - 1) // per_page),
-    }
+    try:
+        where  = "deleted_at IS NOT NULL" if deleted else "deleted_at IS NULL AND status = 'done'"
+        params = []
+        if q:
+            where += " AND LOWER(company_title) LIKE LOWER(?)"
+            params.append(f"%{q}%")
+        total  = conn.execute(f"SELECT COUNT(*) FROM fiches WHERE {where}", params).fetchone()[0]
+        offset = (page - 1) * per_page
+        rows   = conn.execute(
+            f"SELECT id, company_title, status, model, completion_tokens, generated_at, deleted_at, "
+            f"       LENGTH(qa_answered) as qa_a_len, LENGTH(qa_open) as qa_o_len "
+            f"FROM fiches WHERE {where} ORDER BY generated_at DESC LIMIT ? OFFSET ?",
+            params + [per_page, offset]
+        ).fetchall()
+        return {
+            "results": [dict(r) for r in rows],
+            "total":   total,
+            "page":    page,
+            "pages":   max(1, (total + per_page - 1) // per_page),
+        }
+    finally:
+        conn.close()
 
 
 @app.put("/api/fiche/{title:path}")
-async def update_fiche(title: str, data: dict = Body(...)):
-    """Modifie le contenu d'une fiche (qa_answered, intro_text et/ou open_answers)."""
+async def update_fiche(title: str, data: UpdateFicheRequest):
+    """Modifie le contenu d'une fiche."""
     fiche = get_fiche(title)
     if not fiche:
         raise HTTPException(status_code=404, detail="Fiche non trouvée")
 
-    conn = sqlite3.connect(FICHES_DB)
-
-    # Champs admin (qa_answered, intro_text)
     updates = {}
-    if "qa_answered" in data:
-        updates["qa_answered"] = json.dumps(data["qa_answered"], ensure_ascii=False)
-    if "intro_text" in data:
-        updates["intro_text"] = data["intro_text"]
-
-    # Réponses client aux questions ouvertes
-    if "open_answers" in data:
-        # [{q: "...", r: "..."}] — on fusionne questions template + réponses client
-        updates["qa_open"] = json.dumps(data["open_answers"], ensure_ascii=False)
+    if data.qa_answered is not None:
+        updates["qa_answered"] = json.dumps(data.qa_answered, ensure_ascii=False)
+    if data.intro_text is not None:
+        updates["intro_text"] = data.intro_text
+    if data.open_answers is not None:
+        updates["qa_open"] = json.dumps(data.open_answers, ensure_ascii=False)
 
     if updates:
-        set_clause = ", ".join(f"{k}=?" for k in updates)
-        conn.execute(
-            f"UPDATE fiches SET {set_clause} WHERE company_title=?",
-            list(updates.values()) + [title],
-        )
-        conn.commit()
-    conn.close()
+        conn = sqlite3.connect(FICHES_DB)
+        try:
+            conn.execute("BEGIN")
+            set_clause = ", ".join(f"{k}=?" for k in updates)
+            conn.execute(
+                f"UPDATE fiches SET {set_clause} WHERE company_title=?",
+                list(updates.values()) + [title],
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"update_fiche error for '{title}': {e}")
+            raise HTTPException(status_code=500, detail="Erreur de mise à jour")
+        finally:
+            conn.close()
     return {"ok": True}
 
 
 @app.delete("/api/fiche/{title:path}")
 def delete_fiche(title: str):
-    """Soft delete d'une fiche (conservée en base, restaurable)."""
+    """Soft delete d'une fiche."""
     conn = sqlite3.connect(FICHES_DB)
-    affected = conn.execute(
-        "UPDATE fiches SET deleted_at=datetime('now') WHERE company_title=? AND deleted_at IS NULL",
-        [title]
-    ).rowcount
-    conn.commit()
-    conn.close()
+    try:
+        affected = conn.execute(
+            "UPDATE fiches SET deleted_at=datetime('now') WHERE company_title=? AND deleted_at IS NULL",
+            [title]
+        ).rowcount
+        conn.commit()
+    finally:
+        conn.close()
     if not affected:
         raise HTTPException(status_code=404, detail="Fiche non trouvée ou déjà supprimée")
     return {"ok": True}
@@ -1227,65 +1322,68 @@ def delete_fiche(title: str):
 def restore_fiche(title: str):
     """Restaure une fiche soft-supprimée."""
     conn = sqlite3.connect(FICHES_DB)
-    affected = conn.execute(
-        "UPDATE fiches SET deleted_at=NULL WHERE company_title=? AND deleted_at IS NOT NULL",
-        [title]
-    ).rowcount
-    conn.commit()
-    conn.close()
+    try:
+        affected = conn.execute(
+            "UPDATE fiches SET deleted_at=NULL WHERE company_title=? AND deleted_at IS NOT NULL",
+            [title]
+        ).rowcount
+        conn.commit()
+    finally:
+        conn.close()
     if not affected:
         raise HTTPException(status_code=404, detail="Fiche non trouvée ou déjà active")
     return {"ok": True}
 
 
+# =============================================================================
+# ENDPOINTS — LICENCE
+# =============================================================================
+
 @app.get("/api/license/status")
 def license_status():
-    """Retourne le statut de la licence plugin (admin seulement)."""
     return {
         "has_key":   bool(get_setting("license_hash")),
         "activated": get_setting("license_activated") == "true",
     }
 
+
 @app.post("/api/license/generate")
 def license_generate():
-    """Génère une nouvelle clé de licence, affiche-la UNE seule fois, stocke uniquement son hash."""
-    # Format lisible : XXXX-XXXX-XXXX-XXXX
+    """Génère une nouvelle clé de licence (affichée UNE seule fois)."""
     raw = "-".join(secrets.token_hex(2).upper() for _ in range(4))
     set_setting("license_hash",      _hash_key(raw))
     set_setting("license_activated", "false")
-    # La clé brute n'est JAMAIS persistée — affichée une seule fois ici
+    logger.info("Nouvelle clé de licence générée")
     return {"key": raw}
 
+
 @app.post("/api/license/verify")
-def license_verify(data: dict = Body(...)):
+def license_verify(data: LicenseVerifyRequest):
     """Vérifie une clé depuis le plugin WordPress (endpoint public)."""
-    raw = data.get("key", "").strip()
-    if not raw:
-        raise HTTPException(status_code=400, detail="Clé manquante")
     stored_hash = get_setting("license_hash")
     if not stored_hash:
         raise HTTPException(status_code=404, detail="Aucune licence configurée sur ce serveur")
-    if not secrets.compare_digest(_hash_key(raw), stored_hash):
+    if not secrets.compare_digest(_hash_key(data.key.strip()), stored_hash):
+        logger.warning("Tentative de vérification de licence invalide")
         raise HTTPException(status_code=403, detail="Clé de licence invalide")
     set_setting("license_activated", "true")
-    return {"ok": True, "hash": _hash_key(raw)}
+    return {"ok": True, "hash": _hash_key(data.key.strip())}
+
 
 @app.get("/api/plugin/download")
 def download_plugin():
     """Télécharge le plugin WordPress societies-connector en zip."""
-    import zipfile, io, pathlib
+    import zipfile
+    import pathlib
     plugin_dir = pathlib.Path(__file__).parent / "wordpress" / "societies-connector"
     if not plugin_dir.exists():
         raise HTTPException(status_code=404, detail="Plugin introuvable sur ce serveur")
-
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in plugin_dir.rglob("*"):
             if f.is_file():
                 zf.write(f, f"societies-connector/{f.relative_to(plugin_dir)}")
     buf.seek(0)
-
-    from fastapi.responses import StreamingResponse
     return StreamingResponse(
         buf,
         media_type="application/zip",
@@ -1294,77 +1392,80 @@ def download_plugin():
 
 
 # =============================================================================
-# SEO — pages secteur / ville
+# ENDPOINTS — SEO
 # =============================================================================
 
 @app.get("/api/seo/sector/{sector:path}")
 def seo_sector(sector: str, limit: int = 20):
-    """Liste d'entreprises d'un même secteur — pour pages SEO internes."""
     conn = duckdb.connect(DB_PATH, read_only=True)
-    rows = conn.execute("""
-        SELECT title, category, city, zip_code, phone, url, rating_value, rating_votes
-        FROM companies
-        WHERE LOWER(category) = LOWER(?)
-        ORDER BY rating_votes DESC NULLS LAST
-        LIMIT ?
-    """, [sector, limit]).fetchall()
-    conn.close()
-    cols = ["title", "category", "city", "zip_code", "phone", "url", "rating_value", "rating_votes"]
-    return {
-        "sector":  sector,
-        "total":   len(rows),
-        "results": [dict(zip(cols, r)) for r in rows],
-    }
+    try:
+        rows = conn.execute("""
+            SELECT title, category, city, zip_code, phone, url, rating_value, rating_votes
+            FROM companies
+            WHERE LOWER(category) = LOWER(?)
+            ORDER BY rating_votes DESC NULLS LAST
+            LIMIT ?
+        """, [sector, min(int(limit), 200)]).fetchall()
+        cols = ["title", "category", "city", "zip_code", "phone", "url", "rating_value", "rating_votes"]
+        return {"sector": sector, "total": len(rows), "results": [dict(zip(cols, r)) for r in rows]}
+    finally:
+        conn.close()
+
 
 @app.get("/api/seo/city/{city:path}")
 def seo_city(city: str, limit: int = 20):
-    """Liste d'entreprises d'une même ville — pour pages SEO internes."""
     conn = duckdb.connect(DB_PATH, read_only=True)
-    rows = conn.execute("""
-        SELECT title, category, city, zip_code, phone, url, rating_value, rating_votes
-        FROM companies
-        WHERE LOWER(city) = LOWER(?)
-        ORDER BY rating_votes DESC NULLS LAST
-        LIMIT ?
-    """, [city, limit]).fetchall()
-    conn.close()
-    cols = ["title", "category", "city", "zip_code", "phone", "url", "rating_value", "rating_votes"]
-    return {
-        "city":    city,
-        "total":   len(rows),
-        "results": [dict(zip(cols, r)) for r in rows],
-    }
+    try:
+        rows = conn.execute("""
+            SELECT title, category, city, zip_code, phone, url, rating_value, rating_votes
+            FROM companies
+            WHERE LOWER(city) = LOWER(?)
+            ORDER BY rating_votes DESC NULLS LAST
+            LIMIT ?
+        """, [city, min(int(limit), 200)]).fetchall()
+        cols = ["title", "category", "city", "zip_code", "phone", "url", "rating_value", "rating_votes"]
+        return {"city": city, "total": len(rows), "results": [dict(zip(cols, r)) for r in rows]}
+    finally:
+        conn.close()
+
 
 @app.get("/api/seo/top-sectors")
 def seo_top_sectors(limit: int = 50):
-    """Top secteurs par nombre d'entreprises — pour navigation SEO."""
     conn = duckdb.connect(DB_PATH, read_only=True)
-    rows = conn.execute("""
-        SELECT category, COUNT(*) as count
-        FROM companies
-        WHERE category IS NOT NULL AND category != ''
-        GROUP BY category
-        ORDER BY count DESC
-        LIMIT ?
-    """, [limit]).fetchall()
-    conn.close()
-    return {"results": [{"sector": r[0], "count": r[1]} for r in rows]}
+    try:
+        rows = conn.execute("""
+            SELECT category, COUNT(*) as count
+            FROM companies
+            WHERE category IS NOT NULL AND category != ''
+            GROUP BY category
+            ORDER BY count DESC
+            LIMIT ?
+        """, [min(int(limit), 200)]).fetchall()
+        return {"results": [{"sector": r[0], "count": r[1]} for r in rows]}
+    finally:
+        conn.close()
+
 
 @app.get("/api/seo/top-cities")
 def seo_top_cities(limit: int = 50):
-    """Top villes par nombre d'entreprises — pour navigation SEO."""
     conn = duckdb.connect(DB_PATH, read_only=True)
-    rows = conn.execute("""
-        SELECT city, COUNT(*) as count
-        FROM companies
-        WHERE city IS NOT NULL AND city != ''
-        GROUP BY city
-        ORDER BY count DESC
-        LIMIT ?
-    """, [limit]).fetchall()
-    conn.close()
-    return {"results": [{"city": r[0], "count": r[1]} for r in rows]}
+    try:
+        rows = conn.execute("""
+            SELECT city, COUNT(*) as count
+            FROM companies
+            WHERE city IS NOT NULL AND city != ''
+            GROUP BY city
+            ORDER BY count DESC
+            LIMIT ?
+        """, [min(int(limit), 200)]).fetchall()
+        return {"results": [{"city": r[0], "count": r[1]} for r in rows]}
+    finally:
+        conn.close()
 
+
+# =============================================================================
+# STATIC + SPA FALLBACK
+# =============================================================================
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
