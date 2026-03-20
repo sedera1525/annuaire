@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Societies — Annuaire des entreprises</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --border: #2e3247;
+    --accent: #6c8aff;
+    --accent2: #a78bfa;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --green: #34d399;
+    --orange: #fb923c;
+    --red: #f87171;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+
+  /* HEADER */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo img { height: 36px; width: auto; display: block; }
+  .logo span { color: var(--text); }
+  .db-status {
+    margin-left: auto;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
+  .status-dot.ready { background: var(--green); }
+  .status-dot.loading { background: var(--orange); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* LAYOUT */
+  .container { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 57px); }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    height: calc(100vh - 57px);
+    position: sticky;
+    top: 57px;
+  }
+  .sidebar-section { display: flex; flex-direction: column; gap: 8px; }
+  .sidebar-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+
+  input, select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 14px;
+    width: 100%;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+
+  .filter-row { display: flex; gap: 6px; }
+  .filter-row input { flex: 1; }
+
+  .checkbox-group { display: flex; flex-direction: column; gap: 6px; }
+  .checkbox-item { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--muted); }
+  .checkbox-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+  .checkbox-item:hover { color: var(--text); }
+
+  .btn-search {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    width: 100%;
+  }
+  .btn-search:hover { opacity: .9; }
+  .btn-search:active { transform: scale(.98); }
+  .btn-reset {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    width: 100%;
+    transition: color .2s, border-color .2s;
+  }
+  .btn-reset:hover { color: var(--text); border-color: var(--muted); }
+
+  .btn-export {
+    background: transparent;
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 9px;
+    font-size: 13px;
+    cursor: pointer;
+    width: 100%;
+    transition: background .2s;
+    text-align: center;
+    text-decoration: none;
+    display: block;
+  }
+  .btn-export:hover { background: rgba(52,211,153,.1); }
+
+  /* MAIN */
+  .main { padding: 20px 24px; overflow-y: auto; }
+
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .results-count { font-size: 14px; color: var(--muted); }
+  .results-count strong { color: var(--text); }
+  .sort-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .sort-row select { width: auto; padding: 6px 10px; font-size: 13px; }
+
+  /* LOADING INIT */
+  .init-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(15,17,23,.9);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .init-overlay.show { display: flex; }
+  .init-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px 40px;
+    text-align: center;
+    max-width: 400px;
+  }
+  .init-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .init-msg { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .progress-bar { background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .5s; border-radius: 99px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* VIEW TOGGLE */
+  .view-toggle { display: flex; gap: 4px; }
+  .view-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 7px;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .view-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .view-btn:hover:not(.active) { color: var(--text); border-color: var(--muted); }
+
+  /* CARDS */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; }
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .data-table th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    position: sticky; top: 0; z-index: 1;
+  }
+  .data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .data-table tr:hover td { background: var(--surface2); cursor: pointer; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table .td-name { font-weight: 600; color: var(--text); max-width: 200px; }
+  .data-table .td-cat { color: var(--accent); max-width: 160px; }
+  .data-table .td-addr { color: var(--muted); max-width: 200px; }
+  .data-table a { color: var(--accent); text-decoration: none; }
+  .data-table a:hover { text-decoration: underline; }
+  .data-table .stars-sm { color: #fbbf24; font-size: 11px; }
+  .data-table .badge-sm {
+    display: inline-block; padding: 2px 6px; border-radius: 99px;
+    font-size: 10px; font-weight: 600;
+  }
+  .badge-sm-phone { background: rgba(52,211,153,.15); color: var(--green); }
+  .badge-sm-web { background: rgba(108,138,255,.15); color: var(--accent); }
+  .badge-sm-email { background: rgba(167,139,250,.15); color: var(--accent2); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color .2s, transform .15s;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+  .card-header { display: flex; gap: 10px; align-items: flex-start; }
+  .card-logo {
+    width: 44px; height: 44px; border-radius: 8px;
+    object-fit: cover; background: var(--surface2);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .card-logo-placeholder {
+    width: 44px; height: 44px; border-radius: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .card-category { font-size: 12px; color: var(--accent); margin-top: 2px; }
+
+  .card-info { display: flex; flex-direction: column; gap: 5px; }
+  .info-row { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+  .info-row svg { flex-shrink: 0; opacity: .7; }
+  .info-row a { color: var(--accent); text-decoration: none; }
+  .info-row a:hover { text-decoration: underline; }
+
+  .card-footer { display: flex; align-items: center; justify-content: space-between; }
+  .rating { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+  .stars { color: #fbbf24; }
+  .rating-count { color: var(--muted); font-size: 12px; }
+  .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 99px;
+    font-weight: 600;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .badge-phone { background: rgba(52,211,153,.15); color: var(--green); }
+  .badge-web { background: rgba(108,138,255,.15); color: var(--accent); }
+  .badge-email { background: rgba(167,139,250,.15); color: var(--accent2); }
+  .badges { display: flex; gap: 5px; flex-wrap: wrap; }
+
+  /* LOG PANEL */
+  .log-panel {
+    position: fixed; bottom: 0; right: 0;
+    width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom: none; border-right: none;
+    border-radius: 12px 0 0 0;
+    z-index: 150;
+    display: flex; flex-direction: column;
+    max-height: 340px;
+    box-shadow: -4px -4px 24px rgba(0,0,0,.4);
+    transition: transform .3s;
+  }
+  .log-panel.collapsed { transform: translateY(calc(100% - 40px)); }
+  .log-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .log-header-title { font-size: 12px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 7px; }
+  .log-badge { background: var(--accent); color: white; border-radius: 99px; font-size: 10px; padding: 1px 6px; min-width: 18px; text-align: center; }
+  .log-toggle { font-size: 11px; color: var(--muted); }
+  .log-body { overflow-y: auto; padding: 8px 0; flex: 1; }
+  .log-entry {
+    padding: 6px 14px;
+    border-bottom: 1px solid rgba(46,50,71,.5);
+    font-size: 12px;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-company { font-weight: 600; color: var(--text); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log-stage { color: var(--muted); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+  .log-stage .stage-icon { font-size: 11px; }
+  .log-bar-wrap { background: var(--border); border-radius: 99px; height: 4px; overflow: hidden; }
+  .log-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+  .log-entry.done .log-bar-fill { background: var(--green); }
+  .log-entry.error .log-bar-fill { background: var(--red); }
+  .log-tokens { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  /* NAV BUTTONS */
+  .nav-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .15s;
+    font-weight: 500;
+  }
+  .nav-btn:hover { color: var(--text); background: var(--surface2); }
+  .nav-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(108,138,255,.08); }
+
+  /* TAB BUTTONS (fiches) */
+  .tab-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all .15s;
+  }
+  .tab-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(108,138,255,.1); }
+
+  /* FICHES TABLE */
+  .fiches-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .fiches-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fiches-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .fiches-table tr:last-child td { border-bottom: none; }
+  .fiches-table tbody tr:hover { background: rgba(255,255,255,.02); }
+  .fiches-table .td-title { font-weight: 500; max-width: 280px; }
+  .fiches-table .td-title span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .fiche-stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    min-width: 140px;
+  }
+  .fiche-stat-card .stat-val { font-size: 22px; font-weight: 700; color: var(--text); }
+  .fiche-stat-card .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .btn-icon {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 5px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .btn-icon:hover { color: var(--text); border-color: var(--muted); }
+  .btn-icon.danger:hover { color: var(--red); border-color: var(--red); }
+  .btn-icon.success:hover { color: var(--green); border-color: var(--green); }
+
+  .edit-qa-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .edit-qa-item label { font-size: 11px; color: var(--muted); font-weight: 600; display: block; margin-bottom: 4px; }
+  .edit-qa-item textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 13px; resize: vertical; outline: none; font-family: inherit; transition: border-color .2s; }
+  .edit-qa-item textarea:focus { border-color: var(--accent); }
+
+  /* BOUTON GEN SUR CARTE */
+  .btn-gen-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+    line-height: 1.4;
+  }
+  .btn-gen-card:hover { background: rgba(108,138,255,.15); border-color: var(--accent); }
+  .btn-gen-card.done { border-color: var(--green); }
+  .btn-gen-card.generating { opacity: .5; cursor: default; }
+
+  /* FICHE GÉNÉRÉE */
+  .btn-generate {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white; border: none; border-radius: 8px;
+    padding: 10px 16px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity .2s, transform .1s;
+  }
+  .btn-generate:hover { opacity: .9; }
+  .btn-generate:active { transform: scale(.98); }
+  .btn-generate:disabled { opacity: .5; cursor: default; }
+
+  .qa-list { display: flex; flex-direction: column; gap: 12px; }
+  .qa-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .qa-q { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+  .qa-r { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .qa-meta { font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .fiche-error { color: var(--red); font-size: 13px; padding: 10px; background: rgba(248,113,113,.1); border-radius: 8px; }
+  .generating-anim { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .generating-anim .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: bounce .6s infinite; }
+  .generating-anim .dot:nth-child(2) { animation-delay: .15s; }
+  .generating-anim .dot:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+
+  /* EMPTY */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+
+  /* PAGINATION */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  .page-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .page-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--accent); }
+  .page-btn:disabled { opacity: .4; cursor: default; }
+  .page-btn.active { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 28px;
+    position: relative;
+  }
+  .modal-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-logo { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; margin-bottom: 12px; }
+  .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .modal-category { color: var(--accent); font-size: 14px; margin-bottom: 16px; }
+  .modal-section { margin-bottom: 20px; }
+  .modal-section-title {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-field label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
+  .modal-field span { font-size: 14px; color: var(--text); word-break: break-word; }
+  .modal-field a { color: var(--accent); text-decoration: none; font-size: 14px; }
+  .modal-field a:hover { text-decoration: underline; }
+  .modal-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .modal-map-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent2);
+    font-size: 13px;
+    text-decoration: none;
+    padding: 7px 12px;
+    border: 1px solid var(--accent2);
+    border-radius: 8px;
+    transition: background .15s;
+  }
+  .modal-map-link:hover { background: rgba(167,139,250,.1); }
+
+  .no-data { color: var(--muted); font-style: italic; font-size: 13px; }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .cards { grid-template-columns: 1fr; }
+    .modal-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="init-overlay" id="initOverlay">
+  <div class="init-box">
+    <div class="spinner"></div>
+    <div class="init-title">Chargement de la base de données</div>
+    <div class="init-msg" id="initMsg">Initialisation...</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<header class="header">
+  <div class="logo"><img src="/static/logo.jpg" alt="TOPsocietes.com"></div>
+  <nav style="display:flex;gap:4px;margin-left:16px">
+    <button class="nav-btn active" id="navSearch" onclick="showView('search')">🔍 Annuaire</button>
+    <button class="nav-btn" id="navFiches" onclick="showView('fiches')">📄 Fiches IA</button>
+  </nav>
+  <div class="db-status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Chargement...</span>
+  </div>
+  <button onclick="openPluginModal()" style="font-size:12px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:7px;padding:6px 10px;cursor:pointer;transition:color .15s;margin-right:6px" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">⬇ Plugin WP</button>
+  <a href="/logout" style="font-size:12px;color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:7px;transition:color .15s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">Déconnexion</a>
+</header>
+
+<!-- Modal Plugin -->
+<div id="pluginModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 32px;width:480px;max-width:95vw;position:relative">
+    <button onclick="closePluginModal()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+    <h3 style="margin:0 0 6px;color:var(--text)">⬇ Plugin WordPress</h3>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 20px">Téléchargez le plugin et activez-le avec une clé de licence unique.</p>
+
+    <!-- Téléchargement -->
+    <a id="pluginDownloadBtn" href="/api/plugin/download"
+       style="display:inline-block;background:var(--accent);color:#fff;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;text-decoration:none;margin-bottom:20px">
+      ⬇ Télécharger societies-connector.zip
+    </a>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:0 0 20px">
+
+    <!-- Statut licence -->
+    <div id="licenseSection">
+      <h4 style="margin:0 0 10px;color:var(--text);font-size:14px">🔑 Clé de licence</h4>
+      <div id="licenseStatus" style="font-size:13px;color:var(--muted);margin-bottom:14px">Chargement...</div>
+
+      <!-- Clé générée (affichée une seule fois) -->
+      <div id="licenseKeyDisplay" style="display:none;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 16px;margin-bottom:14px">
+        <div style="font-size:11px;color:#f59e0b;margin-bottom:8px;font-weight:600">⚠ Copiez cette clé maintenant — elle ne sera plus affichée</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <code id="licenseKeyValue" style="font-size:16px;letter-spacing:2px;color:#7ee787;font-family:monospace;flex:1"></code>
+          <button onclick="copyLicenseKey()" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">Copier</button>
+        </div>
+      </div>
+
+      <!-- Boutons actions -->
+      <div id="licenseActions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+  </div>
+</div>
+
+<div id="view-search">
+<div class="container">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Recherche</div>
+      <input type="text" id="searchQ" placeholder="Nom, ville, catégorie..." oninput="debounceSearch()">
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Localisation</div>
+      <input type="text" id="filterCity" placeholder="Ville" oninput="debounceSearch()">
+      <input type="text" id="filterZip" placeholder="Code postal" oninput="debounceSearch()">
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Secteur d'activité</div>
+      <input type="text" id="filterCategory" placeholder="Ex: Restaurant, Médecin..." oninput="debounceSearch()">
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Filtres</div>
+      <div class="checkbox-group">
+        <label class="checkbox-item">
+          <input type="checkbox" id="hasPhone" onchange="doSearch()"> Avec téléphone
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="hasWebsite" onchange="doSearch()"> Avec site web
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="noWebWithEmail" onchange="onNoWebEmailToggle()">
+          <span>Sans site web <span style="color:var(--accent2)">+ avec email</span></span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="noWebNoEmail" onchange="onNoWebNoEmailToggle()">
+          <span>Sans site web <span style="color:var(--orange)">+ sans email</span></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Trier par</div>
+      <select id="sortBy" onchange="doSearch()">
+        <option value="rating">Note (meilleure en premier)</option>
+        <option value="votes">Nombre d'avis</option>
+        <option value="name">Nom A → Z</option>
+        <option value="city">Ville A → Z</option>
+      </select>
+    </div>
+
+    <button class="btn-search" onclick="doSearch()">🔍 Rechercher</button>
+    <button class="btn-reset" onclick="resetFilters()">Réinitialiser les filtres</button>
+    <a href="#" class="btn-export" id="exportBtn" onclick="exportCSV(event)">⬇ Exporter en CSV</a>
+  </aside>
+
+  <main class="main">
+    <div class="results-header">
+      <div class="results-count" id="resultsCount">—</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:12px;color:var(--muted)" id="elapsed"></div>
+        <div class="view-toggle">
+          <button class="view-btn active" id="btnGrid" onclick="setView('grid')" title="Vue grille">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
+          <button class="view-btn" id="btnTable" onclick="setView('table')" title="Vue tableau">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="cardsContainer"></div>
+    <div id="pagination" class="pagination"></div>
+  </main>
+</div>
+</div><!-- /view-search -->
+
+<!-- ═══ VUE FICHES ═══════════════════════════════════════════════════════════ -->
+<div id="view-fiches" style="display:none;padding:24px;max-width:1200px;margin:0 auto">
+
+  <!-- Auto-génération -->
+  <div id="autoGenPanel" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">
+          ⚡ Auto-génération
+          <span id="autoRunBadge" style="display:none;background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px;animation:pulse 1.5s infinite">EN COURS</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">Génère automatiquement toutes les fiches manquantes</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;color:var(--muted)">Têtes :</label>
+        <select id="autoConcurrency" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:13px;width:70px">
+          <option value="1">1</option>
+          <option value="3">3</option>
+          <option value="6" selected>6</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+        </select>
+        <button id="autoStartBtn" onclick="autoGenStart()"
+                style="background:#6c8aff;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s">
+          ▶ Démarrer
+        </button>
+        <button id="autoStopBtn" onclick="autoGenStop()" style="display:none;background:#ef4444;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">
+          ⏹ Arrêter
+        </button>
+      </div>
+    </div>
+
+    <!-- Barre de progression + stats -->
+    <div id="autoGenProgress" style="display:none;margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span id="autoGenStat" style="font-size:13px;color:var(--muted)">—</span>
+        <span id="autoGenPct" style="font-size:13px;font-weight:700;color:var(--accent)">0%</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden">
+        <div id="autoGenBar" style="height:100%;background:linear-gradient(90deg,#6c8aff,#a78bfa);border-radius:6px;transition:width .5s;width:0%"></div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:10px;margin-bottom:14px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--muted)">✅ <strong id="autoDone" style="color:var(--green)">0</strong> générées</span>
+        <span style="font-size:12px;color:var(--muted)">❌ <strong id="autoErrors" style="color:var(--red)">0</strong> erreurs</span>
+        <span style="font-size:12px;color:var(--muted)">📍 Offset : <strong id="autoOffset" style="color:var(--text)">0</strong></span>
+        <span style="font-size:12px;color:var(--muted)">⏱ <span id="autoLastActivity">—</span></span>
+      </div>
+      <!-- Grille des têtes -->
+      <div id="autoHeadsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px"></div>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div id="fichesStats" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>
+
+  <!-- Tabs + search -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;gap:4px">
+      <button class="tab-btn active" id="tabActive" onclick="switchFichesTab('active')">✅ Actives</button>
+      <button class="tab-btn" id="tabDeleted" onclick="switchFichesTab('deleted')">🗑 Corbeille</button>
+    </div>
+    <input type="text" id="fichesSearch" placeholder="Rechercher une entreprise..." style="flex:1;min-width:200px;max-width:360px" oninput="debouceFiches()">
+    <span id="fichesCount" style="font-size:13px;color:var(--muted);margin-left:auto"></span>
+  </div>
+
+  <!-- Table -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    <table class="fiches-table">
+      <thead>
+        <tr>
+          <th>Entreprise</th>
+          <th>Générée le</th>
+          <th>Modèle</th>
+          <th>Tokens</th>
+          <th style="text-align:center">Q&R</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="fichesBody">
+        <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">Chargement...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination fiches -->
+  <div id="fichesPagination" class="pagination" style="margin-top:16px"></div>
+</div>
+
+<!-- ═══ MODAL LECTURE FICHE ═══════════════════════════════════════════════════ -->
+<div id="viewFicheOverlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeViewFiche()">
+  <div class="modal" style="max-width:860px;width:95%">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+        <div style="min-width:0">
+          <div class="modal-title" id="viewFicheTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Contenu de la fiche</div>
+          <div class="modal-subtitle" style="font-size:12px;color:var(--muted)">Lecture seule — contenu généré par l'IA</div>
+        </div>
+        <button class="btn-generate" style="padding:6px 14px;font-size:13px;flex-shrink:0" onclick="copyFicheContent()" id="btnCopyFiche">📋 Copier</button>
+      </div>
+      <button class="modal-close" onclick="closeViewFiche()" style="flex-shrink:0;margin-left:8px">✕</button>
+    </div>
+    <div id="viewFicheBody" style="padding:0 24px 24px;overflow-y:auto;max-height:82vh"></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL ÉDITION FICHE ══════════════════════════════════════════════════ -->
+<div id="editFicheOverlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeEditFiche()">
+  <div class="modal" style="max-width:900px;width:95%">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="editFicheTitle">Édition de la fiche</div>
+        <div class="modal-subtitle" style="font-size:12px;color:var(--muted)">Modifiez les questions et réponses</div>
+      </div>
+      <button class="modal-close" onclick="closeEditFiche()">✕</button>
+    </div>
+    <div style="padding:0 24px 24px;overflow-y:auto;max-height:85vh">
+      <div id="editCompanyInfo"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">📝 Texte introductif</div>
+      <div class="edit-qa-item">
+        <label>Intro (3 phrases)</label>
+        <textarea id="editIntroText" rows="6" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px;resize:vertical;outline:none;font-family:inherit"></textarea>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 10px">✅ Questions avec réponses (IA)</div>
+      <div id="editAnswered"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:20px 0 10px">❓ Questions ouvertes (réponses client)</div>
+      <div id="editOpenQuestions"></div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button class="btn-generate" onclick="saveEditFiche()" id="btnSaveFiche">💾 Enregistrer</button>
+        <button class="btn-generate" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border)" onclick="closeEditFiche()">Annuler</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPage = 1;
+let totalPages = 1;
+let debounceTimer = null;
+let lastParams = {};
+let currentView = 'grid';
+
+function setView(v) {
+  currentView = v;
+  document.getElementById('btnGrid').classList.toggle('active', v === 'grid');
+  document.getElementById('btnTable').classList.toggle('active', v === 'table');
+  doSearch();
+}
+
+// ─── STATUS POLLING ───────────────────────────────────────────────────
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    const overlay = document.getElementById('initOverlay');
+    const msg = document.getElementById('initMsg');
+    const fill = document.getElementById('progressFill');
+
+    txt.textContent = s.message;
+    if (s.ready) {
+      dot.className = 'status-dot ready';
+      overlay.classList.remove('show');
+      doSearch();
+    } else if (s.initializing) {
+      dot.className = 'status-dot loading';
+      overlay.classList.add('show');
+      msg.textContent = s.message;
+      fill.style.width = (s.progress || 0) + '%';
+      setTimeout(checkStatus, 2000);
+    } else {
+      dot.className = 'status-dot loading';
+      overlay.classList.add('show');
+      msg.textContent = s.message;
+      setTimeout(checkStatus, 3000);
+    }
+  } catch(e) {
+    setTimeout(checkStatus, 3000);
+  }
+}
+
+// ─── SEARCH ───────────────────────────────────────────────────────────
+function debounceSearch() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { currentPage = 1; doSearch(); }, 400);
+}
+
+function getParams(forExport = false) {
+  const params = new URLSearchParams();
+  const q = document.getElementById('searchQ').value.trim();
+  const city = document.getElementById('filterCity').value.trim();
+  const zip = document.getElementById('filterZip').value.trim();
+  const cat = document.getElementById('filterCategory').value.trim();
+  const hasPhone = document.getElementById('hasPhone').checked;
+  const hasWeb = document.getElementById('hasWebsite').checked;
+  const noWebEmail = document.getElementById('noWebWithEmail').checked;
+  const noWebNoEmail = document.getElementById('noWebNoEmail').checked;
+  const sort = document.getElementById('sortBy').value;
+
+  if (q) params.set('q', q);
+  if (city) params.set('city', city);
+  if (zip) params.set('zip_code', zip);
+  if (cat) params.set('category', cat);
+  if (hasPhone) params.set('has_phone', 'true');
+  if (hasWeb) params.set('has_website', 'true');
+  if (noWebEmail) params.set('no_web_with_email', 'true');
+  if (noWebNoEmail) params.set('no_web_no_email', 'true');
+  if (!forExport) {
+    params.set('page', currentPage);
+    params.set('per_page', '30');
+    params.set('sort_by', sort);
+  } else {
+    params.set('limit', '2000');
+  }
+  return params;
+}
+
+async function doSearch() {
+  const params = getParams();
+  try {
+    const r = await fetch('/api/search?' + params);
+    if (!r.ok) return;
+    const data = await r.json();
+    totalPages = data.pages;
+    renderResults(data);
+  } catch(e) {}
+}
+
+function renderResults(data) {
+  const container = document.getElementById('cardsContainer');
+  const countEl = document.getElementById('resultsCount');
+  const elapsedEl = document.getElementById('elapsed');
+
+  countEl.innerHTML = `<strong>${data.total.toLocaleString('fr-FR')}</strong> résultat${data.total !== 1 ? 's' : ''}`;
+  elapsedEl.textContent = `${data.elapsed}s`;
+
+  if (!data.results.length) {
+    container.innerHTML = `
+      <div class="empty" style="grid-column:1/-1">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">Aucun résultat</div>
+        <div>Essayez d'autres critères de recherche</div>
+      </div>`;
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  if (currentView === 'table') {
+    container.className = 'table-wrap';
+    container.innerHTML = renderTable(data.results);
+  } else {
+    container.className = 'cards';
+    container.innerHTML = data.results.map(c => renderCard(c)).join('');
+  }
+  renderPagination(data.page, data.pages, data.total);
+}
+
+function renderCard(c) {
+  const logoEl = c.logo
+    ? `<img class="card-logo" src="${escHtml(c.logo)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" alt="">`
+    : '';
+  const placeholderIcon = categoryIcon(c.category);
+
+  const stars = c.rating_value ? starStr(c.rating_value) : '';
+  const ratingEl = c.rating_value ? `
+    <div class="rating">
+      <span class="stars">${stars}</span>
+      <span>${parseFloat(c.rating_value).toFixed(1)}</span>
+      <span class="rating-count">(${(c.rating_votes||0).toLocaleString('fr-FR')})</span>
+    </div>` : '';
+
+  const badges = [];
+  if (c.phone) badges.push(`<span class="badge badge-phone">📞 Tél</span>`);
+  if (c.url) badges.push(`<span class="badge badge-web">🌐 Web</span>`);
+  if (c.emails && c.emails.length) badges.push(`<span class="badge badge-email">✉ Email</span>`);
+
+  const addr = [c.addr_street, c.city, c.zip_code].filter(Boolean).join(', ');
+
+  return `
+    <div class="card" data-c="${escHtml(JSON.stringify(c))}" onclick="openModal(JSON.parse(this.dataset.c))">
+      <div class="card-header">
+        ${logoEl}
+        <div class="card-logo-placeholder" ${c.logo ? 'style="display:none"' : ''}>${placeholderIcon}</div>
+        <div>
+          <div class="card-title">${escHtml(c.title || '—')}</div>
+          <div class="card-category">${escHtml(c.category || '')}</div>
+        </div>
+      </div>
+      <div class="card-info">
+        ${addr ? `<div class="info-row">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          ${escHtml(addr)}
+        </div>` : ''}
+        ${c.phone ? `<div class="info-row">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.68A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
+          ${escHtml(c.phone)}
+        </div>` : ''}
+        ${c.url ? `<div class="info-row">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 014-10z"/></svg>
+          <a href="${escHtml(c.url)}" target="_blank" onclick="event.stopPropagation()">${escHtml(c.domain || c.url)}</a>
+        </div>` : ''}
+      </div>
+      <div class="card-footer">
+        ${ratingEl}
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="badges">${badges.join('')}</div>
+          <button class="btn-gen-card" id="gen-${btoa(encodeURIComponent(c.title||'')).slice(0,12)}"
+            onclick="event.stopPropagation();generateFromCard(JSON.parse(this.closest('.card').dataset.c),this)"
+            title="Générer la fiche IA">✨</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderTable(results) {
+  const rows = results.map(c => {
+    const addr = [c.addr_street, c.city, c.zip_code].filter(Boolean).join(', ');
+    const rating = c.rating_value ? `<span class="stars-sm">${starStr(c.rating_value)}</span> ${parseFloat(c.rating_value).toFixed(1)}` : '—';
+    const badges = [
+      c.phone ? `<span class="badge-sm badge-sm-phone">Tél</span>` : '',
+      c.url   ? `<span class="badge-sm badge-sm-web">Web</span>` : '',
+      c.emails && c.emails.length ? `<span class="badge-sm badge-sm-email">Email</span>` : '',
+    ].join(' ');
+    return `<tr data-c="${escHtml(JSON.stringify(c))}" onclick="openModal(JSON.parse(this.dataset.c))">
+      <td class="td-name" title="${escHtml(c.title)}">${escHtml(c.title || '—')}</td>
+      <td class="td-cat" title="${escHtml(c.category)}">${escHtml(c.category || '—')}</td>
+      <td class="td-addr" title="${escHtml(addr)}">${escHtml(addr || '—')}</td>
+      <td>${c.phone ? `<a href="tel:${escHtml(c.phone)}" onclick="event.stopPropagation()">${escHtml(c.phone)}</a>` : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${c.url ? `<a href="${escHtml(c.url)}" target="_blank" onclick="event.stopPropagation()">${escHtml(c.domain || c.url)}</a>` : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${rating}</td>
+      <td>${badges}</td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="data-table">
+    <thead><tr>
+      <th>Nom</th>
+      <th>Catégorie</th>
+      <th>Adresse</th>
+      <th>Téléphone</th>
+      <th>Site web</th>
+      <th>Note</th>
+      <th>Contacts</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderPagination(page, pages, total) {
+  if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  const el = document.getElementById('pagination');
+  let html = '';
+  html += `<button class="page-btn" onclick="goPage(${page-1})" ${page<=1?'disabled':''}>‹ Précédent</button>`;
+
+  const start = Math.max(1, page - 2);
+  const end = Math.min(pages, page + 2);
+  if (start > 1) { html += `<button class="page-btn" onclick="goPage(1)">1</button>`; if (start > 2) html += `<span style="color:var(--muted);padding:0 4px">…</span>`; }
+  for (let i = start; i <= end; i++) html += `<button class="page-btn${i===page?' active':''}" onclick="goPage(${i})">${i}</button>`;
+  if (end < pages) { if (end < pages-1) html += `<span style="color:var(--muted);padding:0 4px">…</span>`; html += `<button class="page-btn" onclick="goPage(${pages})">${pages}</button>`; }
+
+  html += `<button class="page-btn" onclick="goPage(${page+1})" ${page>=pages?'disabled':''}>Suivant ›</button>`;
+  el.innerHTML = html;
+}
+
+function goPage(p) {
+  currentPage = p;
+  doSearch();
+  document.querySelector('.main').scrollTop = 0;
+  window.scrollTo(0, 0);
+}
+
+function onNoWebEmailToggle() {
+  if (document.getElementById('noWebWithEmail').checked) {
+    document.getElementById('hasWebsite').checked = false;
+    document.getElementById('noWebNoEmail').checked = false;
+  }
+  doSearch();
+}
+
+function onNoWebNoEmailToggle() {
+  if (document.getElementById('noWebNoEmail').checked) {
+    document.getElementById('hasWebsite').checked = false;
+    document.getElementById('noWebWithEmail').checked = false;
+  }
+  doSearch();
+}
+
+function resetFilters() {
+  document.getElementById('searchQ').value = '';
+  document.getElementById('filterCity').value = '';
+  document.getElementById('filterZip').value = '';
+  document.getElementById('filterCategory').value = '';
+  document.getElementById('hasPhone').checked = false;
+  document.getElementById('hasWebsite').checked = false;
+  document.getElementById('noWebWithEmail').checked = false;
+  document.getElementById('noWebNoEmail').checked = false;
+  document.getElementById('sortBy').value = 'rating';
+  currentPage = 1;
+  doSearch();
+}
+
+// ─── MODAL ────────────────────────────────────────────────────────────
+let _currentCompany = null;
+
+async function openModal(c) {
+  _currentCompany = c;
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+
+  const logoEl = c.logo ? `<img class="modal-logo" src="${escHtml(c.logo)}" onerror="this.style.display='none'" alt="">` : '';
+  const addr = [c.addr_street, c.city, c.zip_code, c.region].filter(Boolean).join(', ');
+  const mapUrl = c.latitude && c.longitude
+    ? `https://www.openstreetmap.org/?mlat=${c.latitude}&mlon=${c.longitude}#map=16/${c.latitude}/${c.longitude}`
+    : null;
+
+  let emailsHtml = '<span class="no-data">Non disponible</span>';
+  if (c.emails && c.emails.length) {
+    emailsHtml = c.emails.map(e => `<a href="mailto:${escHtml(e)}">${escHtml(e)}</a>`).join('<br>');
+  }
+
+  const starsHtml = c.rating_value ? `${starStr(c.rating_value)} ${parseFloat(c.rating_value).toFixed(1)}/5 (${(c.rating_votes||0).toLocaleString('fr-FR')} avis)` : '<span class="no-data">Non noté</span>';
+
+  content.innerHTML = `
+    <button class="modal-close" onclick="document.getElementById('modalOverlay').classList.remove('show')">✕</button>
+    ${logoEl}
+    <div class="modal-title">${escHtml(c.title || '—')}</div>
+    <div class="modal-category">${escHtml(c.category || 'Catégorie non renseignée')}</div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Coordonnées</div>
+      <div class="modal-grid">
+        <div class="modal-field">
+          <label>Adresse</label>
+          <span>${addr ? escHtml(addr) : '<span class="no-data">Non disponible</span>'}</span>
+        </div>
+        <div class="modal-field">
+          <label>Téléphone</label>
+          <span>${c.phone ? `<a href="tel:${escHtml(c.phone)}">${escHtml(c.phone)}</a>` : '<span class="no-data">Non disponible</span>'}</span>
+        </div>
+        <div class="modal-field">
+          <label>Site web</label>
+          <span>${c.url ? `<a href="${escHtml(c.url)}" target="_blank">${escHtml(c.domain || c.url)}</a>` : '<span class="no-data">Non disponible</span>'}</span>
+        </div>
+        <div class="modal-field">
+          <label>Email(s)</label>
+          <span>${emailsHtml}</span>
+        </div>
+        <div class="modal-field">
+          <label>Note</label>
+          <span style="color:#fbbf24">${starsHtml}</span>
+        </div>
+        <div class="modal-field">
+          <label>Fiche revendiquée</label>
+          <span>${c.is_claimed === true || c.is_claimed === 'true' ? '✅ Oui' : '❌ Non'}</span>
+        </div>
+      </div>
+    </div>
+
+    ${c.snippet ? `
+    <div class="modal-section">
+      <div class="modal-section-title">Description</div>
+      <div class="modal-desc">${escHtml(c.snippet)}</div>
+    </div>` : ''}
+
+    ${mapUrl ? `
+    <div class="modal-section">
+      <a href="${mapUrl}" target="_blank" class="modal-map-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Voir sur la carte
+      </a>
+    </div>` : ''}
+
+    <div class="modal-section" id="ficheSection">
+      <div class="modal-section-title">Fiche IA — Questions & Réponses</div>
+      <div id="ficheContent">
+        <div class="generating-anim" style="opacity:.5">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <span>Vérification...</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  overlay.classList.add('show');
+
+  // Charger la fiche existante (si générée)
+  try {
+    const r = await fetch('/api/fiche/' + encodeURIComponent(c.title));
+    const fiche = await r.json();
+    renderFicheSection(fiche);
+  } catch(e) {
+    renderFicheSection({status: 'none'});
+  }
+}
+
+function renderFicheSection(fiche) {
+  const el = document.getElementById('ficheContent');
+  if (!el) return;
+
+  if (fiche.status === 'done' && fiche.qa_answered) {
+    const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : [];
+    const openQs = Array.isArray(fiche.open_questions) ? fiche.open_questions : [];
+    const intro = fiche.intro_text || '';
+    const date = fiche.date_fr || '';
+    const dateLabel = date ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;font-style:italic">Décryptage du ${escHtml(date)}</div>` : '';
+    el.innerHTML = `
+      ${intro ? `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+        <p style="font-size:13px;line-height:1.7;color:var(--text)">${escHtml(intro)}</p>
+        ${dateLabel}
+      </div>` : ''}
+      <div class="qa-section-title" style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">
+        ✅ Questions & Réponses (${answered.length})
+      </div>
+      <div class="qa-list">
+        ${answered.map(item => `
+          <div class="qa-item">
+            <div class="qa-q">${escHtml(item.q)}</div>
+            <div class="qa-r">${escHtml(item.r)}</div>
+            ${dateLabel}
+          </div>`).join('')}
+      </div>
+      ${openQs.length ? `
+      <div class="qa-section-title" style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:16px;margin-bottom:8px">
+        🔒 Questions à remplir — accès abonné (${openQs.length})
+      </div>
+      <div class="qa-list">
+        ${openQs.map(q => `
+          <div class="qa-item" style="opacity:.6">
+            <div class="qa-q">${escHtml(q)}</div>
+            <div class="qa-r" style="font-style:italic;color:var(--muted)">Réponse à compléter par le propriétaire...</div>
+          </div>`).join('')}
+      </div>` : ''}
+      <div class="qa-meta">Généré avec ${escHtml(fiche.model || '—')} · ${fiche.completion_tokens || 0} tokens · ${fiche.generated_at || ''}</div>
+      <button class="btn-generate" style="margin-top:12px;background:var(--surface2);color:var(--muted);border:1px solid var(--border)" onclick="triggerGenerate(true)">
+        🔄 Régénérer
+      </button>`;
+  } else if (fiche.status === 'generating') {
+    el.innerHTML = `
+      <div class="generating-anim">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Génération en cours...</span>
+      </div>`;
+  } else if (fiche.status === 'error') {
+    el.innerHTML = `
+      <div class="fiche-error">⚠️ Erreur : ${escHtml(fiche.error || 'inconnue')}</div>
+      <button class="btn-generate" style="margin-top:10px" onclick="triggerGenerate()">✨ Réessayer</button>`;
+  } else {
+    el.innerHTML = `
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+        Aucune fiche générée pour cette entreprise.
+      </p>
+      <button class="btn-generate" onclick="triggerGenerate()">
+        ✨ Générer la fiche IA
+      </button>`;
+  }
+}
+
+
+async function triggerGenerate(force = false) {
+  const c = _currentCompany;
+  if (!c) return;
+  const el = document.getElementById('ficheContent');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="generating-anim">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <span>Génération en cours (5-15s)...</span>
+    </div>`;
+
+  try {
+    const r = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({...c, _force: force}),
+    });
+    const fiche = await r.json();
+    if (!r.ok) throw new Error(fiche.detail || 'Erreur serveur');
+    renderFicheSection(fiche);
+  } catch(e) {
+    el.innerHTML = `<div class="fiche-error">⚠️ ${escHtml(e.message)}</div>
+      <button class="btn-generate" style="margin-top:10px" onclick="triggerGenerate()">Réessayer</button>`;
+  }
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modalOverlay')) {
+    document.getElementById('modalOverlay').classList.remove('show');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('modalOverlay').classList.remove('show');
+});
+
+// ─── EXPORT ───────────────────────────────────────────────────────────
+function exportCSV(e) {
+  e.preventDefault();
+  const params = getParams(true);
+  window.location.href = '/api/export?' + params;
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escJson(obj) {
+  return "'" + JSON.stringify(obj).replace(/'/g, "\\'") + "'";
+}
+
+function starStr(v) {
+  const n = Math.round(parseFloat(v));
+  return '★'.repeat(Math.max(0, Math.min(5, n))) + '☆'.repeat(Math.max(0, 5 - n));
+}
+
+function categoryIcon(cat) {
+  if (!cat) return '🏢';
+  cat = cat.toLowerCase();
+  if (cat.includes('restaurant') || cat.includes('food') || cat.includes('café') || cat.includes('boulanger')) return '🍽️';
+  if (cat.includes('médecin') || cat.includes('doctor') || cat.includes('santé') || cat.includes('psycho') || cat.includes('dentist')) return '⚕️';
+  if (cat.includes('hotel') || cat.includes('hôtel') || cat.includes('logement')) return '🏨';
+  if (cat.includes('auto') || cat.includes('voiture') || cat.includes('garage')) return '🚗';
+  if (cat.includes('école') || cat.includes('school') || cat.includes('formation')) return '📚';
+  if (cat.includes('sport') || cat.includes('fitness') || cat.includes('gym')) return '⚽';
+  if (cat.includes('coiffeur') || cat.includes('beauty') || cat.includes('salon')) return '💇';
+  if (cat.includes('avocat') || cat.includes('notaire') || cat.includes('juridique')) return '⚖️';
+  if (cat.includes('immobilier') || cat.includes('real estate')) return '🏡';
+  if (cat.includes('construction') || cat.includes('bâtiment') || cat.includes('plombier')) return '🔨';
+  if (cat.includes('fleuriste') || cat.includes('jardin')) return '🌿';
+  if (cat.includes('vétérinaire') || cat.includes('animal')) return '🐾';
+  return '🏢';
+}
+
+// ─── LOG PANEL ────────────────────────────────────────────────────────
+let _logEntries = {};
+let _logCount = 0;
+let _logCollapsed = true;  // commence collapsé (correspond au HTML)
+
+function logPanel() { return document.getElementById('logPanel'); }
+
+function toggleLog() {
+  _logCollapsed = !_logCollapsed;
+  logPanel().classList.toggle('collapsed', _logCollapsed);
+  document.getElementById('logToggleIcon').textContent = _logCollapsed ? '▲' : '▼';
+}
+
+function logEntry(id, companyName) {
+  const panel = logPanel();
+  panel.style.display = 'flex';
+  if (_logCollapsed) toggleLog(); // ouvre le panneau automatiquement
+
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  el.id = 'log-' + id;
+  el.innerHTML = `
+    <div class="log-company" title="${escHtml(companyName)}">${escHtml(companyName)}</div>
+    <div class="log-stage"><span class="stage-icon">⏳</span><span class="stage-text">Démarrage...</span></div>
+    <div class="log-bar-wrap"><div class="log-bar-fill" style="width:5%"></div></div>
+    <div class="log-tokens"></div>`;
+
+  document.getElementById('logBody').prepend(el);
+  _logCount++;
+  document.getElementById('logBadge').textContent = _logCount;
+  _logEntries[id] = el;
+  return el;
+}
+
+function updateLogEntry(id, type, data) {
+  const el = _logEntries[id];
+  if (!el) return;
+  const stageText = el.querySelector('.stage-text');
+  const bar = el.querySelector('.log-bar-fill');
+  const tokens = el.querySelector('.log-tokens');
+
+  if (data.percent !== undefined) bar.style.width = data.percent + '%';
+
+  if (type === 'stage') {
+    stageText.textContent = data.message;
+  } else if (type === 'token') {
+    stageText.textContent = `Génération... ${data.count} tokens`;
+  } else if (type === 'done') {
+    el.classList.add('done');
+    stageText.textContent = `✅ ${data.qa_count} Q&R générées`;
+    bar.style.width = '100%';
+    tokens.textContent = `${data.completion_tokens} tokens · ${data.model}`;
+  } else if (type === 'error') {
+    el.classList.add('error');
+    stageText.textContent = `⚠️ ${data.message}`;
+    bar.style.width = '100%';
+    bar.style.background = 'var(--red)';
+  }
+}
+
+// ─── GÉNÉRATION STREAMING ─────────────────────────────────────────────
+async function runStreamGenerate(c, onDone, onError) {
+  const logId = Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  logEntry(logId, c.title);
+
+  try {
+    const resp = await fetch('/api/generate/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(c),
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      updateLogEntry(logId, 'error', {message: err.detail || 'Erreur serveur'});
+      onError && onError(err.detail);
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, {stream: true});
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          updateLogEntry(logId, evt.type, evt);
+          if (evt.type === 'done') { onDone && onDone(evt); return; }
+          if (evt.type === 'error') { onError && onError(evt.message); return; }
+        } catch(e) {}
+      }
+    }
+  } catch(e) {
+    updateLogEntry(logId, 'error', {message: e.message});
+    onError && onError(e.message);
+  }
+}
+
+async function generateFromCard(c, btn) {
+  if (btn.classList.contains('generating')) return;
+  btn.classList.add('generating');
+  btn.textContent = '⏳';
+
+  await runStreamGenerate(c,
+    (evt) => {
+      btn.textContent = '✅';
+      btn.classList.remove('generating');
+      btn.classList.add('done');
+      btn.title = `${(evt.qa_answered||[]).length} Q&R + ${(evt.qa_open||[]).length} questions`;
+    },
+    (msg) => {
+      btn.textContent = '⚠️';
+      btn.classList.remove('generating');
+      btn.title = msg;
+    }
+  );
+}
+
+async function triggerGenerate(force = false) {
+  const c = _currentCompany;
+  if (!c) return;
+  const el = document.getElementById('ficheContent');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="generating-anim">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <span id="modalGenStage">Démarrage...</span>
+    </div>
+    <div style="margin-top:10px">
+      <div class="log-bar-wrap"><div class="log-bar-fill" id="modalGenBar" style="width:5%"></div></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px" id="modalGenTokens"></div>
+    </div>`;
+
+  await runStreamGenerate(c,
+    (evt) => renderFicheSection({...evt, status: 'done'}),
+    (msg) => {
+      el.innerHTML = `<div class="fiche-error">⚠️ ${escHtml(msg)}</div>
+        <button class="btn-generate" style="margin-top:10px" onclick="triggerGenerate()">Réessayer</button>`;
+    }
+  );
+}
+
+// Patch updateLogEntry pour mettre à jour aussi le modal si ouvert
+const _origUpdate = updateLogEntry;
+// eslint-disable-next-line no-global-assign
+updateLogEntry = function(id, type, data) {
+  _origUpdate(id, type, data);
+  const stage = document.getElementById('modalGenStage');
+  const bar = document.getElementById('modalGenBar');
+  const tok = document.getElementById('modalGenTokens');
+  if (!stage) return;
+  if (data.percent !== undefined && bar) bar.style.width = data.percent + '%';
+  if (type === 'stage' && stage) stage.textContent = data.message;
+  if (type === 'token' && stage) { stage.textContent = `Génération... ${data.count} tokens`; if(tok) tok.textContent = `~${data.count} tokens reçus`; }
+};
+
+// ─── INIT ─────────────────────────────────────────────────────────────
+checkStatus();
+
+// ═══════════════════════════════════════════════════════════════════════
+// VUE NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════
+let _currentView = 'search';
+
+function showView(view) {
+  _currentView = view;
+  document.getElementById('view-search').style.display = view === 'search' ? '' : 'none';
+  document.getElementById('view-fiches').style.display = view === 'fiches' ? '' : 'none';
+  document.getElementById('navSearch').classList.toggle('active', view === 'search');
+  document.getElementById('navFiches').classList.toggle('active', view === 'fiches');
+  if (view === 'fiches') loadFiches();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FICHES — LISTE
+// ═══════════════════════════════════════════════════════════════════════
+let _fichesTab = 'active';
+let _fichesPage = 1;
+let _fichesDebounce = null;
+let _editFicheTitle = null;
+
+function debouceFiches() {
+  clearTimeout(_fichesDebounce);
+  _fichesDebounce = setTimeout(() => { _fichesPage = 1; loadFiches(); }, 350);
+}
+
+function switchFichesTab(tab) {
+  _fichesTab = tab;
+  _fichesPage = 1;
+  document.getElementById('tabActive').classList.toggle('active', tab === 'active');
+  document.getElementById('tabDeleted').classList.toggle('active', tab === 'deleted');
+  loadFiches();
+}
+
+async function loadFiches() {
+  const q = document.getElementById('fichesSearch').value.trim();
+  const deleted = _fichesTab === 'deleted';
+  const url = `/api/fiches?page=${_fichesPage}&per_page=30${deleted ? '&deleted=true' : ''}${q ? '&q=' + encodeURIComponent(q) : ''}`;
+  const tbody = document.getElementById('fichesBody');
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Chargement...</td></tr>`;
+
+  try {
+    const [dataR, statsR] = await Promise.all([fetch(url), fetch('/api/fiches/stats')]);
+    const data = await dataR.json();
+    const stats = await statsR.json();
+
+    renderFichesStats(stats);
+    renderFichesTable(data.results, deleted);
+    document.getElementById('fichesCount').textContent = `${data.total.toLocaleString('fr-FR')} fiche${data.total > 1 ? 's' : ''}`;
+    renderFichesPagination(data.page, data.pages);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px">Erreur : ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderFichesStats(stats) {
+  const done = stats.done || 0;
+  const err = stats.error || 0;
+  const del = stats.deleted || 0;
+  const tokens = 0; // pas stocké en agrégat
+  document.getElementById('fichesStats').innerHTML = `
+    <div class="fiche-stat-card">
+      <div class="stat-val" style="color:var(--green)">${done.toLocaleString('fr-FR')}</div>
+      <div class="stat-lbl">Fiches actives</div>
+    </div>
+    <div class="fiche-stat-card">
+      <div class="stat-val" style="color:var(--red)">${err.toLocaleString('fr-FR')}</div>
+      <div class="stat-lbl">Erreurs</div>
+    </div>
+    <div class="fiche-stat-card">
+      <div class="stat-val" style="color:var(--muted)">${del.toLocaleString('fr-FR')}</div>
+      <div class="stat-lbl">Supprimées</div>
+    </div>
+    <div class="fiche-stat-card">
+      <div class="stat-val">${((done + del) * 0.0002).toFixed(2)} $</div>
+      <div class="stat-lbl">Coût estimé</div>
+    </div>`;
+}
+
+function renderFichesTable(rows, deleted) {
+  const tbody = document.getElementById('fichesBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">${deleted ? 'Aucune fiche supprimée' : 'Aucune fiche générée'}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(f => {
+    const date = f.generated_at ? f.generated_at.slice(0, 16).replace('T', ' ') : '—';
+    const qaCount = f.qa_a_len ? '3 + 6' : '—';
+    const titleAttr = JSON.stringify(f.company_title).replace(/"/g, '&quot;');
+    const actions = deleted
+      ? `<button class="btn-icon success" onclick="restoreFiche(${titleAttr})">↩ Restaurer</button>`
+      : `<button class="btn-icon" onclick="openViewFiche(${titleAttr})" title="Voir le contenu">👁</button>
+         <button class="btn-icon" onclick="openEditFiche(${titleAttr})" title="Modifier">✏️</button>
+         <button class="btn-icon danger" onclick="softDeleteFiche(${titleAttr})" title="Supprimer">🗑</button>`;
+    return `<tr>
+      <td class="td-title"><span title="${escHtml(f.company_title)}">${escHtml(f.company_title)}</span></td>
+      <td style="color:var(--muted);white-space:nowrap">${date}</td>
+      <td style="color:var(--muted)">${escHtml(f.model || '—')}</td>
+      <td style="color:var(--muted)">${f.completion_tokens || '—'}</td>
+      <td style="text-align:center;color:var(--muted)">${qaCount}</td>
+      <td style="text-align:right;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFichesPagination(page, pages) {
+  const el = document.getElementById('fichesPagination');
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="page-btn" onclick="fichesGotoPage(${page-1})">← Préc</button>`;
+  html += `<span style="font-size:13px;color:var(--muted)">Page ${page} / ${pages}</span>`;
+  if (page < pages) html += `<button class="page-btn" onclick="fichesGotoPage(${page+1})">Suiv →</button>`;
+  el.innerHTML = html;
+}
+
+function fichesGotoPage(p) {
+  _fichesPage = p;
+  loadFiches();
+  document.getElementById('view-fiches').scrollIntoView({behavior:'smooth'});
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FICHES — ACTIONS
+// ═══════════════════════════════════════════════════════════════════════
+async function softDeleteFiche(title) {
+  if (!confirm(`Supprimer la fiche de "${title}" ?\nElle sera conservée et pourra être restaurée.`)) return;
+  try {
+    const r = await fetch('/api/fiche/' + encodeURIComponent(title), {method: 'DELETE'});
+    if (!r.ok) throw new Error((await r.json()).detail);
+    loadFiches();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+async function restoreFiche(title) {
+  try {
+    const r = await fetch('/api/fiche/' + encodeURIComponent(title) + '/restore', {method: 'POST'});
+    if (!r.ok) throw new Error((await r.json()).detail);
+    loadFiches();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FICHES — LECTURE
+// ═══════════════════════════════════════════════════════════════════════
+let _viewFicheData = null;
+
+function renderCompanyInfoBlock(ci, title) {
+  if (!ci) return '';
+  const parts = [];
+  if (ci.city || ci.zip_code) parts.push(`📍 ${[ci.zip_code, ci.city].filter(Boolean).join(' ')}`);
+  if (ci.category)            parts.push(`🏷 ${escHtml(ci.category)}`);
+  if (ci.phone)               parts.push(`📞 ${escHtml(ci.phone)}`);
+  if (ci.url)                 parts.push(`🌐 <a href="${escHtml(ci.url)}" target="_blank" style="color:var(--accent)">${escHtml(ci.url)}</a>`);
+  if (ci.rating_value)        parts.push(`⭐ ${ci.rating_value}${ci.rating_votes ? ' <span style="color:var(--muted);font-size:12px">(${ci.rating_votes} avis)</span>' : ''}`);
+  if (!parts.length) return '';
+  return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center">
+    ${parts.map(p => `<span style="font-size:13px;color:var(--text)">${p}</span>`).join('')}
+  </div>`;
+}
+
+async function openViewFiche(title) {
+  _viewFicheData = null;
+  document.getElementById('viewFicheTitle').textContent = title;
+  document.getElementById('viewFicheBody').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0">Chargement...</div>';
+  document.getElementById('viewFicheOverlay').style.display = 'flex';
+
+  try {
+    const r = await fetch('/api/fiche/' + encodeURIComponent(title));
+    const fiche = await r.json();
+    _viewFicheData = fiche;
+    const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : (JSON.parse(fiche.qa_answered || '[]'));
+
+    let html = renderCompanyInfoBlock(fiche.company_info, title);
+    if (fiche.intro_text) {
+      html += `<div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">📝 Présentation</div>
+        <div style="font-size:14px;line-height:1.7;color:var(--text);white-space:pre-wrap">${escHtml(fiche.intro_text)}</div>
+      </div>`;
+    }
+    if (answered.length) {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">✅ Questions & Réponses (IA)</div>`;
+      html += answered.map((item, i) => `
+        <div style="background:var(--surface2);border-radius:8px;padding:14px 16px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">Q${i+1} — ${escHtml(item.q)}</div>
+          <div style="font-size:14px;line-height:1.6;color:var(--text);white-space:pre-wrap">${escHtml(item.r || '—')}</div>
+        </div>`).join('');
+    }
+    const openQs = Array.isArray(fiche.open_questions) ? fiche.open_questions : [];
+    if (openQs.length) {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:20px 0 12px">❓ Questions ouvertes (sans réponse)</div>`;
+      html += openQs.map((q, i) => `
+        <div style="border:1px dashed var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start">
+          <span style="font-size:11px;font-weight:700;color:var(--muted);min-width:24px;padding-top:2px">Q${i+1}</span>
+          <span style="font-size:13px;color:var(--muted);line-height:1.5">${escHtml(q)}</span>
+        </div>`).join('');
+    }
+    if (!html) html = '<div style="color:var(--muted);font-size:13px">Aucun contenu disponible.</div>';
+    document.getElementById('viewFicheBody').innerHTML = html;
+  } catch(e) {
+    document.getElementById('viewFicheBody').innerHTML = `<div style="color:var(--red)">Erreur : ${escHtml(e.message)}</div>`;
+  }
+}
+
+function closeViewFiche() {
+  document.getElementById('viewFicheOverlay').style.display = 'none';
+  _viewFicheData = null;
+}
+
+async function copyFicheContent() {
+  if (!_viewFicheData) return;
+  const fiche = _viewFicheData;
+  const ci = fiche.company_info;
+  const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : (JSON.parse(fiche.qa_answered || '[]'));
+  let text = '';
+  // Infos entreprise
+  if (ci) {
+    const infoParts = [];
+    if (ci.category) infoParts.push(`Secteur : ${ci.category}`);
+    if (ci.city || ci.zip_code) infoParts.push(`Ville : ${[ci.zip_code, ci.city].filter(Boolean).join(' ')}`);
+    if (ci.phone) infoParts.push(`Téléphone : ${ci.phone}`);
+    if (ci.url) infoParts.push(`Site web : ${ci.url}`);
+    if (ci.rating_value) infoParts.push(`Note : ${ci.rating_value}${ci.rating_votes ? ` (${ci.rating_votes} avis)` : ''}`);
+    if (infoParts.length) text += infoParts.join('\n') + '\n\n';
+  }
+  if (fiche.intro_text) text += fiche.intro_text + '\n\n';
+  answered.forEach((item, i) => {
+    text += `Q${i+1} : ${item.q}\n${item.r || ''}\n\n`;
+  });
+  const openQs = Array.isArray(fiche.open_questions) ? fiche.open_questions : [];
+  if (openQs.length) {
+    text += '--- Questions ouvertes ---\n';
+    openQs.forEach((q, i) => { text += `Q${i+1} : ${q}\n`; });
+  }
+  try {
+    await navigator.clipboard.writeText(text.trim());
+    const btn = document.getElementById('btnCopyFiche');
+    btn.textContent = '✅ Copié !';
+    setTimeout(() => { btn.textContent = '📋 Copier'; }, 2000);
+  } catch(e) {
+    alert('Impossible de copier : ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FICHES — ÉDITION
+// ═══════════════════════════════════════════════════════════════════════
+async function openEditFiche(title) {
+  _editFicheTitle = title;
+  document.getElementById('editFicheTitle').textContent = title;
+  document.getElementById('editAnswered').innerHTML = '<div style="color:var(--muted);font-size:13px">Chargement...</div>';
+  document.getElementById('editFicheOverlay').style.display = 'flex';
+
+  try {
+    const r = await fetch('/api/fiche/' + encodeURIComponent(title));
+    const fiche = await r.json();
+    const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : (JSON.parse(fiche.qa_answered || '[]'));
+
+    document.getElementById('editCompanyInfo').innerHTML = renderCompanyInfoBlock(fiche.company_info, title);
+    document.getElementById('editIntroText').value = fiche.intro_text || '';
+    document.getElementById('editAnswered').innerHTML = answered.map((item, i) => `
+      <div class="edit-qa-item">
+        <label>Question ${i+1}</label>
+        <textarea id="aq_${i}" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px;resize:vertical;outline:none;font-family:inherit">${escHtml(item.q)}</textarea>
+        <label style="margin-top:8px">Réponse ${i+1}</label>
+        <textarea id="ar_${i}" rows="5" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px;resize:vertical;outline:none;font-family:inherit">${escHtml(item.r)}</textarea>
+      </div>`).join('');
+
+    window._editAnsweredCount = answered.length;
+
+    // Questions ouvertes avec réponses existantes
+    const openQs = Array.isArray(fiche.open_questions) ? fiche.open_questions : [];
+    const openAnswers = Array.isArray(fiche.qa_open) ? fiche.qa_open : (fiche.qa_open ? JSON.parse(fiche.qa_open) : []);
+    document.getElementById('editOpenQuestions').innerHTML = openQs.map((q, i) => {
+      const existing = openAnswers.find(a => a.q === q) || openAnswers[i] || {};
+      return `<div class="edit-qa-item">
+        <label>Q${i+1} — ${escHtml(q)}</label>
+        <textarea id="oq_${i}" rows="4" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px;resize:vertical;outline:none;font-family:inherit" placeholder="Réponse du client...">${escHtml(existing.r || '')}</textarea>
+      </div>`;
+    }).join('');
+    window._editOpenCount = openQs.length;
+    window._editOpenQuestions = openQs;
+  } catch(e) {
+    document.getElementById('editAnswered').innerHTML = `<div style="color:var(--red)">Erreur : ${escHtml(e.message)}</div>`;
+  }
+}
+
+function closeEditFiche() {
+  document.getElementById('editFicheOverlay').style.display = 'none';
+  _editFicheTitle = null;
+}
+
+async function saveEditFiche() {
+  if (!_editFicheTitle) return;
+  const btn = document.getElementById('btnSaveFiche');
+  btn.textContent = '⏳ Enregistrement...';
+  btn.disabled = true;
+
+  const intro_text = document.getElementById('editIntroText')?.value.trim() || '';
+  const qa_answered = [];
+  for (let i = 0; i < (window._editAnsweredCount || 3); i++) {
+    const q = document.getElementById(`aq_${i}`)?.value.trim();
+    const r = document.getElementById(`ar_${i}`)?.value.trim();
+    if (q) qa_answered.push({q, r: r || ''});
+  }
+  const open_answers = [];
+  const openQs = window._editOpenQuestions || [];
+  for (let i = 0; i < (window._editOpenCount || 0); i++) {
+    const r = document.getElementById(`oq_${i}`)?.value.trim() || '';
+    open_answers.push({q: openQs[i] || '', r});
+  }
+
+  try {
+    const resp = await fetch('/api/fiche/' + encodeURIComponent(_editFicheTitle), {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({qa_answered, intro_text, open_answers}),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).detail);
+    closeEditFiche();
+    loadFiches();
+  } catch(e) {
+    alert('Erreur : ' + e.message);
+  } finally {
+    btn.textContent = '💾 Enregistrer';
+    btn.disabled = false;
+  }
+}
+
+// ── Plugin modal ──────────────────────────────────────────────────────────────
+async function openPluginModal() {
+  document.getElementById('pluginModal').style.display = 'flex';
+  await refreshLicenseStatus();
+}
+
+function closePluginModal() {
+  document.getElementById('pluginModal').style.display = 'none';
+  document.getElementById('licenseKeyDisplay').style.display = 'none';
+}
+
+async function refreshLicenseStatus() {
+  const res  = await fetch('/api/license/status');
+  const data = await res.json();
+  const statusEl  = document.getElementById('licenseStatus');
+  const actionsEl = document.getElementById('licenseActions');
+
+  if (data.activated) {
+    statusEl.innerHTML = '<span style="color:#10b981;font-weight:600">✅ Licence active — plugin activé</span>';
+    actionsEl.innerHTML = `<button onclick="generateLicense()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer">🔄 Régénérer une nouvelle clé</button>`;
+  } else if (data.has_key) {
+    statusEl.innerHTML = '<span style="color:#f59e0b;font-weight:600">⏳ Clé générée — en attente d\'activation dans WordPress</span>';
+    actionsEl.innerHTML = `<button onclick="generateLicense()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer">🔄 Régénérer une nouvelle clé</button>`;
+  } else {
+    statusEl.innerHTML = '<span style="color:var(--muted)">Aucune clé générée.</span>';
+    actionsEl.innerHTML = `<button onclick="generateLicense()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">🔑 Générer la clé de licence</button>`;
+  }
+}
+
+async function generateLicense() {
+  if (!confirm('Générer une nouvelle clé ? L\'ancienne sera invalidée.')) return;
+  const res  = await fetch('/api/license/generate', { method: 'POST' });
+  const data = await res.json();
+  document.getElementById('licenseKeyValue').textContent = data.key;
+  document.getElementById('licenseKeyDisplay').style.display = 'block';
+  await refreshLicenseStatus();
+}
+
+function copyLicenseKey() {
+  const key = document.getElementById('licenseKeyValue').textContent;
+  navigator.clipboard.writeText(key).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Copié';
+    setTimeout(() => btn.textContent = 'Copier', 2000);
+  });
+}
+
+document.getElementById('pluginModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('pluginModal')) closePluginModal();
+});
+</script>
+
+<div class="log-panel collapsed" id="logPanel" style="display:none">
+  <div class="log-header" onclick="toggleLog()">
+    <div class="log-header-title">
+      <span>⚡ Générations en cours</span>
+      <span class="log-badge" id="logBadge">0</span>
+    </div>
+    <span class="log-toggle" id="logToggleIcon">▲</span>
+  </div>
+  <div class="log-body" id="logBody"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// AUTO-GÉNÉRATION
+// ═══════════════════════════════════════════════════════════════════════
+let _autoInterval = null;
+
+async function autoGenStart() {
+  const concurrency = parseInt(document.getElementById('autoConcurrency').value);
+  try {
+    const r = await fetch('/api/auto-generate/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ concurrency })
+    });
+    const d = await r.json();
+    if (d.status === 'already_running' || d.status === 'started') {
+      _setAutoUI(true);
+      _startAutoPolling();
+    }
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+async function autoGenStop() {
+  try {
+    await fetch('/api/auto-generate/stop', { method: 'POST' });
+    _setAutoUI(false);
+    _stopAutoPolling();
+    await _refreshAutoStatus();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+function _setAutoUI(running) {
+  document.getElementById('autoStartBtn').style.display = running ? 'none' : '';
+  document.getElementById('autoStopBtn').style.display  = running ? '' : 'none';
+  document.getElementById('autoConcurrency').disabled   = running;
+  document.getElementById('autoRunBadge').style.display = running ? '' : 'none';
+  document.getElementById('autoGenProgress').style.display = running ? '' : (
+    document.getElementById('autoDone').textContent !== '0' ? '' : 'none'
+  );
+}
+
+function _startAutoPolling() {
+  _stopAutoPolling();
+  _autoInterval = setInterval(_refreshAutoStatus, 3000);
+}
+
+function _stopAutoPolling() {
+  if (_autoInterval) { clearInterval(_autoInterval); _autoInterval = null; }
+}
+
+async function _refreshAutoStatus() {
+  try {
+    const r = await fetch('/api/auto-generate/status');
+    const d = await r.json();
+
+    _setAutoUI(d.running);
+    if (!d.running) _stopAutoPolling();
+
+    document.getElementById('autoGenProgress').style.display = '';
+    document.getElementById('autoDone').textContent    = d.done.toLocaleString('fr-FR');
+    document.getElementById('autoErrors').textContent  = d.errors.toLocaleString('fr-FR');
+    document.getElementById('autoOffset').textContent  = d.offset.toLocaleString('fr-FR');
+    document.getElementById('autoGenPct').textContent  = d.percent + '%';
+    document.getElementById('autoGenBar').style.width  = Math.min(d.percent, 100) + '%';
+    document.getElementById('autoGenStat').textContent =
+      `${d.done.toLocaleString('fr-FR')} / ${d.total.toLocaleString('fr-FR')} entreprises`;
+
+    if (d.last_activity) {
+      const ago = Math.round((Date.now() - new Date(d.last_activity).getTime()) / 1000);
+      document.getElementById('autoLastActivity').textContent =
+        ago < 60 ? `il y a ${ago}s` : `il y a ${Math.round(ago/60)}min`;
+    }
+
+    _renderHeads(d.heads || [], d.running);
+  } catch(_) {}
+}
+
+function _renderHeads(heads, running) {
+  const grid = document.getElementById('autoHeadsGrid');
+  if (!heads.length) { grid.innerHTML = ''; return; }
+
+  const statusColor = { working: '#22c55e', paused: '#f59e0b', idle: '#4b5563', error: '#ef4444' };
+  const statusLabel = { working: 'En cours', paused: 'En pause', idle: 'Inactif', error: 'Erreur' };
+
+  grid.innerHTML = heads.map(h => {
+    const color  = statusColor[h.status] || '#4b5563';
+    const label  = statusLabel[h.status] || h.status;
+    const isPaused = h.status === 'paused';
+    const isWorking = h.status === 'working' || h.status === 'paused';
+    const btnLabel = isPaused ? '▶ Reprendre' : '⏸ Pause';
+    const btnAction = isPaused ? `autoHeadResume(${h.id})` : `autoHeadPause(${h.id})`;
+    const btnColor = isPaused ? '#22c55e' : '#f59e0b';
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;min-width:0">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0${h.status==='working'?';animation:pulse 1s infinite':''}"></div>
+        <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Tête ${h.id + 1}</span>
+        <span style="font-size:10px;color:${color};margin-left:auto">${label}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;min-height:16px" title="${h.title || ''}">${h.title ? escHtml(h.title) : '<span style="color:var(--muted)">—</span>'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">✅ ${h.done} &nbsp; ❌ ${h.errors}</div>
+      ${running && isWorking ? `<button onclick="${btnAction}" style="width:100%;background:none;border:1px solid ${btnColor};color:${btnColor};border-radius:6px;padding:4px 0;font-size:11px;font-weight:600;cursor:pointer">${btnLabel}</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function autoHeadPause(slot) {
+  await fetch(`/api/auto-generate/head/${slot}/pause`, {method:'POST'});
+  await _refreshAutoStatus();
+}
+
+async function autoHeadResume(slot) {
+  await fetch(`/api/auto-generate/head/${slot}/resume`, {method:'POST'});
+  await _refreshAutoStatus();
+}
+
+// Initialiser au chargement de la vue fiches
+const _origShowView = typeof showView === 'function' ? showView : null;
+document.addEventListener('DOMContentLoaded', async () => {
+  const st = await fetch('/api/auto-generate/status').then(r => r.json()).catch(() => null);
+  if (st) {
+    _setAutoUI(st.running);
+    if (st.running) _startAutoPolling();
+    if (st.done > 0 || st.running) {
+      document.getElementById('autoGenProgress').style.display = '';
+      document.getElementById('autoDone').textContent   = st.done.toLocaleString('fr-FR');
+      document.getElementById('autoErrors').textContent = st.errors.toLocaleString('fr-FR');
+      document.getElementById('autoOffset').textContent = st.offset.toLocaleString('fr-FR');
+      document.getElementById('autoGenPct').textContent = st.percent + '%';
+      document.getElementById('autoGenBar').style.width = Math.min(st.percent, 100) + '%';
+      document.getElementById('autoGenStat').textContent =
+        `${st.done.toLocaleString('fr-FR')} / ${st.total.toLocaleString('fr-FR')} entreprises`;
+    }
+    if (st.concurrency) document.getElementById('autoConcurrency').value = st.concurrency;
+  }
+});
+</script>
+
+</body>
+</html>

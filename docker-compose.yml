@@ -1,0 +1,71 @@
+services:
+  societies:
+    build: .
+    ports:
+      - "${APP_PORT:-8090}:8090"
+    volumes:
+      - ./0.csv:/app/0.csv:ro
+      - ./societies.duckdb:/app/societies.duckdb
+      - ./fiches.db:/app/fiches.db
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  wordpress-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${WP_DB_ROOT_PASSWORD:-wproot}
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: ${WP_DB_PASSWORD:-wordpress}
+    volumes:
+      - wordpress_db:/var/lib/mysql
+    restart: unless-stopped
+
+  wordpress:
+    image: wordpress:6-php8.2-apache
+    ports:
+      - "${WP_PORT:-8082}:80"
+    environment:
+      WORDPRESS_DB_HOST: wordpress-db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${WP_DB_PASSWORD:-wordpress}
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_TABLE_PREFIX: wp_
+    volumes:
+      - wordpress_files:/var/www/html
+      - ./wordpress/societies-connector:/var/www/html/wp-content/plugins/societies-connector
+    depends_on:
+      - wordpress-db
+    restart: unless-stopped
+
+  wordpress-setup:
+    build: ./wordpress
+    volumes:
+      - wordpress_files:/var/www/html
+    depends_on:
+      - wordpress
+      - wordpress-db
+    environment:
+      WORDPRESS_DB_HOST: wordpress-db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${WP_DB_PASSWORD:-wordpress}
+      WORDPRESS_DB_NAME: wordpress
+      WP_URL: ${WP_URL:-http://localhost:8080}
+      WP_TITLE: "Societies — Annuaire"
+      WP_ADMIN_USER: ${WP_ADMIN_USER:-admin}
+      WP_ADMIN_PASSWORD: ${WP_ADMIN_PASSWORD:-admin123}
+      WP_ADMIN_EMAIL: ${WP_ADMIN_EMAIL:-admin@societies.local}
+      SOCIETIES_API_URL: http://societies:8090
+      SOCIETIES_API_USER: ${APP_USERNAME:-admin}
+      SOCIETIES_API_PASS: ${APP_PASSWORD:-changeme123}
+    restart: "no"
+
+volumes:
+  wordpress_db:
+  wordpress_files:

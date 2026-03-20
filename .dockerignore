@@ -1,0 +1,12 @@
+# Données lourdes montées via volumes
+*.csv
+*.duckdb
+*.db
+
+# Fichiers inutiles dans l'image
+.env
+*.md
+__pycache__/
+*.pyc
+*.pyo
+.git/

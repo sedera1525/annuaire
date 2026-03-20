@@ -1,0 +1,7 @@
+.env
+*.duckdb
+fiches.db
+venv/
+__pycache__/
+*.pyc
+0.csv
