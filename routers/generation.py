@@ -1,0 +1,271 @@
+"""
+Societies — Endpoints de génération OpenAI (simple, stream, batch)
+"""
+import json
+import logging
+import re
+from datetime import datetime
+
+from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi.responses import StreamingResponse
+
+from core.config import OPENAI_MODEL, OPENAI_TIMEOUT
+from core.db import fetch_company
+from core.limiter import limiter
+from core.utils import format_date_fr, sse
+from models import BatchRequest, GenerateRequest
+from services.fiches import get_fiche, get_openai_key, save_fiche
+from core.utils import is_excluded_category
+from services.generator import (
+    OPEN_QUESTIONS_TEMPLATE,
+    build_prompt,
+    call_openai,
+    validate_qa,
+)
+
+logger   = logging.getLogger("societies")
+router   = APIRouter(tags=["generation"])
+
+
+async def stream_generate(title: str, company_data: dict):
+    """Async generator — SSE temps réel pour une génération unique."""
+    api_key = get_openai_key()
+    if not api_key:
+        yield sse("error", message="Clé API OpenAI manquante dans .env")
+        return
+
+    yield sse("stage", message="Préparation du prompt...", percent=5)
+    prompt = build_prompt(
+        title=title,
+        category=company_data.get("category"),
+        city=company_data.get("city"),
+        zip_code=company_data.get("zip_code"),
+        rating_value=company_data.get("rating_value"),
+        rating_votes=company_data.get("rating_votes"),
+    )
+    save_fiche(title, "generating")
+    yield sse("stage", message="Connexion à OpenAI...", percent=10)
+
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key, timeout=OPENAI_TIMEOUT)
+        stream = await client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_completion_tokens=4000,
+            response_format={"type": "json_object"},
+            stream=True,
+        )
+        yield sse("stage", message="Génération en cours...", percent=15)
+
+        full_text        = ""
+        token_count      = 0
+        ESTIMATED_TOKENS = 900
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                full_text   += delta
+                token_count += 1
+                percent = min(15 + int(token_count / ESTIMATED_TOKENS * 70), 85)
+                yield sse("token", token=delta, count=token_count, percent=percent)
+
+        yield sse("stage", message="Analyse du JSON...", percent=88)
+        text = full_text.strip()
+        # Certains modèles enveloppent le JSON dans des blocs markdown
+        text = re.sub(r'^```(?:json)?\s*', '', text)
+        text = re.sub(r'\s*```$', '', text).strip()
+        if not text:
+            raise ValueError(f"Réponse vide reçue du modèle ({OPENAI_MODEL})")
+        # Répare le JSON tronqué : ferme les accolades/crochets manquants
+        open_b = text.count('{') - text.count('}')
+        open_br = text.count('[') - text.count(']')
+        if open_b > 0 or open_br > 0:
+            text = text.rstrip(',').rstrip()
+            text += ']' * open_br + '}' * open_b
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"Format JSON invalide — reçu : {text[:200]}")
+        validate_qa(parsed)
+
+        qa_answered    = parsed["qa_answered"]
+        intro          = parsed.get("intro", "")
+        open_questions = [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE]
+        date_fr        = format_date_fr(datetime.now().strftime("%Y-%m-%d"))
+
+        yield sse("stage", message="Sauvegarde...", percent=95)
+        save_fiche(title, "done",
+                   qa_answered=json.dumps(qa_answered, ensure_ascii=False),
+                   intro_text=intro,
+                   model=OPENAI_MODEL,
+                   completion_tokens=token_count)
+
+        yield sse("done",
+                  qa_answered=qa_answered,
+                  intro_text=intro,
+                  open_questions=open_questions,
+                  date_fr=date_fr,
+                  model=OPENAI_MODEL,
+                  completion_tokens=token_count,
+                  percent=100)
+        logger.info(f"Fiche générée (stream) : {title} — {token_count} tokens")
+
+    except Exception as e:
+        logger.error(f"stream_generate error for '{title}': {e}")
+        save_fiche(title, "error", error=str(e))
+        yield sse("error", message=str(e))
+
+
+@router.post("/generate/stream")
+@limiter.limit("120/minute")
+async def generate_stream_endpoint(request: Request, data: dict = Body(...)):
+    title = data.get("title", "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title requis")
+    return StreamingResponse(
+        stream_generate(title, data),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/fiche/{title:path}")
+def get_fiche_endpoint(title: str):
+    fiche = get_fiche(title)
+    if not fiche:
+        return {"status": "none"}
+    if fiche["status"] == "done":
+        try:
+            if fiche.get("qa_answered"):
+                fiche["qa_answered"] = json.loads(fiche["qa_answered"])
+            if fiche.get("qa_open"):
+                fiche["qa_open"] = json.loads(fiche["qa_open"])
+        except Exception:
+            pass
+        if fiche.get("generated_at"):
+            fiche["date_fr"] = format_date_fr(fiche["generated_at"])
+        fiche["open_questions"] = [
+            q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE
+        ]
+    company = fetch_company(title)
+    if company:
+        fiche["company_info"] = {
+            "category":     company.get("category", ""),
+            "city":         company.get("city", ""),
+            "zip_code":     company.get("zip_code", ""),
+            "phone":        company.get("phone", ""),
+            "url":          company.get("url", ""),
+            "rating_value": company.get("rating_value"),
+            "rating_votes": company.get("rating_votes"),
+            "emails":       company.get("emails", []),
+        }
+    else:
+        fiche["company_info"] = None
+    return fiche
+
+
+@router.post("/generate")
+@limiter.limit("30/minute")
+async def generate_fiche(request: Request, data: GenerateRequest):
+    title    = data.title.strip()
+    existing = get_fiche(title)
+    if existing and existing["status"] == "done":
+        try:
+            if existing.get("qa_answered"):
+                existing["qa_answered"] = json.loads(existing["qa_answered"])
+            if existing.get("qa_open"):
+                existing["qa_open"] = json.loads(existing["qa_open"])
+        except Exception:
+            pass
+        return existing
+
+    save_fiche(title, "generating")
+    prompt = build_prompt(title, data.category, data.city, data.zip_code,
+                          data.rating_value, data.rating_votes)
+    try:
+        result = await call_openai(get_openai_key(), OPENAI_MODEL, OPENAI_TIMEOUT, prompt)
+        parsed = json.loads(result["text"])
+        if not isinstance(parsed, dict):
+            raise ValueError("Format inattendu")
+        validate_qa(parsed)
+        intro = parsed.get("intro", "")
+        save_fiche(title, "done",
+                   qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
+                   intro_text=intro,
+                   model=result["model"],
+                   completion_tokens=result["completion_tokens"])
+        logger.info(f"Fiche générée : {title} — {result['completion_tokens']} tokens")
+        return {
+            "status":            "done",
+            "qa_answered":       parsed["qa_answered"],
+            "intro_text":        intro,
+            "open_questions":    [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE],
+            "date_fr":           format_date_fr(datetime.now().strftime("%Y-%m-%d")),
+            "model":             result["model"],
+            "completion_tokens": result["completion_tokens"],
+        }
+    except Exception as e:
+        logger.error(f"generate_fiche error for '{title}': {e}")
+        save_fiche(title, "error", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate/batch")
+@limiter.limit("10/minute")
+async def generate_batch(request: Request, data: BatchRequest):
+    import asyncio
+    companies   = data.companies[:data.max]
+    concurrency = data.concurrency
+    results     = []
+    to_generate = []
+
+    for company in companies:
+        title    = company.title.strip()
+        if is_excluded_category(getattr(company, "category", None)):
+            results.append({"title": title, "status": "excluded"})
+            continue
+        existing = get_fiche(title)
+        if existing and existing["status"] == "done":
+            results.append({"title": title, "status": "already_done"})
+        else:
+            save_fiche(title, "generating")
+            to_generate.append(company)
+
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _generate_one(company) -> dict:
+        title = company.title.strip()
+        async with semaphore:
+            prompt = build_prompt(title, company.category, company.city,
+                                  company.zip_code, company.rating_value, company.rating_votes)
+            try:
+                result = await call_openai(get_openai_key(), OPENAI_MODEL, OPENAI_TIMEOUT, prompt)
+                parsed = json.loads(result["text"])
+                if not isinstance(parsed, dict) or "qa_answered" not in parsed:
+                    raise ValueError("Format inattendu")
+                save_fiche(title, "done",
+                           qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
+                           intro_text=parsed.get("intro", ""),
+                           model=result["model"],
+                           completion_tokens=result["completion_tokens"])
+                return {"title": title, "status": "done",
+                        "qa_answered_count": len(parsed["qa_answered"])}
+            except Exception as e:
+                logger.error(f"batch error for '{title}': {e}")
+                save_fiche(title, "error", error=str(e))
+                return {"title": title, "status": "error", "error": str(e)}
+
+    parallel_results = await asyncio.gather(*[_generate_one(c) for c in to_generate])
+    results.extend(parallel_results)
+
+    done_count  = sum(1 for r in results if r["status"] == "done")
+    error_count = sum(1 for r in results if r["status"] == "error")
+    logger.info(f"Batch terminé : {done_count} ok / {error_count} erreurs")
+    return {
+        "results":      results,
+        "total":        len(results),
+        "done":         done_count,
+        "errors":       error_count,
+        "already_done": len(results) - done_count - error_count,
+        "concurrency":  concurrency,
+    }

@@ -437,3 +437,44 @@ Clique Revendiquer cette entreprise
 Modifie sa présentation (gratuit)
 S'abonne → répond aux 6 questions ouvertes
 
+
+
+cd /opt/societies
+wget "https://downloads.dataforseo.com/databasesV3/business_listing/cb297481-c579-4a05-9d12-c0e742690cdd/0.csv.gz"
+gunzip 0.csv.gz
+
+
+Oui, tout à fait — sans réécrire le projet. Voici ce qu'on peut intégrer concrètement :
+
+✅ Faisable sans réécriture
+Sécurité (priorité haute)
+
+CORS restreint aux domaines autorisés (topsocietes.com, localhost)
+Rate limiting sur /login et /api/generate avec slowapi
+Prepared statements partout dans DuckDB (remplacer sanitize())
+Timeout OpenAI explicite
+Robustesse
+
+Transactions SQLite dans save_fiche() avec try/finally
+Logging centralisé dans un fichier logs/societies.log (module logging Python)
+Lock sur _sessions pour éviter les race conditions
+Timeout sur les appels OpenAI
+Maintenabilité
+
+Pydantic models pour valider les inputs des endpoints principaux
+Séparation en modules : db.py, generation.py, auth.py, routes/ — sans changer le comportement
+⚠️ Trop lourd pour ce stade
+Suite de tests complète (PHPUnit équivalent) — faisable mais long
+Refactoring MVC complet — inutile pour ce projet monolithique
+Effort estimé
+Amélioration	Effort
+CORS + Rate limiting	30 min
+Prepared statements	1h
+Logging + transactions	1h
+Pydantic models	2h
+Séparation modules	3h
+Tu veux qu'on commence ? Je recommande de partir dans cet ordre :
+
+Sécurité d'abord (CORS, rate limiting, prepared statements)
+Robustesse (logging, transactions)
+Maintenabilité (Pydantic, modules) en dernier

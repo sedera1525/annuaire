@@ -1,0 +1,52 @@
+2026-03-20 10:30:18 [WARNING] Tentative de connexion échouée : admin
+2026-03-20 10:30:18 [INFO] Connexion réussie : admin
+2026-03-20 10:30:18 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 10:30:35 [WARNING] Tentative de connexion échouée : admin
+2026-03-20 10:30:35 [INFO] Connexion réussie : admin
+2026-03-20 10:30:35 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:02:13 [WARNING] Tentative de connexion échouée : admin
+2026-03-20 11:02:13 [INFO] Connexion réussie : admin
+2026-03-20 11:02:13 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:20:25 [WARNING] Tentative de connexion échouée : admin
+2026-03-20 11:20:25 [INFO] Connexion réussie : admin
+2026-03-20 11:20:25 [INFO] Connexion réussie : admin
+2026-03-20 11:20:25 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:20:25 [INFO] Connexion réussie : admin
+2026-03-20 11:20:25 [INFO] Nouvelle clé de licence générée
+2026-03-20 11:20:25 [INFO] Migration SQLite v1 appliquée
+2026-03-20 11:20:25 [INFO] Migration SQLite v3 appliquée
+2026-03-20 11:20:47 [WARNING] Tentative de connexion échouée : admin
+2026-03-20 11:20:47 [INFO] Connexion réussie : admin
+2026-03-20 11:20:47 [INFO] Connexion réussie : admin
+2026-03-20 11:20:47 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:20:47 [INFO] Connexion réussie : admin
+2026-03-20 11:20:47 [INFO] Nouvelle clé de licence générée
+2026-03-20 11:36:38 [WARNING] Tentative de connexion échouée : admin
+2026-03-20 11:36:38 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:36:38 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:36:38 [INFO] Migration SQLite v4 appliquée
+2026-03-20 11:38:35 [WARNING] Tentative de connexion échouée : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Nouvelle clé de licence générée
+2026-03-20 11:38:35 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Nouvelle clé de licence générée
+2026-03-20 11:38:35 [WARNING] Tentative de vérification de licence invalide
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Nouvelle clé de licence générée
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Fiche générée : Boulangerie PaulMock — 42 tokens
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [INFO] Fiche générée : Boulangerie PaulCache — 42 tokens
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 11:38:35 [ERROR] generate_fiche error for 'Entreprise Invalide ZZTEST': Expecting value: line 1 column 1 (char 0)
+2026-03-20 11:38:35 [INFO] Connexion réussie : admin
+2026-03-20 16:15:41 [INFO] DuckDB déjà disponible — 4,589,492 entreprises

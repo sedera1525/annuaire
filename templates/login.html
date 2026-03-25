@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Societies — Connexion</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0f1117;font-family:system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .box{background:#1a1d27;border:1px solid #2e3247;border-radius:16px;padding:40px;width:360px}
+  .logo{font-size:22px;font-weight:700;color:#6c8aff;margin-bottom:4px}
+  .logo span{color:#e2e8f0}
+  .sub{font-size:13px;color:#8892a4;margin-bottom:28px}
+  label{font-size:12px;color:#8892a4;font-weight:600;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:6px}
+  input{width:100%;background:#242736;border:1px solid #2e3247;color:#e2e8f0;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;margin-bottom:16px;transition:border-color .2s}
+  input:focus{border-color:#6c8aff}
+  button{width:100%;background:#6c8aff;color:white;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}
+  button:hover{opacity:.9}
+  .error{color:#f87171;font-size:13px;margin-bottom:14px;background:rgba(248,113,113,.1);padding:8px 12px;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">Socie<span>ties</span></div>
+  <div class="sub">Accès restreint — connectez-vous</div>
+  {error}
+  <form method="post" action="/login">
+    <label>Identifiant</label>
+    <input type="text" name="username" autocomplete="username" autofocus required>
+    <label>Mot de passe</label>
+    <input type="password" name="password" autocomplete="current-password" required>
+    <button type="submit">Se connecter</button>
+  </form>
+</div>
+</body>
+</html>

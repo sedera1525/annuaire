@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store">
 <title>Societies — Annuaire des entreprises</title>
 <style>
   :root {
@@ -561,6 +562,54 @@
     .cards { grid-template-columns: 1fr; }
     .modal-grid { grid-template-columns: 1fr; }
   }
+
+  /* ─── CONFIRM MODAL ─── */
+  .confirm-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.75); backdrop-filter: blur(4px);
+    z-index: 1000; align-items: center; justify-content: center; padding: 20px;
+  }
+  .confirm-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    width: 100%; max-width: 400px; padding: 28px;
+    animation: cfmIn .15s ease;
+  }
+  @keyframes cfmIn { from { transform: scale(.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .confirm-icon-wrap {
+    width: 48px; height: 48px; border-radius: 12px; font-size: 22px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
+  }
+  .confirm-icon-wrap.danger { background: rgba(248,113,113,.12); }
+  .confirm-icon-wrap.warn   { background: rgba(251,146,60,.12); }
+  .confirm-icon-wrap.info   { background: rgba(108,138,255,.12); }
+  .confirm-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .confirm-subtitle { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 24px; }
+  .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .cfm-btn {
+    border: none; border-radius: 8px; padding: 8px 18px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s;
+  }
+  .cfm-btn:hover { opacity: .82; }
+  .cfm-btn.cancel  { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .cfm-btn.danger  { background: var(--red); color: #fff; }
+  .cfm-btn.primary { background: var(--accent); color: #fff; }
+  /* ─── TOAST ─── */
+  .toast-wrap {
+    position: fixed; bottom: 24px; right: 24px; z-index: 2000;
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  }
+  .toast {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 11px 16px; font-size: 13px; min-width: 220px; max-width: 340px;
+    display: flex; align-items: flex-start; gap: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4); animation: toastIn .2s ease;
+    pointer-events: all;
+  }
+  @keyframes toastIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .toast.error   { border-left: 3px solid var(--red); }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.info    { border-left: 3px solid var(--accent); }
+  .toast-msg { flex: 1; color: var(--text); line-height: 1.45; }
 </style>
 </head>
 <body>
@@ -719,10 +768,11 @@
         <label style="font-size:12px;color:var(--muted)">Têtes :</label>
         <select id="autoConcurrency" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:13px;width:70px">
           <option value="1">1</option>
+          <option value="2">2</option>
           <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
           <option value="6" selected>6</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
         </select>
         <button id="autoStartBtn" onclick="autoGenStart()"
                 style="background:#6c8aff;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s">
@@ -764,6 +814,16 @@
       <button class="tab-btn" id="tabDeleted" onclick="switchFichesTab('deleted')">🗑 Corbeille</button>
     </div>
     <input type="text" id="fichesSearch" placeholder="Rechercher une entreprise..." style="flex:1;min-width:200px;max-width:360px" oninput="debouceFiches()">
+    <button id="regenAllBtn" onclick="regenAllFiches(this)"
+            style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap"
+            title="Régénérer toutes les fiches (done + erreurs)">
+      🔄 Régénérer tout
+    </button>
+    <button id="regenErrorsBtn" onclick="regenErrorFiches(this)"
+            style="background:var(--surface2);border:1px solid #ef4444;color:#ef4444;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap"
+            title="Régénérer uniquement les fiches en erreur">
+      ⚠️ Régénérer erreurs
+    </button>
     <span id="fichesCount" style="font-size:13px;color:var(--muted);margin-left:auto"></span>
   </div>
 
@@ -776,12 +836,11 @@
           <th>Générée le</th>
           <th>Modèle</th>
           <th>Tokens</th>
-          <th style="text-align:center">Q&R</th>
           <th style="text-align:right">Actions</th>
         </tr>
       </thead>
       <tbody id="fichesBody">
-        <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">Chargement...</td></tr>
+        <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px">Chargement...</td></tr>
       </tbody>
     </table>
   </div>
@@ -835,6 +894,22 @@
     </div>
   </div>
 </div>
+
+<!-- ═══ CONFIRM MODAL ════════════════════════════════════════════════════ -->
+<div id="confirmOverlay" class="confirm-overlay" style="display:none" onclick="if(event.target===this)closeConfirm()">
+  <div class="confirm-box">
+    <div class="confirm-icon-wrap danger" id="cfmIconWrap"><span id="cfmIcon">🗑</span></div>
+    <div class="confirm-title" id="cfmTitle">Confirmation</div>
+    <div class="confirm-subtitle" id="cfmSubtitle"></div>
+    <div class="confirm-actions">
+      <button class="cfm-btn cancel" onclick="closeConfirm()">Annuler</button>
+      <button class="cfm-btn danger" id="cfmOkBtn" onclick="_cfmCb&&_cfmCb()">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST CONTAINER ══════════════════════════════════════════════════ -->
+<div id="toastWrap" class="toast-wrap"></div>
 
 <script>
 let currentPage = 1;
@@ -1202,7 +1277,7 @@ function renderFicheSection(fiche) {
   if (!el) return;
 
   if (fiche.status === 'done' && fiche.qa_answered) {
-    const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : [];
+    const answered = parseQaAnswered(fiche.qa_answered);
     const openQs = Array.isArray(fiche.open_questions) ? fiche.open_questions : [];
     const intro = fiche.intro_text || '';
     const date = fiche.date_fr || '';
@@ -1276,7 +1351,7 @@ async function triggerGenerate(force = false) {
   try {
     const r = await fetch('/api/generate', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: csrfHeaders(),
       body: JSON.stringify({...c, _force: force}),
     });
     const fiche = await r.json();
@@ -1313,6 +1388,12 @@ function escHtml(s) {
 
 function escJson(obj) {
   return "'" + JSON.stringify(obj).replace(/'/g, "\\'") + "'";
+}
+
+function csrfHeaders(extra) {
+  const token = document.cookie.split(';').map(c => c.trim())
+    .find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
+  return Object.assign({'Content-Type': 'application/json', 'X-CSRF-Token': token}, extra || {});
 }
 
 function starStr(v) {
@@ -1403,42 +1484,66 @@ async function runStreamGenerate(c, onDone, onError) {
   const logId = Date.now() + '_' + Math.random().toString(36).slice(2, 6);
   logEntry(logId, c.title);
 
-  try {
-    const resp = await fetch('/api/generate/stream', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(c),
-    });
-    if (!resp.ok) {
-      const err = await resp.json();
-      updateLogEntry(logId, 'error', {message: err.detail || 'Erreur serveur'});
-      onError && onError(err.detail);
+  const _RETRY_BACKOFF = [10, 30, 60]; // secondes entre tentatives sur 429
+
+  for (let attempt = 0; attempt <= _RETRY_BACKOFF.length; attempt++) {
+    try {
+      const resp = await fetch('/api/generate/stream', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(c),
+      });
+
+      // Gestion rate-limit : attente puis retry automatique
+      if (resp.status === 429) {
+        if (attempt >= _RETRY_BACKOFF.length) {
+          updateLogEntry(logId, 'error', {message: 'Rate limit dépassé après 3 tentatives'});
+          onError && onError('Rate limit dépassé');
+          return;
+        }
+        const wait = _RETRY_BACKOFF[attempt];
+        updateLogEntry(logId, 'stage', {
+          message: `⏳ Rate limit — pause ${wait}s (tentative ${attempt + 1}/3)...`,
+          percent: 0,
+        });
+        await new Promise(r => setTimeout(r, wait * 1000));
+        continue; // retry
+      }
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        updateLogEntry(logId, 'error', {message: err.detail || `Erreur ${resp.status}`});
+        onError && onError(err.detail);
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, {stream: true});
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            updateLogEntry(logId, evt.type, evt);
+            if (evt.type === 'done') { onDone && onDone(evt); return; }
+            if (evt.type === 'error') { onError && onError(evt.message); return; }
+          } catch(e) {}
+        }
+      }
+      return; // succès — sortir de la boucle retry
+
+    } catch(e) {
+      updateLogEntry(logId, 'error', {message: e.message});
+      onError && onError(e.message);
       return;
     }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-
-    while (true) {
-      const {done, value} = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, {stream: true});
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const evt = JSON.parse(line.slice(6));
-          updateLogEntry(logId, evt.type, evt);
-          if (evt.type === 'done') { onDone && onDone(evt); return; }
-          if (evt.type === 'error') { onError && onError(evt.message); return; }
-        } catch(e) {}
-      }
-    }
-  } catch(e) {
-    updateLogEntry(logId, 'error', {message: e.message});
-    onError && onError(e.message);
   }
 }
 
@@ -1587,27 +1692,73 @@ function renderFichesStats(stats) {
 function renderFichesTable(rows, deleted) {
   const tbody = document.getElementById('fichesBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">${deleted ? 'Aucune fiche supprimée' : 'Aucune fiche générée'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px">${deleted ? 'Aucune fiche supprimée' : 'Aucune fiche générée'}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(f => {
     const date = f.generated_at ? f.generated_at.slice(0, 16).replace('T', ' ') : '—';
-    const qaCount = f.qa_a_len ? '3 + 6' : '—';
-    const titleAttr = JSON.stringify(f.company_title).replace(/"/g, '&quot;');
+    const t = escHtml(f.company_title);
     const actions = deleted
-      ? `<button class="btn-icon success" onclick="restoreFiche(${titleAttr})">↩ Restaurer</button>`
-      : `<button class="btn-icon" onclick="openViewFiche(${titleAttr})" title="Voir le contenu">👁</button>
-         <button class="btn-icon" onclick="openEditFiche(${titleAttr})" title="Modifier">✏️</button>
-         <button class="btn-icon danger" onclick="softDeleteFiche(${titleAttr})" title="Supprimer">🗑</button>`;
+      ? `<button class="btn-icon success" data-action="restore" data-title="${t}" title="Restaurer">↩ Restaurer</button>`
+      : `<button class="btn-icon" data-action="view" data-title="${t}" title="Voir la fiche">👁 Voir</button>
+         <button class="btn-icon" data-action="edit" data-title="${t}" title="Modifier la fiche">✏️ Éditer</button>
+         <button class="btn-icon" data-action="regen" data-title="${t}" title="Régénérer la fiche">🔄</button>
+         <button class="btn-icon" data-action="copy" data-title="${t}" title="Copier le contenu">📋 Copier</button>
+         <button class="btn-icon danger" data-action="delete" data-title="${t}" title="Supprimer">🗑</button>`;
     return `<tr>
-      <td class="td-title"><span title="${escHtml(f.company_title)}">${escHtml(f.company_title)}</span></td>
+      <td class="td-title"><span title="${t}">${t}</span></td>
       <td style="color:var(--muted);white-space:nowrap">${date}</td>
       <td style="color:var(--muted)">${escHtml(f.model || '—')}</td>
       <td style="color:var(--muted)">${f.completion_tokens || '—'}</td>
-      <td style="text-align:center;color:var(--muted)">${qaCount}</td>
       <td style="text-align:right;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end">${actions}</td>
     </tr>`;
   }).join('');
+}
+
+// Event delegation — un seul listener pour tous les boutons de la table
+document.getElementById('fichesBody').addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const title = btn.dataset.title;
+  const action = btn.dataset.action;
+  if      (action === 'view')    openViewFiche(title);
+  else if (action === 'edit')    openEditFiche(title);
+  else if (action === 'regen')   regenFiche(title);
+  else if (action === 'copy')    copyFicheByTitle(title, btn);
+  else if (action === 'delete')  softDeleteFiche(title);
+  else if (action === 'restore') restoreFiche(title);
+});
+
+async function copyFicheByTitle(title, btn) {
+  const orig = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const r    = await fetch('/api/fiche/' + encodeURIComponent(title));
+    const fiche = await r.json();
+    const answered = parseQaAnswered(fiche.qa_answered);
+    const ci = fiche.company_info;
+    let text = title + '\n';
+    if (ci) {
+      if (ci.category)                text += `Secteur : ${ci.category}\n`;
+      if (ci.city || ci.zip_code)     text += `Ville : ${[ci.zip_code, ci.city].filter(Boolean).join(' ')}\n`;
+      if (ci.phone)                   text += `Téléphone : ${ci.phone}\n`;
+      if (ci.url)                     text += `Site : ${ci.url}\n`;
+      if (ci.rating_value)            text += `Note : ${ci.rating_value}${ci.rating_votes ? ` (${ci.rating_votes} avis)` : ''}\n`;
+      if ((ci.emails||[]).length)     text += `Email : ${ci.emails.join(', ')}\n`;
+    }
+    text += '\n';
+    if (fiche.intro_text) text += fiche.intro_text + '\n\n';
+    answered.forEach((item, i) => { text += `Q${i+1} : ${item.q}\n${item.r || ''}\n\n`; });
+    await navigator.clipboard.writeText(text.trim());
+    btn.textContent = '✅';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+    showToast('Fiche copiée dans le presse-papier.', 'success');
+  } catch(e) {
+    btn.textContent = orig;
+    btn.disabled = false;
+    showToast('Erreur copie : ' + e.message);
+  }
 }
 
 function renderFichesPagination(page, pages) {
@@ -1627,29 +1778,171 @@ function fichesGotoPage(p) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// CONFIRM MODAL + TOAST
+// ═══════════════════════════════════════════════════════════════════════
+let _cfmCb = null;
+
+function showConfirm({title, subtitle, confirmText = 'Confirmer', type = 'danger', icon = '⚠️', onConfirm}) {
+  _cfmCb = () => { closeConfirm(); onConfirm(); };
+  document.getElementById('cfmIcon').textContent = icon;
+  document.getElementById('cfmIconWrap').className = `confirm-icon-wrap ${type}`;
+  document.getElementById('cfmTitle').textContent = title;
+  document.getElementById('cfmSubtitle').textContent = subtitle || '';
+  const btn = document.getElementById('cfmOkBtn');
+  btn.textContent = confirmText;
+  btn.className = `cfm-btn ${type}`;
+  document.getElementById('confirmOverlay').style.display = 'flex';
+}
+
+function closeConfirm() {
+  document.getElementById('confirmOverlay').style.display = 'none';
+  _cfmCb = null;
+}
+
+function showToast(message, type = 'error') {
+  const icons = { error: '⚠️', success: '✅', info: 'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span style="font-size:16px;flex-shrink:0">${icons[type]||'⚠️'}</span><span class="toast-msg">${escHtml(String(message))}</span>`;
+  document.getElementById('toastWrap').appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .3s, transform .3s';
+    el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
+    setTimeout(() => el.remove(), 320);
+  }, 4000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // FICHES — ACTIONS
 // ═══════════════════════════════════════════════════════════════════════
-async function softDeleteFiche(title) {
-  if (!confirm(`Supprimer la fiche de "${title}" ?\nElle sera conservée et pourra être restaurée.`)) return;
+// RÉGÉNÉRATION
+// ═══════════════════════════════════════════════════════════════════════
+async function regenFiche(title) {
   try {
-    const r = await fetch('/api/fiche/' + encodeURIComponent(title), {method: 'DELETE'});
-    if (!r.ok) throw new Error((await r.json()).detail);
+    const r = await fetch('/api/fiche/' + encodeURIComponent(title));
+    const fiche = await r.json();
+    if (!r.ok) throw new Error(fiche.detail || `Erreur ${r.status}`);
+    const ci = fiche.company_info || {};
+    await runStreamGenerate({
+      title,
+      category:     ci.category     || '',
+      city:         ci.city         || '',
+      zip_code:     ci.zip_code     || '',
+      rating_value: ci.rating_value || null,
+      rating_votes: ci.rating_votes || null,
+    });
     loadFiches();
-  } catch(e) { alert('Erreur : ' + e.message); }
+  } catch(e) {
+    showToast('Erreur régénération : ' + e.message);
+  }
+}
+
+async function regenAllFiches(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/fiches?per_page=500&include_errors=true');
+    const data = await r.json();
+    const titles = (data.results || []).map(f => f.company_title);
+    if (!titles.length) { showToast('Aucune fiche à régénérer.'); return; }
+
+    let done = 0, idx = 0;
+    btn.textContent = `⏳ 0/${titles.length}`;
+
+    const worker = async () => {
+      while (idx < titles.length) {
+        const t = titles[idx++];
+        try { await regenFiche(t); } catch {}
+        btn.textContent = `⏳ ${++done}/${titles.length}`;
+        // Pause 2s entre chaque fiche pour ne jamais saturer le rate-limit
+        if (idx < titles.length) await new Promise(r => setTimeout(r, 2000));
+      }
+    };
+    // 1 worker séquentiel + pause 2s = max ~6/min, bien sous les 120/min
+    await worker();
+    showToast(`${done} fiches régénérées.`, 'success');
+    loadFiches();
+  } catch(e) {
+    showToast('Erreur : ' + e.message);
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
+}
+
+async function regenErrorFiches(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/fiches?per_page=500&include_errors=true');
+    const data = await r.json();
+    const titles = (data.results || [])
+      .filter(f => f.status === 'error')
+      .map(f => f.company_title);
+    if (!titles.length) { showToast('Aucune fiche en erreur.', 'success'); return; }
+
+    let done = 0, idx = 0;
+    btn.textContent = `⏳ 0/${titles.length}`;
+
+    while (idx < titles.length) {
+      const t = titles[idx++];
+      try { await regenFiche(t); } catch {}
+      btn.textContent = `⏳ ${++done}/${titles.length}`;
+      if (idx < titles.length) await new Promise(r => setTimeout(r, 2000));
+    }
+    showToast(`${done} fiches en erreur régénérées.`, 'success');
+    loadFiches();
+  } catch(e) {
+    showToast('Erreur : ' + e.message);
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+async function softDeleteFiche(title) {
+  showConfirm({
+    title: 'Supprimer la fiche ?',
+    subtitle: `La fiche de "${title}" sera désactivée. Elle pourra être restaurée depuis l'onglet Supprimées.`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+    icon: '🗑',
+    onConfirm: async () => {
+      try {
+        const r = await fetch('/api/fiche/' + encodeURIComponent(title), {method: 'DELETE', headers: csrfHeaders()});
+        if (!r.ok) throw new Error((await r.json()).detail);
+        loadFiches();
+        showToast('Fiche supprimée.', 'success');
+      } catch(e) { showToast('Erreur : ' + e.message); }
+    },
+  });
 }
 
 async function restoreFiche(title) {
   try {
-    const r = await fetch('/api/fiche/' + encodeURIComponent(title) + '/restore', {method: 'POST'});
+    const r = await fetch('/api/fiche/' + encodeURIComponent(title) + '/restore', {method: 'POST', headers: csrfHeaders()});
     if (!r.ok) throw new Error((await r.json()).detail);
     loadFiches();
-  } catch(e) { alert('Erreur : ' + e.message); }
+    showToast('Fiche restaurée.', 'success');
+  } catch(e) { showToast('Erreur : ' + e.message); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // FICHES — LECTURE
 // ═══════════════════════════════════════════════════════════════════════
 let _viewFicheData = null;
+
+function parseQaAnswered(qa) {
+  if (Array.isArray(qa)) return qa;
+  if (typeof qa === 'string') {
+    try { qa = JSON.parse(qa); } catch { return []; }
+  }
+  if (qa && typeof qa === 'object') {
+    return Object.entries(qa).map(([q, r]) => ({q, r: typeof r === 'string' ? r : String(r)}));
+  }
+  return [];
+}
 
 function renderCompanyInfoBlock(ci, title) {
   if (!ci) return '';
@@ -1658,7 +1951,7 @@ function renderCompanyInfoBlock(ci, title) {
   if (ci.category)            parts.push(`🏷 ${escHtml(ci.category)}`);
   if (ci.phone)               parts.push(`📞 ${escHtml(ci.phone)}`);
   if (ci.url)                 parts.push(`🌐 <a href="${escHtml(ci.url)}" target="_blank" style="color:var(--accent)">${escHtml(ci.url)}</a>`);
-  if (ci.rating_value)        parts.push(`⭐ ${ci.rating_value}${ci.rating_votes ? ' <span style="color:var(--muted);font-size:12px">(${ci.rating_votes} avis)</span>' : ''}`);
+  if (ci.rating_value)        parts.push(`⭐ ${ci.rating_value}${ci.rating_votes ? ` <span style="color:var(--muted);font-size:12px">(${ci.rating_votes} avis)</span>` : ''}`);
   if (!parts.length) return '';
   return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center">
     ${parts.map(p => `<span style="font-size:13px;color:var(--text)">${p}</span>`).join('')}
@@ -1674,8 +1967,9 @@ async function openViewFiche(title) {
   try {
     const r = await fetch('/api/fiche/' + encodeURIComponent(title));
     const fiche = await r.json();
+    if (!r.ok) throw new Error(fiche.detail || `Erreur ${r.status}`);
     _viewFicheData = fiche;
-    const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : (JSON.parse(fiche.qa_answered || '[]'));
+    const answered = parseQaAnswered(fiche.qa_answered);
 
     let html = renderCompanyInfoBlock(fiche.company_info, title);
     if (fiche.intro_text) {
@@ -1717,7 +2011,7 @@ async function copyFicheContent() {
   if (!_viewFicheData) return;
   const fiche = _viewFicheData;
   const ci = fiche.company_info;
-  const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : (JSON.parse(fiche.qa_answered || '[]'));
+  const answered = parseQaAnswered(fiche.qa_answered);
   let text = '';
   // Infos entreprise
   if (ci) {
@@ -1744,7 +2038,7 @@ async function copyFicheContent() {
     btn.textContent = '✅ Copié !';
     setTimeout(() => { btn.textContent = '📋 Copier'; }, 2000);
   } catch(e) {
-    alert('Impossible de copier : ' + e.message);
+    showToast('Impossible de copier : ' + e.message);
   }
 }
 
@@ -1760,7 +2054,7 @@ async function openEditFiche(title) {
   try {
     const r = await fetch('/api/fiche/' + encodeURIComponent(title));
     const fiche = await r.json();
-    const answered = Array.isArray(fiche.qa_answered) ? fiche.qa_answered : (JSON.parse(fiche.qa_answered || '[]'));
+    const answered = parseQaAnswered(fiche.qa_answered);
 
     document.getElementById('editCompanyInfo').innerHTML = renderCompanyInfoBlock(fiche.company_info, title);
     document.getElementById('editIntroText').value = fiche.intro_text || '';
@@ -1819,14 +2113,14 @@ async function saveEditFiche() {
   try {
     const resp = await fetch('/api/fiche/' + encodeURIComponent(_editFicheTitle), {
       method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
+      headers: csrfHeaders(),
       body: JSON.stringify({qa_answered, intro_text, open_answers}),
     });
     if (!resp.ok) throw new Error((await resp.json()).detail);
     closeEditFiche();
     loadFiches();
   } catch(e) {
-    alert('Erreur : ' + e.message);
+    showToast('Erreur : ' + e.message);
   } finally {
     btn.textContent = '💾 Enregistrer';
     btn.disabled = false;
@@ -1863,12 +2157,21 @@ async function refreshLicenseStatus() {
 }
 
 async function generateLicense() {
-  if (!confirm('Générer une nouvelle clé ? L\'ancienne sera invalidée.')) return;
-  const res  = await fetch('/api/license/generate', { method: 'POST' });
-  const data = await res.json();
-  document.getElementById('licenseKeyValue').textContent = data.key;
-  document.getElementById('licenseKeyDisplay').style.display = 'block';
-  await refreshLicenseStatus();
+  showConfirm({
+    title: 'Générer une nouvelle clé ?',
+    subtitle: "L'ancienne clé sera immédiatement invalidée et tous les accès liés seront révoqués.",
+    confirmText: 'Générer',
+    type: 'warn',
+    icon: '🔑',
+    onConfirm: async () => {
+      const res  = await fetch('/api/license/generate', { method: 'POST', headers: csrfHeaders() });
+      const data = await res.json();
+      document.getElementById('licenseKeyValue').textContent = data.key;
+      document.getElementById('licenseKeyDisplay').style.display = 'block';
+      await refreshLicenseStatus();
+      showToast('Nouvelle clé générée.', 'success');
+    },
+  });
 }
 
 function copyLicenseKey() {
@@ -1907,7 +2210,7 @@ async function autoGenStart() {
   try {
     const r = await fetch('/api/auto-generate/start', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: csrfHeaders(),
       body: JSON.stringify({ concurrency })
     });
     const d = await r.json();
@@ -1915,16 +2218,16 @@ async function autoGenStart() {
       _setAutoUI(true);
       _startAutoPolling();
     }
-  } catch(e) { alert('Erreur : ' + e.message); }
+  } catch(e) { showToast('Erreur : ' + e.message); }
 }
 
 async function autoGenStop() {
   try {
-    await fetch('/api/auto-generate/stop', { method: 'POST' });
+    await fetch('/api/auto-generate/stop', { method: 'POST', headers: csrfHeaders() });
     _setAutoUI(false);
     _stopAutoPolling();
     await _refreshAutoStatus();
-  } catch(e) { alert('Erreur : ' + e.message); }
+  } catch(e) { showToast('Erreur : ' + e.message); }
 }
 
 function _setAutoUI(running) {
@@ -2002,12 +2305,12 @@ function _renderHeads(heads, running) {
 }
 
 async function autoHeadPause(slot) {
-  await fetch(`/api/auto-generate/head/${slot}/pause`, {method:'POST'});
+  await fetch(`/api/auto-generate/head/${slot}/pause`, {method:'POST', headers: csrfHeaders()});
   await _refreshAutoStatus();
 }
 
 async function autoHeadResume(slot) {
-  await fetch(`/api/auto-generate/head/${slot}/resume`, {method:'POST'});
+  await fetch(`/api/auto-generate/head/${slot}/resume`, {method:'POST', headers: csrfHeaders()});
   await _refreshAutoStatus();
 }
 

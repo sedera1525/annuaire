@@ -1,0 +1,334 @@
+"""
+Societies — Endpoints recherche, export, statut DB
+Phase C : cache dict+TTL pour les recherches fréquentes
+"""
+import csv as csv_mod
+import io
+import json
+import time
+from typing import Any, Optional
+
+import json as _json
+
+from fastapi import APIRouter, Request
+
+from core.config import REDIS_URL
+from core.db import db_state, fetch_company, get_conn
+
+router = APIRouter(tags=["search"])
+
+# =============================================================================
+# CACHE — Redis si REDIS_URL défini, sinon dict+TTL en mémoire (fallback)
+# Inspiré de RealeseSeo : Cache::remember() / spatie/responsecache
+# =============================================================================
+_CACHE_TTL  = 300  # 5 minutes
+
+# Tentative de connexion Redis (import optionnel)
+_redis: Any = None
+if REDIS_URL:
+    try:
+        import redis as _redis_lib
+        _r = _redis_lib.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=2)
+        _r.ping()
+        _redis = _r
+    except Exception:
+        _redis = None  # Fallback silencieux vers dict
+
+# Fallback dict+TTL
+_cache: dict[str, tuple[Any, float]] = {}
+
+
+def _cache_get(key: str) -> Any:
+    if _redis:
+        try:
+            raw = _redis.get(f"societies:{key}")
+            return _json.loads(raw) if raw else None
+        except Exception:
+            pass  # Fallback vers dict si Redis devient indisponible
+    entry = _cache.get(key)
+    if entry and time.time() - entry[1] < _CACHE_TTL:
+        return entry[0]
+    return None
+
+
+def _cache_set(key: str, value: Any) -> None:
+    if _redis:
+        try:
+            _redis.setex(f"societies:{key}", _CACHE_TTL, _json.dumps(value, ensure_ascii=False))
+            return
+        except Exception:
+            pass  # Fallback vers dict
+    _cache[key] = (value, time.time())
+    if len(_cache) > 1000:
+        now = time.time()
+        expired = [k for k, (_, t) in _cache.items() if now - t > _CACHE_TTL]
+        for k in expired:
+            del _cache[k]
+
+
+# =============================================================================
+# ENDPOINTS
+# =============================================================================
+
+@router.get("/status")
+def get_status():
+    return db_state
+
+
+@router.get("/healthz")
+def healthz():
+    """Endpoint Docker HEALTHCHECK — répond 200 si l'app est prête, 503 sinon."""
+    import sqlite3 as _sqlite3
+    from core.config import FICHES_DB as _FICHES_DB
+    checks: dict = {"app": "ok", "duckdb": "ok", "sqlite": "ok"}
+    status = 200
+
+    if not db_state.get("ready"):
+        checks["duckdb"] = "not_ready"
+        status = 503
+
+    try:
+        c = _sqlite3.connect(_FICHES_DB, timeout=2)
+        c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+        c.close()
+    except Exception:
+        checks["sqlite"] = "error"
+        status = 503
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=checks, status_code=status)
+
+
+@router.get("/categories")
+def list_categories():
+    cached = _cache_get("categories")
+    if cached:
+        return cached
+    conn = get_conn()
+    try:
+        rows = conn.execute("""
+            SELECT category, COUNT(*) AS cnt
+            FROM companies
+            WHERE category IS NOT NULL AND category != ''
+            GROUP BY category ORDER BY cnt DESC LIMIT 100
+        """).fetchall()
+        result = [{"category": r[0], "count": r[1]} for r in rows]
+        _cache_set("categories", result)
+        return result
+    finally:
+        conn.close()
+
+
+@router.get("/cities")
+def list_cities(q: Optional[str] = None):
+    cache_key = f"cities:{q or ''}"
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+    conn = get_conn()
+    try:
+        params = []
+        where  = ""
+        if q:
+            where = "AND UPPER(city) LIKE UPPER(?)"
+            params.append(f"%{q[:100]}%")
+        rows = conn.execute(f"""
+            SELECT city, COUNT(*) AS cnt
+            FROM companies
+            WHERE city IS NOT NULL AND city != '' {where}
+            GROUP BY city ORDER BY cnt DESC LIMIT 50
+        """, params).fetchall()
+        result = [{"city": r[0], "count": r[1]} for r in rows]
+        _cache_set(cache_key, result)
+        return result
+    finally:
+        conn.close()
+
+
+@router.get("/search")
+def search(
+    q:                 Optional[str]  = None,
+    city:              Optional[str]  = None,
+    zip_code:          Optional[str]  = None,
+    category:          Optional[str]  = None,
+    has_phone:         Optional[bool] = None,
+    has_website:       Optional[bool] = None,
+    no_web_with_email: bool           = False,
+    no_web_no_email:   bool           = False,
+    page:     int = 1,
+    per_page: int = 50,
+    sort_by:  str = "rating",
+):
+    cache_key = (
+        f"search:{q}:{city}:{zip_code}:{category}:{has_phone}:{has_website}:"
+        f"{no_web_with_email}:{no_web_no_email}:{page}:{per_page}:{sort_by}"
+    )
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
+    conn       = get_conn()
+    conditions = []
+    params     = []
+
+    if q:
+        pct = f"%{q[:150]}%"
+        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
+        params.extend([pct, pct, pct])
+    if city:
+        conditions.append("UPPER(city) LIKE UPPER(?)")
+        params.append(f"%{city[:100]}%")
+    if zip_code:
+        conditions.append("zip_code LIKE ?")
+        params.append(f"{zip_code[:10]}%")
+    if category:
+        conditions.append("UPPER(category) LIKE UPPER(?)")
+        params.append(f"%{category[:150]}%")
+    if has_phone is True:
+        conditions.append("phone != '' AND phone IS NOT NULL")
+    if has_phone is False:
+        conditions.append("(phone = '' OR phone IS NULL)")
+    if has_website is True:
+        conditions.append("url != '' AND url IS NOT NULL")
+    if has_website is False:
+        conditions.append("(url = '' OR url IS NULL)")
+    if no_web_with_email:
+        conditions.append("(url = '' OR url IS NULL)")
+        conditions.append("contacts LIKE '%\"type\":\"Mail\"%'")
+    if no_web_no_email:
+        conditions.append("(url = '' OR url IS NULL)")
+        conditions.append("(contacts NOT LIKE '%\"type\":\"Mail\"%')")
+
+    where  = " AND ".join(conditions) if conditions else "1=1"
+    offset = (page - 1) * per_page
+    order  = {
+        "rating": "rating_value DESC NULLS LAST, rating_votes DESC NULLS LAST",
+        "votes":  "rating_votes DESC NULLS LAST",
+        "name":   "title ASC",
+        "city":   "city ASC",
+    }.get(sort_by, "rating_value DESC NULLS LAST")
+
+    try:
+        total = conn.execute(f"SELECT COUNT(*) FROM companies WHERE {where}", params).fetchone()[0]
+    except Exception:
+        total = 0
+
+    t0   = time.time()
+    rows = conn.execute(f"""
+        SELECT title, category, phone, url, domain,
+               addr_street, city, zip_code, region,
+               rating_value, rating_votes,
+               contacts, logo, snippet, is_claimed,
+               latitude, longitude, address_full
+        FROM companies WHERE {where}
+        ORDER BY {order}
+        LIMIT {int(per_page)} OFFSET {int(offset)}
+    """, params).fetchall()
+    cols    = [d[0] for d in conn.description]
+    elapsed = round(time.time() - t0, 3)
+    conn.close()
+
+    results = []
+    for row in rows:
+        d = dict(zip(cols, row))
+        try:
+            contacts_data = json.loads(d.get("contacts") or "[]")
+            d["emails"]   = [c["value"] for c in contacts_data if c.get("type") == "Mail"]
+        except Exception:
+            d["emails"] = []
+        results.append(d)
+
+    result = {
+        "results":  results,
+        "total":    total,
+        "page":     page,
+        "per_page": per_page,
+        "pages":    max(1, (total + per_page - 1) // per_page) if total > 0 else 1,
+        "elapsed":  elapsed,
+    }
+    _cache_set(cache_key, result)
+    return result
+
+
+@router.get("/company/{title:path}")
+def get_company(title: str):
+    company = fetch_company(title)
+    if not company:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Entreprise non trouvée")
+    return company
+
+
+@router.get("/export")
+def export(
+    q:                 Optional[str]  = None,
+    city:              Optional[str]  = None,
+    zip_code:          Optional[str]  = None,
+    category:          Optional[str]  = None,
+    has_phone:         Optional[bool] = None,
+    has_website:       Optional[bool] = None,
+    no_web_with_email: bool           = False,
+    no_web_no_email:   bool           = False,
+    limit: int = 2000,
+):
+    from fastapi.responses import StreamingResponse
+    conn       = get_conn()
+    conditions = []
+    params     = []
+
+    if q:
+        pct = f"%{q[:150]}%"
+        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
+        params.extend([pct, pct, pct])
+    if city:
+        conditions.append("UPPER(city) LIKE UPPER(?)")
+        params.append(f"%{city[:100]}%")
+    if zip_code:
+        conditions.append("zip_code LIKE ?")
+        params.append(f"{zip_code[:10]}%")
+    if category:
+        conditions.append("UPPER(category) LIKE UPPER(?)")
+        params.append(f"%{category[:150]}%")
+    if has_phone is True:
+        conditions.append("phone != '' AND phone IS NOT NULL")
+    if has_website is True:
+        conditions.append("url != '' AND url IS NOT NULL")
+    if no_web_with_email:
+        conditions.append("(url = '' OR url IS NULL)")
+        conditions.append("contacts LIKE '%\"type\":\"Mail\"%'")
+    if no_web_no_email:
+        conditions.append("(url = '' OR url IS NULL)")
+        conditions.append("(contacts NOT LIKE '%\"type\":\"Mail\"%')")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+    rows  = conn.execute(f"""
+        SELECT title, category, phone, url, addr_street, city, zip_code,
+               rating_value, rating_votes, contacts
+        FROM companies WHERE {where}
+        LIMIT {min(int(limit), 5000)}
+    """, params).fetchall()
+    cols = [d[0] for d in conn.description]
+    conn.close()
+
+    output = io.StringIO()
+    w      = csv_mod.writer(output)
+    w.writerow(["Nom", "Catégorie", "Téléphone", "Site web", "Adresse",
+                "Ville", "Code postal", "Note", "Nb avis", "Emails"])
+    for row in rows:
+        d = dict(zip(cols, row))
+        try:
+            emails = "; ".join(
+                c["value"] for c in json.loads(d.get("contacts") or "[]")
+                if c.get("type") == "Mail"
+            )
+        except Exception:
+            emails = ""
+        w.writerow([d["title"], d["category"], d["phone"], d["url"],
+                    d["addr_street"], d["city"], d["zip_code"],
+                    d["rating_value"], d["rating_votes"], emails])
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=societies_export.csv"},
+    )
