@@ -61,6 +61,7 @@ _MIGRATIONS: list[tuple[int, str]] = [
         );
     """),
     (4, "ALTER TABLE sessions ADD COLUMN username TEXT DEFAULT '';"),
+    (5, "ALTER TABLE sessions ADD COLUMN last_activity REAL DEFAULT 0;"),
 ]
 
 
@@ -99,10 +100,10 @@ def init_fiches_db() -> None:
     conn = sqlite3.connect(FICHES_DB)
     try:
         _run_migrations(conn)
-        # Purge des sessions expirées (> 7 jours)
+        # Purge des sessions inactives depuis plus de 15 min
         conn.execute(
-            "DELETE FROM sessions WHERE created_at < ?",
-            [time.time() - 86400 * 7],
+            "DELETE FROM sessions WHERE last_activity > 0 AND last_activity < ?",
+            [time.time() - 900],
         )
         conn.commit()
     finally:

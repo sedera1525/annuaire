@@ -1683,10 +1683,7 @@ function renderFichesStats(stats) {
       <div class="stat-val" style="color:var(--muted)">${del.toLocaleString('fr-FR')}</div>
       <div class="stat-lbl">Supprimées</div>
     </div>
-    <div class="fiche-stat-card">
-      <div class="stat-val">${((done + del) * 0.0002).toFixed(2)} $</div>
-      <div class="stat-lbl">Coût estimé</div>
-    </div>`;
+`;
 }
 
 function renderFichesTable(rows, deleted) {

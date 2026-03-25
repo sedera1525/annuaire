@@ -27,7 +27,7 @@ if _SENTRY_DSN:
     )
 
 from core.auth import (
-    _CSRF_EXEMPT_PATHS, is_authenticated, rotate_if_needed, verify_csrf,
+    _CSRF_EXEMPT_PATHS, is_authenticated, touch_session, verify_csrf,
 )
 from core.config import ALLOWED_ORIGINS, COOKIE_NAME, CSRF_ENABLED, DB_PATH, LOG_DIR, STATIC_DIR
 from core.db import db_state, init_db
@@ -152,7 +152,7 @@ async def auth_middleware(request: Request, call_next):
                     media_type="application/json",
                 )
     response = await call_next(request)
-    rotate_if_needed(request, response)  # Rotation automatique si token > 1 jour
+    touch_session(request, response)  # Renouvelle last_activity (timeout 15 min)
     return response
 
 # =============================================================================

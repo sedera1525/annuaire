@@ -9,8 +9,9 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 # Variables d'env minimales AVANT tout import du code applicatif
-os.environ.setdefault("APP_USERNAME",   "admin")
-os.environ.setdefault("APP_PASSWORD",   "testpassword")
+import bcrypt as _bcrypt
+os.environ.setdefault("APP_USERNAME", _bcrypt.hashpw(b"admin", _bcrypt.gensalt()).decode())
+os.environ.setdefault("APP_PASSWORD", _bcrypt.hashpw(b"testpassword", _bcrypt.gensalt()).decode())
 os.environ.setdefault("SECRET_KEY",     "test-secret-key-for-testing-only-32ch")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-key")
 os.environ["CSRF_ENABLED"] = "false"   # Désactivé globalement — TestCsrf le teste via patch

@@ -7,14 +7,15 @@ import secrets
 import sqlite3
 import time
 
+import bcrypt
 from fastapi import HTTPException, Request, Response
 
 from .config import APP_PASSWORD, APP_USERNAME, COOKIE_NAME, FICHES_DB
 
 logger = logging.getLogger("societies")
 
-_TOKEN_ROTATE_AFTER = 86400      # Rotation si token > 1 jour
-_TOKEN_MAX_AGE      = 86400 * 7  # Durée max 7 jours
+_SESSION_TIMEOUT = 900  # Déconnexion après 15 min d'inactivité
+_TOKEN_MAX_AGE   = 900  # Durée max du cookie (identique au timeout)
 CSRF_COOKIE_NAME    = "csrf_token"
 
 # Endpoints exemptés du contrôle CSRF (intégrations externes sans cookie)
@@ -43,17 +44,21 @@ def make_token() -> str:
 
 
 def check_credentials(username: str, password: str) -> bool:
-    ok_user = secrets.compare_digest(username, APP_USERNAME)
-    ok_pass = secrets.compare_digest(password, APP_PASSWORD)
-    return ok_user and ok_pass
+    try:
+        ok_user = bcrypt.checkpw(username.encode(), APP_USERNAME.encode())
+        ok_pass = bcrypt.checkpw(password.encode(), APP_PASSWORD.encode())
+        return ok_user and ok_pass
+    except Exception:
+        return False
 
 
 def add_session(token: str, username: str = "") -> None:
+    now = time.time()
     conn = sqlite3.connect(FICHES_DB)
     try:
         conn.execute(
-            "INSERT OR REPLACE INTO sessions(token, created_at, username) VALUES(?, ?, ?)",
-            [token, time.time(), username],
+            "INSERT OR REPLACE INTO sessions(token, created_at, username, last_activity) VALUES(?, ?, ?, ?)",
+            [token, now, username, now],
         )
         conn.commit()
     finally:
@@ -82,7 +87,12 @@ def is_admin(request: Request) -> bool:
     user = get_session_user(token)
     if user is None:
         return False
-    return user == APP_USERNAME or user == ""
+    if user == "":
+        return True  # sessions legacy (avant migration v4)
+    try:
+        return bcrypt.checkpw(user.encode(), APP_USERNAME.encode())
+    except Exception:
+        return False
 
 
 def require_admin(request: Request) -> None:
@@ -106,16 +116,6 @@ def remove_session(token: str) -> None:
         conn.close()
 
 
-def get_session_age(token: str) -> float:
-    """Retourne l'âge du token en secondes, -1 si inexistant."""
-    conn = sqlite3.connect(FICHES_DB)
-    try:
-        row = conn.execute(
-            "SELECT created_at FROM sessions WHERE token=?", [token]
-        ).fetchone()
-        return time.time() - row[0] if row else -1.0
-    finally:
-        conn.close()
 
 
 def is_authenticated(request: Request) -> bool:
@@ -124,26 +124,35 @@ def is_authenticated(request: Request) -> bool:
         return False
     conn = sqlite3.connect(FICHES_DB)
     try:
-        row = conn.execute("SELECT 1 FROM sessions WHERE token=?", [token]).fetchone()
-        return bool(row)
+        row = conn.execute(
+            "SELECT last_activity FROM sessions WHERE token=?", [token]
+        ).fetchone()
+        if not row:
+            return False
+        if time.time() - row[0] > _SESSION_TIMEOUT:
+            conn.execute("DELETE FROM sessions WHERE token=?", [token])
+            conn.commit()
+            return False
+        return True
     finally:
         conn.close()
 
 
-def rotate_if_needed(request: Request, response: Response) -> None:
-    """
-    Émet un nouveau token si l'actuel a plus de 1 jour.
-    Inspiré du token refresh de Sanctum — protège contre le vol de token long-term.
-    """
+def touch_session(request: Request, response: Response) -> None:
+    """Met à jour last_activity et renouvelle le cookie à chaque requête authentifiée."""
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return
-    if get_session_age(token) > _TOKEN_ROTATE_AFTER:
-        new_token = make_token()
-        remove_session(token)
-        add_session(new_token)
-        response.set_cookie(
-            COOKIE_NAME, new_token,
-            httponly=True, samesite="lax", max_age=_TOKEN_MAX_AGE,
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        conn.execute(
+            "UPDATE sessions SET last_activity=? WHERE token=?",
+            [time.time(), token],
         )
-        logger.info("Token de session renouvelé (rotation automatique)")
+        conn.commit()
+    finally:
+        conn.close()
+    response.set_cookie(
+        COOKIE_NAME, token,
+        httponly=True, samesite="lax", max_age=_TOKEN_MAX_AGE,
+    )
