@@ -135,7 +135,9 @@ async def auth_middleware(request: Request, call_next):
     if (path in ("/login", "/api/license/verify", "/api/healthz")
             or path.startswith("/static/")
             or path.startswith("/api/company/")
-            or path.startswith("/api/fiche/")):
+            or path.startswith("/api/fiche/")
+            or path == "/api/plugin/info"
+            or path == "/api/plugin/download"):
         return await call_next(request)
     if not is_authenticated(request):
         if path.startswith("/api/"):

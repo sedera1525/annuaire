@@ -2,16 +2,61 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.0.0
+ * Version:      1.1.0
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.0.0');
+define('SC_VERSION', '1.1.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
+
+// =============================================================================
+// AUTO-UPDATE — vérifie les mises à jour depuis le backend Societies
+// =============================================================================
+
+add_filter('pre_set_site_transient_update_plugins', function($transient) {
+    if (empty($transient->checked)) return $transient;
+    $api_url = rtrim(get_option('societies_api_url', ''), '/');
+    if (!$api_url) return $transient;
+    $response = wp_remote_get($api_url . '/api/plugin/info', ['timeout' => 10, 'sslverify' => false]);
+    if (is_wp_error($response)) return $transient;
+    $info = json_decode(wp_remote_retrieve_body($response), true);
+    if (empty($info['version'])) return $transient;
+    if (version_compare($info['version'], SC_VERSION, '>')) {
+        $license = get_option('sc_license_key', '');
+        $slug    = 'societies-connector/societies-connector.php';
+        $transient->response[$slug] = (object)[
+            'slug'        => 'societies-connector',
+            'plugin'      => $slug,
+            'new_version' => $info['version'],
+            'url'         => $api_url,
+            'package'     => $api_url . '/api/plugin/download' . ($license ? '?license=' . urlencode($license) : ''),
+        ];
+    }
+    return $transient;
+});
+
+add_filter('plugins_api', function($result, $action, $args) {
+    if ($action !== 'plugin_information' || ($args->slug ?? '') !== 'societies-connector') return $result;
+    $api_url  = rtrim(get_option('societies_api_url', ''), '/');
+    $response = wp_remote_get($api_url . '/api/plugin/info', ['timeout' => 10, 'sslverify' => false]);
+    if (is_wp_error($response)) return $result;
+    $info = json_decode(wp_remote_retrieve_body($response), true);
+    if (empty($info['version'])) return $result;
+    $license = get_option('sc_license_key', '');
+    return (object)[
+        'name'          => 'Societies Connector',
+        'slug'          => 'societies-connector',
+        'version'       => $info['version'],
+        'requires'      => $info['requires'] ?? '6.0',
+        'tested'        => $info['tested'] ?? '6.9',
+        'download_link' => $api_url . '/api/plugin/download' . ($license ? '?license=' . urlencode($license) : ''),
+        'sections'      => $info['sections'] ?? [],
+    ];
+}, 10, 3);
 
 // =============================================================================
 // LICENCE
@@ -486,126 +531,151 @@ add_shortcode('societies_fiche', function($atts) {
     $qa_open     = $fiche['qa_open'] ?? [];
     $status      = $fiche['status'] ?? 'none';
 
-    ob_start(); ?>
-    <div class="sc-fiche-page">
+    $stars_full  = (int) round((float)$rating);
+    $stars_empty = 5 - $stars_full;
+    $stars_html  = str_repeat('★', $stars_full) . str_repeat('☆', $stars_empty);
 
-      <!-- En-tête entreprise -->
-      <div class="sc-fiche-header">
-        <div class="sc-fiche-logo">
-          <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com">
-        </div>
-        <div class="sc-fiche-title-row">
-          <h1 class="sc-fiche-name"><?= esc_html($company['title']) ?></h1>
-          <?php if ($rating): ?>
-          <div class="sc-fiche-rating">
-            <span class="sc-stars"><?= str_repeat('★', (int) round($rating)) . str_repeat('☆', 5 - (int) round($rating)) ?></span>
-            <strong><?= number_format($rating, 1) ?>/5</strong>
-            <?php if ($votes): ?>
-            <span class="sc-votes"><?= number_format($votes, 0, ',', ' ') ?> avis</span>
-            <?php endif; ?>
+    ob_start(); ?>
+    <div class="sc2-wrap">
+
+      <!-- HERO -->
+      <div class="sc2-hero">
+        <div class="sc2-hero-inner">
+          <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com" class="sc2-hero-logo">
+          <h1 class="sc2-hero-name"><?= esc_html($company['title']) ?></h1>
+          <?php if (!empty($company['category']) || !empty($company['city'])): ?>
+          <div class="sc2-hero-sub">
+            <?php if (!empty($company['category'])): ?><span><?= esc_html($company['category']) ?></span><?php endif; ?>
+            <?php if (!empty($company['city'])): ?><span>📍 <?= esc_html($company['city']) ?><?= !empty($company['zip_code']) ? ' ' . esc_html($company['zip_code']) : '' ?></span><?php endif; ?>
           </div>
           <?php endif; ?>
         </div>
-
-        <div class="sc-fiche-meta">
-          <?php if (!empty($company['category'])): ?>
-          <span class="sc-meta-pill">🏷️ <?= esc_html($company['category']) ?></span>
-          <?php endif; ?>
-          <?php if (!empty($company['city'])): ?>
-          <span class="sc-meta-pill">📍 <?= esc_html($company['city']) ?><?= !empty($company['zip_code']) ? ' (' . esc_html($company['zip_code']) . ')' : '' ?></span>
-          <?php endif; ?>
-          <?php if (!empty($company['address'])): ?>
-          <span class="sc-meta-pill">🗺️ <?= esc_html($company['address']) ?></span>
-          <?php endif; ?>
-          <?php if (!empty($company['phone'])): ?>
-          <span class="sc-meta-pill">📞 <a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $company['phone'])) ?>"><?= esc_html($company['phone']) ?></a></span>
-          <?php endif; ?>
-          <?php if (!empty($company['website'])): ?>
-          <span class="sc-meta-pill">🌐 <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener"><?= esc_html(preg_replace('/^https?:\/\/(www\.)?/', '', rtrim($company['website'], '/'))) ?></a></span>
-          <?php endif; ?>
+        <?php if ($rating): ?>
+        <div class="sc2-hero-rating">
+          <div class="sc2-hero-score"><?= number_format((float)$rating, 1) ?></div>
+          <div class="sc2-hero-stars"><?= $stars_html ?></div>
+          <?php if ($votes): ?><div class="sc2-hero-votes"><?= number_format((int)$votes, 0, ',', ' ') ?> avis</div><?php endif; ?>
         </div>
+        <?php endif; ?>
       </div>
 
+      <!-- CONTACT BAR -->
+      <?php $has_contact = !empty($company['phone']) || !empty($company['website']) || !empty($company['address']); ?>
+      <?php if ($has_contact): ?>
+      <div class="sc2-contact-bar">
+        <?php if (!empty($company['address'])): ?>
+        <span class="sc2-contact-item">📍 <?= esc_html($company['address']) ?></span>
+        <?php endif; ?>
+        <?php if (!empty($company['phone'])): ?>
+        <a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $company['phone'])) ?>" class="sc2-contact-item sc2-contact-link">📞 <?= esc_html($company['phone']) ?></a>
+        <?php endif; ?>
+        <?php if (!empty($company['website'])): ?>
+        <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-contact-item sc2-contact-link">🌐 <?= esc_html(preg_replace('/^https?:\/\/(www\.)?/', '', rtrim($company['website'], '/'))) ?></a>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
       <?php if ($intro && $status === 'done'): ?>
-      <!-- Présentation IA -->
-      <div class="sc-fiche-section">
-        <div class="sc-fiche-intro">
-          <p><?= nl2br(esc_html($intro)) ?></p>
-        </div>
+      <!-- PRÉSENTATION -->
+      <div class="sc2-intro-card">
+        <div class="sc2-intro-label">Présentation</div>
+        <p class="sc2-intro-text"><?= nl2br(esc_html($intro)) ?></p>
       </div>
       <?php endif; ?>
 
       <?php if (!empty($qa_answered)): ?>
-      <!-- Questions répondues par l'IA -->
-      <div class="sc-fiche-section">
-        <h2 class="sc-section-title">À propos de l'entreprise</h2>
-        <div class="sc-qa-grid">
+      <!-- Q&A RÉPONDUES -->
+      <div class="sc2-section">
+        <h2 class="sc2-section-title">Ce que pensent les clients</h2>
+        <div class="sc2-qa-grid">
           <?php foreach ($qa_answered as $item): ?>
-          <div class="sc-qa-card">
-            <div class="sc-qa-question"><?= esc_html($item['question'] ?? $item['q'] ?? '') ?></div>
-            <div class="sc-qa-answer"><?= nl2br(esc_html($item['answer'] ?? $item['r'] ?? $item['a'] ?? '')) ?></div>
+          <div class="sc2-qa-card">
+            <div class="sc2-qa-q"><?= esc_html($item['question'] ?? $item['q'] ?? '') ?></div>
+            <div class="sc2-qa-a"><?= nl2br(esc_html($item['answer'] ?? $item['r'] ?? $item['a'] ?? '')) ?></div>
           </div>
           <?php endforeach; ?>
         </div>
       </div>
       <?php endif; ?>
 
-      <?php
-      // Filtrer uniquement les questions ouvertes qui ont une réponse
-      $qa_open_answered = array_filter($qa_open, fn($item) => !empty($item['answer'] ?? $item['r'] ?? ''));
-      if (!empty($qa_open_answered)): ?>
-      <!-- Réponses personnalisées de l'entreprise -->
-      <div class="sc-fiche-section">
-        <h2 class="sc-section-title">L'entreprise vous répond</h2>
-        <div class="sc-qa-grid">
-          <?php foreach ($qa_open_answered as $item): ?>
-          <div class="sc-qa-card sc-qa-client">
-            <div class="sc-qa-question"><?= esc_html($item['question'] ?? $item['q'] ?? '') ?></div>
-            <div class="sc-qa-answer"><?= nl2br(esc_html($item['answer'] ?? $item['r'] ?? '')) ?></div>
+      <?php if (!empty($qa_open)): ?>
+      <!-- QUESTIONS OUVERTES -->
+      <div class="sc2-section">
+        <h2 class="sc2-section-title">Questions fréquentes</h2>
+        <div class="sc2-faq-list">
+          <?php foreach ($qa_open as $item): ?>
+          <?php $q = $item['question'] ?? $item['q'] ?? ''; $a = $item['answer'] ?? $item['r'] ?? ''; if (!$q) continue; ?>
+          <div class="sc2-faq-item">
+            <div class="sc2-faq-q"><span class="sc2-faq-icon">Q</span><?= esc_html($q) ?></div>
+            <?php if ($a): ?><div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div><?php endif; ?>
           </div>
           <?php endforeach; ?>
         </div>
       </div>
       <?php endif; ?>
 
-      <!-- Branding -->
-      <div class="sc-fiche-brand">
+      <!-- BRANDING -->
+      <div class="sc2-footer">
         <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com">
+        <span>Fiche entreprise — TOPsocietes.com</span>
       </div>
 
     </div>
     <style>
-    .sc-fiche-page{max-width:820px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a2e}
-    .sc-fiche-brand{margin-top:28px;padding-top:20px;border-top:1px solid #f3f4f6;text-align:center}
-    .sc-fiche-brand img{height:32px;width:auto;opacity:.7}
-    .sc-fiche-header{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px 32px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-    .sc-fiche-logo{margin-bottom:16px}
-    .sc-fiche-logo img{height:40px;width:auto}
-    .sc-fiche-title-row{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px}
-    .sc-fiche-name{margin:0;font-size:26px;font-weight:700;color:#111;line-height:1.2}
-    .sc-fiche-rating{display:flex;align-items:center;gap:6px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 12px;flex-shrink:0}
-    .sc-stars{color:#f59e0b;font-size:16px;letter-spacing:1px}
-    .sc-fiche-rating strong{font-size:15px;color:#92400e}
-    .sc-votes{color:#9ca3af;font-size:12px}
-    .sc-fiche-meta{display:flex;flex-wrap:wrap;gap:8px}
-    .sc-meta-pill{background:#f3f4f6;border-radius:20px;padding:5px 12px;font-size:13px;color:#374151;display:inline-flex;align-items:center;gap:4px}
-    .sc-meta-pill a{color:#2563eb;text-decoration:none}
-    .sc-meta-pill a:hover{text-decoration:underline}
-    .sc-fiche-section{margin-bottom:20px}
-    .sc-fiche-intro{background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border-left:4px solid #3b82f6;border-radius:0 12px 12px 0;padding:20px 24px}
-    .sc-fiche-intro p{margin:0;line-height:1.8;font-size:15px;color:#1e3a5f}
-    .sc-section-title{font-size:18px;font-weight:600;color:#111;margin:0 0 14px;padding-bottom:8px;border-bottom:2px solid #f3f4f6}
-    .sc-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
-    .sc-qa-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;transition:box-shadow .2s}
-    .sc-qa-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.08)}
-    .sc-qa-client{border-left:3px solid #10b981}
-    .sc-qa-question{font-weight:600;color:#374151;font-size:12px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
-    .sc-qa-answer{color:#1f2937;line-height:1.65;font-size:14px}
-    @media(max-width:600px){
-      .sc-fiche-header{padding:18px 16px}
-      .sc-fiche-name{font-size:20px}
-      .sc-fiche-title-row{flex-direction:column}
-      .sc-qa-grid{grid-template-columns:1fr}
+    .sc2-wrap{max-width:860px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
+
+    /* HERO */
+    .sc2-hero{background:#1a2744;border-radius:16px;padding:32px 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:4px;flex-wrap:wrap}
+    .sc2-hero-inner{flex:1}
+    .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px;opacity:.9}
+    .sc2-hero-name{margin:0 0 10px;font-size:28px;font-weight:800;color:#fff;line-height:1.2;text-transform:uppercase;letter-spacing:.5px}
+    .sc2-hero-sub{display:flex;flex-wrap:wrap;gap:10px}
+    .sc2-hero-sub span{background:rgba(255,255,255,.12);color:#cbd5e1;font-size:13px;padding:4px 12px;border-radius:20px}
+    .sc2-hero-rating{text-align:center;background:rgba(255,255,255,.08);border-radius:12px;padding:14px 22px;flex-shrink:0}
+    .sc2-hero-score{font-size:42px;font-weight:800;color:#e63946;line-height:1}
+    .sc2-hero-stars{color:#f59e0b;font-size:18px;letter-spacing:2px;margin:4px 0}
+    .sc2-hero-votes{color:#94a3b8;font-size:12px}
+
+    /* CONTACT BAR */
+    .sc2-contact-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 20px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px}
+    .sc2-contact-item{color:#475569;font-size:13px;display:inline-flex;align-items:center;gap:4px}
+    .sc2-contact-link{color:#2563eb;text-decoration:none}
+    .sc2-contact-link:hover{text-decoration:underline}
+
+    /* INTRO */
+    .sc2-intro-card{background:#1a2744;border-radius:12px;padding:24px 28px;margin-bottom:16px}
+    .sc2-intro-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px;color:#94a3b8}
+    .sc2-intro-text{margin:0;color:#e2e8f0;line-height:1.8;font-size:15px}
+
+    /* SECTIONS */
+    .sc2-section{margin-bottom:24px}
+    .sc2-section-title{font-size:18px;font-weight:700;color:#111827;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid #e63946;display:inline-block}
+
+    /* Q&A GRID */
+    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+    .sc2-qa-card{background:#fff;border:1px solid #e5e7eb;border-left:3px solid #e63946;border-radius:10px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow .2s}
+    .sc2-qa-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+    .sc2-qa-q{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#e63946;margin-bottom:8px}
+    .sc2-qa-a{color:#374151;font-size:14px;line-height:1.7}
+
+    /* FAQ LIST */
+    .sc2-faq-list{display:flex;flex-direction:column;gap:0}
+    .sc2-faq-item{padding:16px 0;border-bottom:1px solid #f1f5f9}
+    .sc2-faq-item:last-child{border-bottom:none}
+    .sc2-faq-q{display:flex;align-items:flex-start;gap:12px;font-size:15px;font-weight:600;color:#1f2937;margin-bottom:6px}
+    .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.65;padding-left:4px}
+    .sc2-faq-icon{background:#1a2744;color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .sc2-faq-icon-r{background:#e63946}
+
+    /* FOOTER */
+    .sc2-footer{margin-top:32px;padding-top:18px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;color:#9ca3af;font-size:12px}
+    .sc2-footer img{height:28px;width:auto;opacity:.6}
+
+    @media(max-width:640px){
+      .sc2-hero{padding:22px 18px;flex-direction:column;align-items:flex-start}
+      .sc2-hero-name{font-size:20px}
+      .sc2-hero-rating{align-self:flex-start}
+      .sc2-qa-grid{grid-template-columns:1fr}
     }
     </style>
     <?php
@@ -696,7 +766,15 @@ add_action('admin_menu', function() {
 add_action('admin_init', function() {
     register_setting('sc_options', 'societies_api_url');
     register_setting('sc_options', 'societies_api_username');
-    register_setting('sc_options', 'societies_api_password');
+    register_setting('sc_options', 'societies_api_password', [
+        'sanitize_callback' => function($new) {
+            // Si le champ est vide, on conserve l'ancien mot de passe
+            if (empty(trim($new))) {
+                return get_option('societies_api_password', '');
+            }
+            return $new;
+        },
+    ]);
 });
 
 // =============================================================================
@@ -992,10 +1070,10 @@ function sc_admin_dashboard() {
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin:20px 0">
         <?php
         $cards = [
-            'Entreprises en base' => number_format($status['rows'] ?? 0, 0, ',', ' '),
-            'Fiches générées'     => number_format($stats['done'] ?? 0, 0, ',', ' '),
-            'Fiches en erreur'    => number_format($stats['error'] ?? 0, 0, ',', ' '),
-            'Fiches supprimées'   => number_format($stats['deleted'] ?? 0, 0, ',', ' '),
+            'Entreprises en base' => number_format((int)($status['rows'] ?? 0), 0, ',', ' '),
+            'Fiches générées'     => number_format((int)($stats['done'] ?? 0), 0, ',', ' '),
+            'Fiches en erreur'    => number_format((int)($stats['error'] ?? 0), 0, ',', ' '),
+            'Fiches supprimées'   => number_format((int)($stats['deleted'] ?? 0), 0, ',', ' '),
         ];
         foreach ($cards as $label => $val): ?>
         <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px 28px;text-align:center;min-width:140px">
@@ -1034,6 +1112,27 @@ function sc_admin_settings() {
       <?php endif; ?>
       <?php endif; ?>
 
+      <?php $configured = get_option('societies_api_url') && get_option('societies_api_password'); ?>
+
+      <?php if ($configured): ?>
+      <!-- Connexion configurée — afficher masqué -->
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px 20px;margin-bottom:20px">
+        <p style="margin:0 0 8px;font-weight:600;color:#166534">✅ Backend configuré</p>
+        <p style="margin:0;color:#374151;font-size:13px">
+          URL : <code><?= esc_html(preg_replace('/^(https?:\/\/)/', '$1***@', get_option('societies_api_url'))) ?></code><br>
+          Identifiant : <code><?= esc_html(get_option('societies_api_username', 'admin')) ?></code><br>
+          Mot de passe : <code>••••••••••••</code>
+        </p>
+        <button type="button" onclick="document.getElementById('sc-settings-form').style.display='block';this.style.display='none'"
+          style="margin-top:12px;background:none;border:1px solid #d1d5db;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;color:#6b7280">
+          🔧 Modifier les paramètres
+        </button>
+      </div>
+      <div id="sc-settings-form" style="display:none">
+      <?php else: ?>
+      <div id="sc-settings-form">
+      <?php endif; ?>
+
       <form method="post" action="options.php">
         <?php settings_fields('sc_options'); ?>
         <table class="form-table">
@@ -1052,12 +1151,16 @@ function sc_admin_settings() {
           </tr>
           <tr>
             <th>Mot de passe</th>
-            <td><input type="password" name="societies_api_password" class="regular-text"
-              value="<?= esc_attr(get_option('societies_api_password', '')) ?>"></td>
+            <td>
+              <input type="password" name="societies_api_password" class="regular-text"
+                value="" autocomplete="new-password"
+                placeholder="<?= get_option('societies_api_password') ? '••••••••••••  (laisser vide pour conserver)' : 'Entrez le mot de passe' ?>">
+            </td>
           </tr>
         </table>
         <?php submit_button('Enregistrer'); ?>
       </form>
+      </div>
 
       <form method="post">
         <?php wp_nonce_field('sc_test'); ?>
@@ -1069,6 +1172,45 @@ function sc_admin_settings() {
 
 function sc_admin_fiches() {
     $tab = sanitize_key($_GET['tab'] ?? 'list');
+
+    // ── Action : créer toutes les pages manquantes en bulk ────────────────────
+    $bulk_notice = null;
+    if (isset($_POST['sc_create_all_pages']) && check_admin_referer('sc_create_all_pages')) {
+        $created = 0;
+        $skipped = 0;
+        $page    = 1;
+        do {
+            $fiches = sc_api('/api/fiches?per_page=100&page=' . $page);
+            if (empty($fiches['items'])) break;
+            foreach ($fiches['items'] as $f) {
+                $title = $f['company_title'] ?? '';
+                if (!$title) { $skipped++; continue; }
+                $existing = get_posts([
+                    'post_type'   => 'page',
+                    'post_status' => ['publish', 'draft'],
+                    'meta_key'    => '_sc_company_title',
+                    'meta_value'  => $title,
+                    'numberposts' => 1,
+                ]);
+                if ($existing) { $skipped++; continue; }
+                $post_id = wp_insert_post([
+                    'post_title'   => sanitize_text_field($title),
+                    'post_name'    => sanitize_title($title),
+                    'post_content' => '[societies_fiche title="' . esc_attr($title) . '"]',
+                    'post_status'  => 'publish',
+                    'post_type'    => 'page',
+                ]);
+                if (!is_wp_error($post_id)) {
+                    update_post_meta($post_id, '_sc_company_title', $title);
+                    $created++;
+                } else {
+                    $skipped++;
+                }
+            }
+            $page++;
+        } while (!empty($fiches['items']) && count($fiches['items']) === 100);
+        $bulk_notice = ['type' => 'success', 'msg' => "{$created} pages créées, {$skipped} ignorées (déjà existantes)."];
+    }
 
     // ── Action : créer une page WordPress pour la fiche ───────────────────────
     $page_notice = null;
@@ -1146,6 +1288,12 @@ function sc_admin_fiches() {
       </div>
       <?php endif; ?>
 
+      <?php if ($bulk_notice): ?>
+      <div class="notice notice-<?= $bulk_notice['type'] ?> is-dismissible" style="padding:12px 16px">
+        <p style="margin:0"><?= esc_html($bulk_notice['msg']) ?></p>
+      </div>
+      <?php endif; ?>
+
       <?php if ($page_notice): ?>
       <div class="notice notice-<?= $page_notice['type'] ?> is-dismissible" style="padding:12px 16px">
         <p style="margin:0"><?= esc_html($page_notice['msg']) ?>
@@ -1155,6 +1303,18 @@ function sc_admin_fiches() {
           <?php endif; ?>
         </p>
       </div>
+      <?php endif; ?>
+
+      <?php if ($tab === 'list'): ?>
+      <form method="post" style="margin-bottom:16px">
+        <input type="hidden" name="page" value="societies-fiches">
+        <input type="hidden" name="tab"  value="list">
+        <?php wp_nonce_field('sc_create_all_pages'); ?>
+        <button type="submit" name="sc_create_all_pages" value="1" class="button button-primary"
+                onclick="return confirm('Créer toutes les pages manquantes ? Cela peut prendre du temps.')">
+          📄 Créer toutes les pages manquantes
+        </button>
+      </form>
       <?php endif; ?>
 
       <?php if ($tab === 'list'): ?>
