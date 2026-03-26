@@ -17,3 +17,4 @@ amelioration4.md
 amelioration5.md
 *.gz
 docs/
+docker-compose.prod.yml
