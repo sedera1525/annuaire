@@ -58,6 +58,12 @@ add_filter('plugins_api', function($result, $action, $args) {
     ];
 }, 10, 3);
 
+// Auto-installation silencieuse dès qu'une nouvelle version est disponible
+add_filter('auto_update_plugin', function($update, $item) {
+    if (($item->slug ?? '') === 'societies-connector') return true;
+    return $update;
+}, 10, 2);
+
 // =============================================================================
 // LICENCE
 // =============================================================================
