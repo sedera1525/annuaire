@@ -132,7 +132,10 @@ async def security_headers_middleware(request: Request, call_next):
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path in ("/login", "/api/license/verify", "/api/healthz") or path.startswith("/static/"):
+    if (path in ("/login", "/api/license/verify", "/api/healthz")
+            or path.startswith("/static/")
+            or path.startswith("/api/company/")
+            or path.startswith("/api/fiche/")):
         return await call_next(request)
     if not is_authenticated(request):
         if path.startswith("/api/"):
