@@ -1183,7 +1183,7 @@ function sc_admin_fiches() {
             $fiches = sc_api('/api/fiches?per_page=100&page=' . $page);
             if (!empty($fiches['error'])) {
                 $bulk_notice = ['type' => 'error', 'msg' => 'Erreur API : ' . esc_html($fiches['error'])];
-                break 2;
+                break;
             }
             $items = $fiches['results'] ?? $fiches['items'] ?? [];
             if (empty($items)) break;
