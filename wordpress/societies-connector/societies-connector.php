@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.1.0
+ * Version:      1.2.0
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.1.0');
+define('SC_VERSION', '1.2.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1181,8 +1181,13 @@ function sc_admin_fiches() {
         $page    = 1;
         do {
             $fiches = sc_api('/api/fiches?per_page=100&page=' . $page);
-            if (empty($fiches['items'])) break;
-            foreach ($fiches['items'] as $f) {
+            if (!empty($fiches['error'])) {
+                $bulk_notice = ['type' => 'error', 'msg' => 'Erreur API : ' . esc_html($fiches['error'])];
+                break 2;
+            }
+            $items = $fiches['results'] ?? $fiches['items'] ?? [];
+            if (empty($items)) break;
+            foreach ($items as $f) {
                 $title = $f['company_title'] ?? '';
                 if (!$title) { $skipped++; continue; }
                 $existing = get_posts([
@@ -1208,7 +1213,7 @@ function sc_admin_fiches() {
                 }
             }
             $page++;
-        } while (!empty($fiches['items']) && count($fiches['items']) === 100);
+        } while (!empty($items) && count($items) === 100);
         $bulk_notice = ['type' => 'success', 'msg' => "{$created} pages créées, {$skipped} ignorées (déjà existantes)."];
     }
 
