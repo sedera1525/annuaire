@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.5.0
+ * Version:      1.6.0
  * Author:       Societies
  * Text Domain:  societies
  */
@@ -917,14 +917,79 @@ add_action('admin_init', function() {
     register_setting('sc_options', 'societies_api_username');
     register_setting('sc_options', 'societies_api_password', [
         'sanitize_callback' => function($new) {
-            // Si le champ est vide, on conserve l'ancien mot de passe
-            if (empty(trim($new))) {
-                return get_option('societies_api_password', '');
-            }
+            if (empty(trim($new))) return get_option('societies_api_password', '');
             return $new;
         },
     ]);
+    register_setting('sc_options', 'societies_subdomain_mode', ['sanitize_callback' => 'absint']);
+    register_setting('sc_options', 'societies_footer_links', ['sanitize_callback' => 'wp_kses_post']);
 });
+
+// =============================================================================
+// MODE SOUS-DOMAINE — masquer header/footer thème + footer custom
+// =============================================================================
+add_action('wp_head', function() {
+    if (!get_option('societies_subdomain_mode')) return;
+    ?>
+<style id="sc-subdomain-css">
+/* Cache le header et le footer du thème */
+.wp-site-blocks > header.wp-block-template-part,
+.wp-site-blocks > footer.wp-block-template-part { display: none !important; }
+/* Cache la barre admin pour les non-admins */
+body.logged-in:not(.logged-in.administrator) #wpadminbar { display: none !important; }
+body { padding-top: 0 !important; margin-top: 0 !important; }
+/* Barre de navigation TOPsocietes */
+.sc-topbar { background:#1a2744; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; }
+.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; letter-spacing:.5px; }
+.sc-topbar-logo { font-size:16px; font-weight:800; color:#e63946 !important; }
+/* Footer custom */
+.sc-site-footer { background:#1a2744; color:#94a3b8; padding:28px 24px; margin-top:24px; font-size:13px; }
+.sc-site-footer-inner { max-width:860px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
+.sc-site-footer-links { display:flex; flex-wrap:wrap; gap:20px; }
+.sc-site-footer-links a { color:#94a3b8; text-decoration:none; }
+.sc-site-footer-links a:hover { color:#fff; }
+.sc-site-footer-copy { color:#64748b; font-size:12px; }
+</style>
+    <?php
+});
+
+add_action('wp_body_open', function() {
+    if (!get_option('societies_subdomain_mode')) return;
+    ?>
+<div class="sc-topbar">
+  <a href="<?= esc_url(home_url('/')) ?>" class="sc-topbar-logo">TOPsocietes.com</a>
+  <a href="<?= esc_url(home_url('/')) ?>">← Accueil</a>
+</div>
+    <?php
+});
+
+add_action('wp_footer', function() {
+    if (!get_option('societies_subdomain_mode')) return;
+    $links_raw = get_option('societies_footer_links', '');
+    // Liens par défaut si non configurés
+    if (empty(trim($links_raw))) {
+        $links_raw = json_encode([
+            ['label' => 'Accueil', 'url' => home_url('/')],
+            ['label' => 'Mentions légales', 'url' => '#'],
+            ['label' => 'Contact', 'url' => '#'],
+            ['label' => 'Créer votre page', 'url' => 'https://www.topsocietes.com'],
+        ]);
+    }
+    $links = json_decode($links_raw, true) ?: [];
+    $year  = date('Y');
+    ?>
+<div class="sc-site-footer">
+  <div class="sc-site-footer-inner">
+    <div class="sc-site-footer-links">
+      <?php foreach ($links as $l): ?>
+      <a href="<?= esc_url($l['url'] ?? '#') ?>"><?= esc_html($l['label'] ?? '') ?></a>
+      <?php endforeach; ?>
+    </div>
+    <div class="sc-site-footer-copy">© <?= $year ?> TOPsocietes.com — Tous droits réservés</div>
+  </div>
+</div>
+    <?php
+}, 99);
 
 // =============================================================================
 // DASHBOARD CLIENT (back office limité)
@@ -1310,6 +1375,35 @@ function sc_admin_settings() {
         <?php submit_button('Enregistrer'); ?>
       </form>
       </div>
+
+      <hr style="margin:24px 0">
+      <h2>Mode sous-domaine</h2>
+      <form method="post" action="options.php">
+        <?php settings_fields('sc_options'); ?>
+        <table class="form-table">
+          <tr>
+            <th>Activer le mode sous-domaine</th>
+            <td>
+              <label>
+                <input type="checkbox" name="societies_subdomain_mode" value="1"
+                  <?php checked(1, get_option('societies_subdomain_mode')); ?>>
+                Masquer le header/footer du thème et afficher le footer TOPsocietes
+              </label>
+              <p class="description">À activer sur le sous-domaine fiches. Cache le menu de navigation du thème et injecte un footer personnalisé.</p>
+            </td>
+          </tr>
+          <tr>
+            <th>Liens du footer <span style="font-weight:400;font-size:12px">(JSON)</span></th>
+            <td>
+              <textarea name="societies_footer_links" rows="6" class="large-text code"
+                placeholder='[{"label":"Accueil","url":"/"},{"label":"Mentions légales","url":"/mentions-legales"}]'
+              ><?= esc_textarea(get_option('societies_footer_links', '')) ?></textarea>
+              <p class="description">Format JSON : <code>[{"label":"Texte","url":"https://..."}]</code>. Laisser vide pour les liens par défaut.</p>
+            </td>
+          </tr>
+        </table>
+        <?php submit_button('Enregistrer le mode sous-domaine'); ?>
+      </form>
 
       <form method="post">
         <?php wp_nonce_field('sc_test'); ?>
