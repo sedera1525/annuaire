@@ -62,6 +62,7 @@ _MIGRATIONS: list[tuple[int, str]] = [
     """),
     (4, "ALTER TABLE sessions ADD COLUMN username TEXT DEFAULT '';"),
     (5, "ALTER TABLE sessions ADD COLUMN last_activity REAL DEFAULT 0;"),
+    (6, "ALTER TABLE fiches ADD COLUMN bonus_text TEXT;"),
 ]
 
 
@@ -211,6 +212,7 @@ def save_fiche(
     qa_answered: str = None,
     qa_open: str = None,
     intro_text: str = None,
+    bonus_text: str = None,
     model: str = None,
     completion_tokens: int = 0,
     error: str = None,
@@ -220,19 +222,20 @@ def save_fiche(
         conn.execute("BEGIN")
         conn.execute("""
             INSERT INTO fiches
-                (company_title, status, qa_answered, qa_open, intro_text,
+                (company_title, status, qa_answered, qa_open, intro_text, bonus_text,
                  model, completion_tokens, generated_at, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
             ON CONFLICT(company_title) DO UPDATE SET
                 status=excluded.status,
                 qa_answered=excluded.qa_answered,
                 qa_open=excluded.qa_open,
                 intro_text=excluded.intro_text,
+                bonus_text=excluded.bonus_text,
                 model=excluded.model,
                 completion_tokens=excluded.completion_tokens,
                 generated_at=excluded.generated_at,
                 error=excluded.error
-        """, [title, status, qa_answered, qa_open, intro_text,
+        """, [title, status, qa_answered, qa_open, intro_text, bonus_text,
               model, completion_tokens, error])
         conn.commit()
     except Exception as e:

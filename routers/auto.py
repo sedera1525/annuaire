@@ -84,6 +84,7 @@ async def _auto_generate_loop():
             save_fiche(title, "done",
                        qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
                        intro_text=parsed.get("intro", ""),
+                       bonus_text=parsed.get("bonus", ""),
                        model=result["model"],
                        completion_tokens=result["completion_tokens"])
             auto_state["heads"][slot]["done"] += 1

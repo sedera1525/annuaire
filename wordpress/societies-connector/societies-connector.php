@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.3.0
+ * Version:      1.5.0
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.3.0');
+define('SC_VERSION', '1.4.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -593,6 +593,7 @@ add_shortcode('societies_fiche', function($atts) {
     $gen_date    = $fiche['generated_at'] ?? '';
     $qa_answered = $fiche['qa_answered'] ?? [];
     $qa_open     = $fiche['qa_open'] ?? [];
+    $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
 
     $stars_full  = (int) round((float)$rating);
@@ -671,12 +672,30 @@ add_shortcode('societies_fiche', function($atts) {
           <?php $q = $item['question'] ?? $item['q'] ?? ''; $a = $item['answer'] ?? $item['r'] ?? ''; if (!$q) continue; ?>
           <div class="sc2-faq-item">
             <div class="sc2-faq-q"><span class="sc2-faq-icon">Q</span><?= esc_html($q) ?></div>
-            <?php if ($a): ?><div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div><?php endif; ?>
+            <?php if ($a): ?>
+            <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
+            <?php else: ?>
+            <div class="sc2-faq-locked">🔒</div>
+            <?php endif; ?>
           </div>
           <?php endforeach; ?>
         </div>
       </div>
       <?php endif; ?>
+
+      <?php if ($bonus_text && $status === 'done'): ?>
+      <!-- TEXTE BONUS IA -->
+      <div class="sc2-bonus-card">
+        <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
+      </div>
+      <?php endif; ?>
+
+      <!-- BANDEAU PUBLICITAIRE -->
+      <div class="sc2-advert">
+        <a href="https://www.topsocietes.com" target="_blank" rel="noopener" class="sc2-advert-link">
+          Créer gratuitement votre page entreprise TOPsocietes.com →
+        </a>
+      </div>
 
       <!-- BRANDING -->
       <div class="sc2-footer">
@@ -729,6 +748,16 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-faq-q{display:flex;align-items:flex-start;gap:12px;font-size:15px;font-weight:600;color:#1f2937;margin-bottom:6px}
     .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.65;padding-left:4px}
     .sc2-faq-icon{background:#1a2744;color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .sc2-faq-locked{font-size:18px;padding-left:4px;opacity:.5}
+
+    /* BONUS TEXT */
+    .sc2-bonus-card{background:#f0f4ff;border-left:4px solid #3b5bdb;border-radius:10px;padding:18px 22px;margin-top:16px}
+    .sc2-bonus-text{margin:0;color:#374151;font-size:14px;line-height:1.7}
+
+    /* BANDEAU PUBLICITAIRE */
+    .sc2-advert{text-align:center;padding:14px 20px;margin-top:16px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}
+    .sc2-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}
+    .sc2-advert-link:hover{text-decoration:underline}
     .sc2-faq-icon-r{background:#e63946}
 
     /* FOOTER */
@@ -809,6 +838,62 @@ add_action('wp_footer', function() {
     " onmouseover="this.style.background=\'#1d4ed8\'" onmouseout="this.style.background=\'#2563eb\'">
         🏢 ' . $label . '
     </a>';
+});
+
+// =============================================================================
+// =============================================================================
+// AJAX — bulk création pages (batch de 50 pour éviter timeout)
+// =============================================================================
+add_action('wp_ajax_sc_bulk_create_batch', function() {
+    check_ajax_referer('sc_bulk_create', 'nonce');
+    if (!current_user_can('manage_options')) wp_send_json_error('Non autorisé');
+
+    $page    = max(1, (int)($_POST['api_page'] ?? 1));
+    $fiches  = sc_api('/api/fiches?per_page=50&page=' . $page);
+
+    if (!empty($fiches['error'])) {
+        wp_send_json_error($fiches['error']);
+    }
+
+    $items   = $fiches['results'] ?? [];
+    $total   = (int)($fiches['total'] ?? 0);
+    $created = 0;
+    $skipped = 0;
+
+    foreach ($items as $f) {
+        $title = $f['company_title'] ?? '';
+        if (!$title) { $skipped++; continue; }
+        $existing = get_posts([
+            'post_type'   => 'page',
+            'post_status' => ['publish', 'draft'],
+            'meta_key'    => '_sc_company_title',
+            'meta_value'  => $title,
+            'numberposts' => 1,
+        ]);
+        if ($existing) { $skipped++; continue; }
+        $post_id = wp_insert_post([
+            'post_title'   => sanitize_text_field($title),
+            'post_name'    => sanitize_title($title),
+            'post_content' => '[societies_fiche title="' . esc_attr($title) . '"]',
+            'post_status'  => 'publish',
+            'post_type'    => 'page',
+        ]);
+        if (!is_wp_error($post_id)) {
+            update_post_meta($post_id, '_sc_company_title', $title);
+            $created++;
+        } else {
+            $skipped++;
+        }
+    }
+
+    wp_send_json_success([
+        'created'   => $created,
+        'skipped'   => $skipped,
+        'has_more'  => count($items) === 50,
+        'next_page' => $page + 1,
+        'total'     => $total,
+        'done_up_to'=> $page * 50,
+    ]);
 });
 
 // =============================================================================
@@ -1375,15 +1460,61 @@ function sc_admin_fiches() {
       <?php endif; ?>
 
       <?php if ($tab === 'list'): ?>
-      <form method="post" style="margin-bottom:16px">
-        <input type="hidden" name="page" value="societies-fiches">
-        <input type="hidden" name="tab"  value="list">
-        <?php wp_nonce_field('sc_create_all_pages'); ?>
-        <button type="submit" name="sc_create_all_pages" value="1" class="button button-primary"
-                onclick="return confirm('Créer toutes les pages manquantes ? Cela peut prendre du temps.')">
+      <div style="margin-bottom:16px">
+        <button id="sc-bulk-btn" class="button button-primary" onclick="scBulkStart()">
           📄 Créer toutes les pages manquantes
         </button>
-      </form>
+        <span id="sc-bulk-status" style="margin-left:12px;font-size:13px;color:#666"></span>
+        <div id="sc-bulk-bar" style="display:none;margin-top:8px;background:#e5e7eb;border-radius:4px;height:8px;width:400px;max-width:100%">
+          <div id="sc-bulk-fill" style="background:#1a2744;height:8px;border-radius:4px;width:0%;transition:width .3s"></div>
+        </div>
+      </div>
+      <script>
+      var scBulkNonce = '<?= wp_create_nonce('sc_bulk_create') ?>';
+      var scBulkTotal = 0, scBulkCreated = 0, scBulkSkipped = 0;
+      function scBulkStart() {
+        if (!confirm('Créer toutes les pages manquantes ? Cela peut prendre du temps.')) return;
+        document.getElementById('sc-bulk-btn').disabled = true;
+        document.getElementById('sc-bulk-bar').style.display = 'block';
+        scBulkTotal = 0; scBulkCreated = 0; scBulkSkipped = 0;
+        scBulkBatch(1);
+      }
+      function scBulkBatch(page) {
+        document.getElementById('sc-bulk-status').textContent = 'Traitement page ' + page + '…';
+        var fd = new FormData();
+        fd.append('action', 'sc_bulk_create_batch');
+        fd.append('nonce', scBulkNonce);
+        fd.append('api_page', page);
+        fetch(ajaxurl, {method:'POST', body:fd})
+          .then(r => r.json())
+          .then(function(res) {
+            if (!res.success) {
+              document.getElementById('sc-bulk-status').textContent = '❌ Erreur : ' + res.data;
+              document.getElementById('sc-bulk-btn').disabled = false;
+              return;
+            }
+            var d = res.data;
+            if (!scBulkTotal && d.total) scBulkTotal = d.total;
+            scBulkCreated += d.created;
+            scBulkSkipped += d.skipped;
+            var pct = scBulkTotal ? Math.min(100, Math.round(d.done_up_to / scBulkTotal * 100)) : 0;
+            document.getElementById('sc-bulk-fill').style.width = pct + '%';
+            document.getElementById('sc-bulk-status').textContent =
+              scBulkCreated + ' créées, ' + scBulkSkipped + ' ignorées (' + pct + '%)';
+            if (d.has_more) {
+              setTimeout(function(){ scBulkBatch(d.next_page); }, 200);
+            } else {
+              document.getElementById('sc-bulk-status').textContent =
+                '✅ Terminé — ' + scBulkCreated + ' pages créées, ' + scBulkSkipped + ' ignorées.';
+              document.getElementById('sc-bulk-btn').disabled = false;
+            }
+          })
+          .catch(function(e) {
+            document.getElementById('sc-bulk-status').textContent = '❌ Erreur réseau';
+            document.getElementById('sc-bulk-btn').disabled = false;
+          });
+      }
+      </script>
       <?php endif; ?>
 
       <?php if ($tab === 'list'): ?>

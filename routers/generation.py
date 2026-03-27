@@ -90,6 +90,7 @@ async def stream_generate(title: str, company_data: dict):
 
         qa_answered    = parsed["qa_answered"]
         intro          = parsed.get("intro", "")
+        bonus          = parsed.get("bonus", "")
         open_questions = [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE]
         date_fr        = format_date_fr(datetime.now().strftime("%Y-%m-%d"))
 
@@ -97,12 +98,14 @@ async def stream_generate(title: str, company_data: dict):
         save_fiche(title, "done",
                    qa_answered=json.dumps(qa_answered, ensure_ascii=False),
                    intro_text=intro,
+                   bonus_text=bonus,
                    model=OPENAI_MODEL,
                    completion_tokens=token_count)
 
         yield sse("done",
                   qa_answered=qa_answered,
                   intro_text=intro,
+                  bonus_text=bonus,
                   open_questions=open_questions,
                   date_fr=date_fr,
                   model=OPENAI_MODEL,
@@ -189,9 +192,11 @@ async def generate_fiche(request: Request, data: GenerateRequest):
             raise ValueError("Format inattendu")
         validate_qa(parsed)
         intro = parsed.get("intro", "")
+        bonus = parsed.get("bonus", "")
         save_fiche(title, "done",
                    qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
                    intro_text=intro,
+                   bonus_text=bonus,
                    model=result["model"],
                    completion_tokens=result["completion_tokens"])
         logger.info(f"Fiche générée : {title} — {result['completion_tokens']} tokens")
@@ -199,6 +204,7 @@ async def generate_fiche(request: Request, data: GenerateRequest):
             "status":            "done",
             "qa_answered":       parsed["qa_answered"],
             "intro_text":        intro,
+            "bonus_text":        bonus,
             "open_questions":    [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE],
             "date_fr":           format_date_fr(datetime.now().strftime("%Y-%m-%d")),
             "model":             result["model"],
@@ -246,6 +252,7 @@ async def generate_batch(request: Request, data: BatchRequest):
                 save_fiche(title, "done",
                            qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
                            intro_text=parsed.get("intro", ""),
+                           bonus_text=parsed.get("bonus", ""),
                            model=result["model"],
                            completion_tokens=result["completion_tokens"])
                 return {"title": title, "status": "done",

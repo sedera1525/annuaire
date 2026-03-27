@@ -59,10 +59,11 @@ GENERATION_PROMPT = """Tu es un analyste de réputation spécialisé dans les en
 
 À partir des données ci-dessous, génère :
 1. Un texte introductif de EXACTEMENT 3 phrases sur ce que pensent les clients de cette entreprise (avis, réputation, satisfaction globale).
-2. Les réponses aux 3 questions d'analyse (EXACTEMENT 2 phrases par réponse).
+2. Un texte bonus de EXACTEMENT 3 phrases sur les avantages du produit et/ou du service vendu par cette entreprise dans sa ville.
+3. Les réponses aux 3 questions d'analyse (EXACTEMENT 2 phrases par réponse).
 
 Règles strictes :
-- Ne cite JAMAIS le nom exact "{nom}" dans l'intro ni dans les réponses. Utilise "cette entreprise", "cet établissement", "ce prestataire", "cette structure", etc.
+- Ne cite JAMAIS le nom exact "{nom}" dans l'intro, le bonus ni dans les réponses. Utilise "cette entreprise", "cet établissement", "ce prestataire", "cette structure", etc.
 - N'utilise JAMAIS de pronom genré (il, elle, son, sa) pour désigner l'entreprise. Toujours des formulations neutres.
 - Traduis le secteur d'activité en français si nécessaire (ex : "Church" → "Lieu de culte", "Painter" → "Peintre").
 - Style journalistique : factuel, nuancé, appuyé sur la note et le nombre d'avis.
@@ -77,6 +78,7 @@ Note clients : {note}
 Réponds UNIQUEMENT avec ce JSON valide, sans texte avant ou après :
 {{
   "intro": "Phrase 1 sur la réputation générale. Phrase 2 nuancée. Phrase 3 de conclusion.",
+  "bonus": "Phrase 1 sur les avantages du produit/service à {ville}. Phrase 2. Phrase 3.",
   "qa_answered": [
     {{"q": "Que pensent réellement les clients de l'entreprise {nom} ?", "r": "Phrase 1. Phrase 2."}},
     {{"q": "L'entreprise {nom} est-elle fiable ?", "r": "Phrase 1. Phrase 2."}},
