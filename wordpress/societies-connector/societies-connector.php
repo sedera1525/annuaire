@@ -675,7 +675,7 @@ add_shortcode('societies_fiche', function($atts) {
             <?php if ($a): ?>
             <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
             <?php else: ?>
-            <div class="sc2-faq-locked">🔒</div>
+            <div class="sc2-faq-locked">🔐</div>
             <?php endif; ?>
           </div>
           <?php endforeach; ?>

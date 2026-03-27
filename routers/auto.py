@@ -15,7 +15,7 @@ from core.db import db_state, get_conn
 from core.utils import is_excluded_category
 from models import AutoStartRequest
 from services.fiches import get_openai_key, get_last_auto_job, save_auto_job, save_fiche, update_auto_job
-from services.generator import build_prompt, call_openai, validate_qa
+from services.generator import build_prompt, call_openai, validate_qa, OPEN_QUESTIONS_TEMPLATE
 
 logger = logging.getLogger("societies")
 router = APIRouter(tags=["auto-generate"])
@@ -81,8 +81,10 @@ async def _auto_generate_loop():
             if not isinstance(parsed, dict):
                 raise ValueError("Format inattendu")
             validate_qa(parsed)
+            open_qs = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
             save_fiche(title, "done",
                        qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
+                       qa_open=json.dumps(open_qs, ensure_ascii=False),
                        intro_text=parsed.get("intro", ""),
                        bonus_text=parsed.get("bonus", ""),
                        model=result["model"],

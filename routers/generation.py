@@ -91,12 +91,13 @@ async def stream_generate(title: str, company_data: dict):
         qa_answered    = parsed["qa_answered"]
         intro          = parsed.get("intro", "")
         bonus          = parsed.get("bonus", "")
-        open_questions = [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE]
+        open_questions = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
         date_fr        = format_date_fr(datetime.now().strftime("%Y-%m-%d"))
 
         yield sse("stage", message="Sauvegarde...", percent=95)
         save_fiche(title, "done",
                    qa_answered=json.dumps(qa_answered, ensure_ascii=False),
+                   qa_open=json.dumps(open_questions, ensure_ascii=False),
                    intro_text=intro,
                    bonus_text=bonus,
                    model=OPENAI_MODEL,
@@ -106,7 +107,7 @@ async def stream_generate(title: str, company_data: dict):
                   qa_answered=qa_answered,
                   intro_text=intro,
                   bonus_text=bonus,
-                  open_questions=open_questions,
+                  open_questions=[q["q"] for q in open_questions],
                   date_fr=date_fr,
                   model=OPENAI_MODEL,
                   completion_tokens=token_count,
@@ -193,8 +194,10 @@ async def generate_fiche(request: Request, data: GenerateRequest):
         validate_qa(parsed)
         intro = parsed.get("intro", "")
         bonus = parsed.get("bonus", "")
+        open_qs = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
         save_fiche(title, "done",
                    qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
+                   qa_open=json.dumps(open_qs, ensure_ascii=False),
                    intro_text=intro,
                    bonus_text=bonus,
                    model=result["model"],
@@ -249,8 +252,10 @@ async def generate_batch(request: Request, data: BatchRequest):
                 parsed = json.loads(result["text"])
                 if not isinstance(parsed, dict) or "qa_answered" not in parsed:
                     raise ValueError("Format inattendu")
+                open_qs = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
                 save_fiche(title, "done",
                            qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
+                           qa_open=json.dumps(open_qs, ensure_ascii=False),
                            intro_text=parsed.get("intro", ""),
                            bonus_text=parsed.get("bonus", ""),
                            model=result["model"],
