@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.2.1
+ * Version:      1.3.0
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.2.1');
+define('SC_VERSION', '1.3.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -63,6 +63,64 @@ add_filter('auto_update_plugin', function($update, $item) {
     if (($item->slug ?? '') === 'societies-connector') return true;
     return $update;
 }, 10, 2);
+
+// =============================================================================
+// INTÉGRATION AUTOMATIQUE — crée les pages WP des nouvelles fiches générées
+// =============================================================================
+
+add_action('sc_auto_sync_fiches', 'sc_sync_fiches_to_pages');
+
+function sc_sync_fiches_to_pages(): void {
+    if (!sc_is_licensed()) return;
+    $page = 1;
+    do {
+        $fiches = sc_api('/api/fiches?per_page=100&page=' . $page);
+        if (!empty($fiches['error'])) break;
+        $items = $fiches['results'] ?? [];
+        if (empty($items)) break;
+        foreach ($items as $f) {
+            $title = $f['company_title'] ?? '';
+            if (!$title) continue;
+            $existing = get_posts([
+                'post_type'   => 'page',
+                'post_status' => ['publish', 'draft'],
+                'meta_key'    => '_sc_company_title',
+                'meta_value'  => $title,
+                'numberposts' => 1,
+            ]);
+            if ($existing) continue;
+            $post_id = wp_insert_post([
+                'post_title'   => sanitize_text_field($title),
+                'post_name'    => sanitize_title($title),
+                'post_content' => '[societies_fiche title="' . esc_attr($title) . '"]',
+                'post_status'  => 'publish',
+                'post_type'    => 'page',
+            ]);
+            if (!is_wp_error($post_id)) {
+                update_post_meta($post_id, '_sc_company_title', $title);
+            }
+        }
+        $page++;
+    } while (count($items) === 100);
+}
+
+// Planifie le cron si pas encore fait
+add_action('wp', function() {
+    if (!wp_next_scheduled('sc_auto_sync_fiches')) {
+        wp_schedule_event(time(), 'thirtyminutes', 'sc_auto_sync_fiches');
+    }
+});
+
+// Intervalle custom 30 min
+add_filter('cron_schedules', function($schedules) {
+    $schedules['thirtyminutes'] = ['interval' => 1800, 'display' => 'Toutes les 30 minutes'];
+    return $schedules;
+});
+
+// Nettoie le cron à la désactivation du plugin
+register_deactivation_hook(__FILE__, function() {
+    wp_clear_scheduled_hook('sc_auto_sync_fiches');
+});
 
 // =============================================================================
 // LICENCE
