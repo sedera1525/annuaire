@@ -18,3 +18,4 @@ amelioration5.md
 *.gz
 docs/
 docker-compose.prod.yml
+.claude/settings.json
