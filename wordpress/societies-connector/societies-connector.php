@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.6.0
+ * Version:      1.8.0
  * Author:       Societies
  * Text Domain:  societies
  */
@@ -137,7 +137,8 @@ add_action('admin_notices', function() {
     // Afficher uniquement sur les pages Societies ou le tableau de bord
     if (!$screen || !in_array($screen->id, ['dashboard', 'toplevel_page_societies',
         'societies_page_societies-settings', 'societies_page_societies-fiches',
-        'societies_page_societies-subscriptions', 'toplevel_page_sc-mon-entreprise'])) return;
+        'societies_page_societies-subscriptions', 'societies_page_societies-moderation',
+        'toplevel_page_sc-mon-entreprise'])) return;
     ?>
     <div class="notice notice-error" style="padding:16px 20px">
       <strong>🔒 Societies Connector — Activation requise</strong>
@@ -201,19 +202,22 @@ function sc_api(string $endpoint, string $method = 'GET', array $body = []): arr
     $base = rtrim(get_option('societies_api_url', 'http://societies:8090'), '/');
 
     // Authenticate if needed
-    $cookie = get_transient('sc_session_cookie');
-    if (!$cookie) {
-        $cookie = sc_authenticate();
+    $session = get_transient('sc_session_cookie');
+    $csrf    = get_transient('sc_csrf_token');
+    if (!$session) {
+        [$session, $csrf] = sc_authenticate();
     }
 
-    $args = [
-        'method'  => $method,
-        'timeout' => 15,
-        'headers' => [
-            'Content-Type' => 'application/json',
-            'Cookie'       => "societies_session={$cookie}",
-        ],
+    $headers = [
+        'Content-Type' => 'application/json',
+        'Cookie'       => "societies_session={$session}; csrf_token={$csrf}",
     ];
+    // Double-submit CSRF pattern — requis pour POST/PUT/DELETE
+    if (in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
+        $headers['X-CSRF-Token'] = $csrf;
+    }
+
+    $args = ['method' => $method, 'timeout' => 15, 'headers' => $headers];
     if (!empty($body)) {
         $args['body'] = wp_json_encode($body);
     }
@@ -226,18 +230,20 @@ function sc_api(string $endpoint, string $method = 'GET', array $body = []): arr
 
     // Re-auth on 401
     if (wp_remote_retrieve_response_code($r) === 401) {
-        $cookie = sc_authenticate(true);
-        $args['headers']['Cookie'] = "societies_session={$cookie}";
+        [$session, $csrf] = sc_authenticate(true);
+        $args['headers']['Cookie']       = "societies_session={$session}; csrf_token={$csrf}";
+        $args['headers']['X-CSRF-Token'] = $csrf;
         $r = wp_remote_request($base . $endpoint, $args);
     }
 
     return json_decode(wp_remote_retrieve_body($r), true) ?: [];
 }
 
-function sc_authenticate(bool $force = false): string {
+function sc_authenticate(bool $force = false): array {
     if (!$force) {
-        $cached = get_transient('sc_session_cookie');
-        if ($cached) return $cached;
+        $session = get_transient('sc_session_cookie');
+        $csrf    = get_transient('sc_csrf_token');
+        if ($session && $csrf) return [$session, $csrf];
     }
 
     $base = rtrim(get_option('societies_api_url', 'http://societies:8090'), '/');
@@ -251,15 +257,22 @@ function sc_authenticate(bool $force = false): string {
         'redirection' => 0,
     ]);
 
-    if (is_wp_error($r)) return '';
+    if (is_wp_error($r)) return ['', ''];
 
     $raw = wp_remote_retrieve_header($r, 'set-cookie');
     $raw = is_array($raw) ? implode('; ', $raw) : $raw;
-    if (preg_match('/societies_session=([^;]+)/', $raw, $m)) {
-        set_transient('sc_session_cookie', $m[1], 6 * HOUR_IN_SECONDS);
-        return $m[1];
+
+    $session = '';
+    $csrf    = '';
+    if (preg_match('/societies_session=([^;,\s]+)/', $raw, $m)) {
+        $session = $m[1];
+        set_transient('sc_session_cookie', $session, 6 * HOUR_IN_SECONDS);
     }
-    return '';
+    if (preg_match('/csrf_token=([^;,\s]+)/', $raw, $m)) {
+        $csrf = $m[1];
+        set_transient('sc_csrf_token', $csrf, 6 * HOUR_IN_SECONDS);
+    }
+    return [$session, $csrf];
 }
 
 // =============================================================================
@@ -335,6 +348,7 @@ add_shortcode('societies_owner_dashboard', function() {
     }
 
     $user_id = get_current_user_id();
+    $user    = wp_get_current_user();
 
     // Association entreprise
     if (isset($_POST['sc_company_title']) && check_admin_referer('sc_link_company')) {
@@ -349,19 +363,23 @@ add_shortcode('societies_owner_dashboard', function() {
 
     $company_title = get_user_meta($user_id, 'sc_company_title', true);
     $has_sub       = sc_user_has_subscription($user_id);
+    $user_email    = $user->user_email;
 
-    // ── Sauvegarde intro (GRATUIT) ────────────────────────────────────────────
+    // ── Soumettre présentation en modération ──────────────────────────────────
     if (isset($_POST['sc_save_intro']) && check_admin_referer('sc_save_intro') && $company_title) {
         $intro_text = sanitize_textarea_field($_POST['sc_intro_text'] ?? '');
-        $result = sc_api('/api/fiche/' . rawurlencode($company_title), 'PUT', [
-            'intro_text' => $intro_text,
+        $result = sc_api('/api/modifications', 'POST', [
+            'company_title' => $company_title,
+            'field_name'    => 'intro_text',
+            'field_value'   => $intro_text,
+            'user_email'    => $user_email,
         ]);
         if (!isset($result['error'])) {
-            update_user_meta($user_id, 'sc_intro_saved', '1');
+            update_user_meta($user_id, 'sc_mod_notice', 'intro_pending');
         }
     }
 
-    // ── Sauvegarde réponses ouvertes (ABONNEMENT requis) ──────────────────────
+    // ── Soumettre réponses ouvertes en modération (abonnement requis) ─────────
     if (isset($_POST['sc_save_answers']) && check_admin_referer('sc_save_answers') && $company_title && $has_sub) {
         $raw_answers    = $_POST['sc_open_answers'] ?? [];
         $fiche_data     = sc_api('/api/fiche/' . rawurlencode($company_title));
@@ -373,12 +391,14 @@ add_shortcode('societies_owner_dashboard', function() {
                 'r' => sanitize_textarea_field($raw_answers[$i] ?? ''),
             ];
         }
-        $result = sc_api('/api/fiche/' . rawurlencode($company_title), 'PUT', [
-            'open_answers' => $open_answers,
+        $result = sc_api('/api/modifications', 'POST', [
+            'company_title' => $company_title,
+            'field_name'    => 'open_answers',
+            'field_value'   => json_encode($open_answers, JSON_UNESCAPED_UNICODE),
+            'user_email'    => $user_email,
         ]);
         if (!isset($result['error'])) {
-            update_user_meta($user_id, 'sc_open_answers', array_column($open_answers, 'r'));
-            update_user_meta($user_id, 'sc_save_ok', '1');
+            update_user_meta($user_id, 'sc_mod_notice', 'answers_pending');
         }
     }
 
@@ -401,40 +421,57 @@ add_shortcode('societies_owner_dashboard', function() {
           </form>
         </div>
     <?php else:
-        $fiche         = sc_api('/api/fiche/' . rawurlencode($company_title));
-        $qa_answered   = $fiche['qa_answered']   ?? [];
+        $fiche          = sc_api('/api/fiche/' . rawurlencode($company_title));
+        $qa_answered    = $fiche['qa_answered']   ?? [];
         $open_questions = $fiche['open_questions'] ?? [];
-        $intro         = $fiche['intro_text']    ?? '';
-        $date          = $fiche['date_fr']        ?? '';
-        $saved_answers = get_user_meta($user_id, 'sc_open_answers', true) ?: [];
-        $save_ok       = get_user_meta($user_id, 'sc_save_ok', true);
-        delete_user_meta($user_id, 'sc_save_ok');
+        $intro          = $fiche['intro_text']    ?? '';
+        $date           = $fiche['date_fr']       ?? '';
+
+        // Modifications en attente pour cet utilisateur
+        $pending_mods = sc_api('/api/modifications?status=pending&company_title=' . rawurlencode($company_title));
+        $pending_list = $pending_mods['results'] ?? [];
+        $pending_fields = array_column($pending_list, 'field_name');
+
+        $mod_notice = get_user_meta($user_id, 'sc_mod_notice', true);
+        delete_user_meta($user_id, 'sc_mod_notice');
     ?>
         <div class="sc-dashboard">
           <h2>📋 <?= esc_html($company_title) ?></h2>
 
-          <?php
-          $intro_saved = get_user_meta($user_id, 'sc_intro_saved', true);
-          delete_user_meta($user_id, 'sc_intro_saved');
-          ?>
-          <?php if ($save_ok): ?>
-          <div class="sc-success">✅ Vos réponses ont bien été enregistrées.</div>
-          <?php endif; ?>
-          <?php if ($intro_saved): ?>
-          <div class="sc-success">✅ Votre présentation a bien été enregistrée.</div>
+          <?php if ($mod_notice === 'intro_pending'): ?>
+          <div class="sc-success">✅ Votre présentation a été soumise — elle sera publiée après validation.</div>
+          <?php elseif ($mod_notice === 'answers_pending'): ?>
+          <div class="sc-success">✅ Vos réponses ont été soumises — elles seront publiées après validation.</div>
           <?php endif; ?>
 
-          <!-- ── Présentation (éditable gratuitement) ── -->
+          <?php if (!empty($pending_list)): ?>
+          <div class="sc-mod-pending">
+            ⏳ <strong><?= count($pending_list) ?> modification(s) en attente de validation</strong>
+            <?php foreach ($pending_list as $mod): ?>
+            <div class="sc-mod-item">
+              <?= $mod['field_name'] === 'intro_text' ? 'Présentation' : 'Réponses aux questions' ?>
+              — soumise le <?= esc_html(substr($mod['submitted_at'], 0, 10)) ?>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
+
+          <!-- ── Présentation ── -->
           <h3>✏️ Votre présentation <span style="font-size:11px;color:#10b981;font-weight:normal;margin-left:6px">Gratuit</span></h3>
+          <?php if (in_array('intro_text', $pending_fields)): ?>
+          <div class="sc-mod-info">⏳ Une modification est en attente de validation — vous ne pouvez pas soumettre une nouvelle version tant qu'elle n'est pas traitée.</div>
+          <?php else: ?>
           <form method="post" class="sc-form">
             <?php wp_nonce_field('sc_save_intro'); ?>
             <textarea name="sc_intro_text" class="sc-textarea" rows="4"
               placeholder="Rédigez une présentation de votre entreprise (3 phrases recommandées)..."
               style="min-height:100px"><?= esc_textarea($intro) ?></textarea>
-            <button type="submit" name="sc_save_intro" value="1" class="sc-btn" style="margin-top:10px">
-              💾 Enregistrer la présentation
+            <p class="sc-mod-note">📋 Votre modification sera soumise à validation avant publication.</p>
+            <button type="submit" name="sc_save_intro" value="1" class="sc-btn" style="margin-top:8px">
+              Soumettre la présentation →
             </button>
           </form>
+          <?php endif; ?>
 
           <?php if ($intro): ?>
           <div class="sc-intro" style="margin-top:12px">
@@ -449,47 +486,39 @@ add_shortcode('societies_owner_dashboard', function() {
           <div class="sc-qa-item">
             <div class="sc-q"><?= esc_html($item['q']) ?></div>
             <div class="sc-r"><?= esc_html($item['r']) ?></div>
-            <?php if ($date): ?><div class="sc-date">Décryptage du <?= esc_html($date) ?></div><?php endif; ?>
           </div>
           <?php endforeach; ?>
           <?php endif; ?>
 
           <?php if (!empty($open_questions)): ?>
-          <h3>🔒 Questions à compléter
-            <?php if (!$has_sub): ?>
-            <span class="sc-badge-locked">Abonnement requis</span>
-            <?php endif; ?>
+          <h3>🔐 Questions à compléter
+            <?php if (!$has_sub): ?><span class="sc-badge-locked">Abonnement requis</span><?php endif; ?>
           </h3>
 
           <?php if (!$has_sub): ?>
           <div class="sc-sub-banner">
-            <strong>🔒 Accédez à votre fiche complète</strong><br>
-            Abonnez-vous pour répondre aux 6 questions verrouillées et enrichir votre profil.
-            <br><br>
-            <a href="<?= esc_url(get_permalink(wc_get_page_id('shop'))) ?>" class="sc-btn">
-              Voir nos abonnements →
-            </a>
+            <strong>🔐 Accédez à votre fiche complète</strong><br>
+            Abonnez-vous pour répondre aux 6 questions verrouillées et enrichir votre profil.<br><br>
+            <a href="<?= esc_url(get_permalink(wc_get_page_id('shop'))) ?>" class="sc-btn">Voir nos abonnements →</a>
           </div>
-          <?php endif; ?>
-
-          <form method="post" <?= !$has_sub ? 'style="pointer-events:none;opacity:.55"' : '' ?>>
+          <?php elseif (in_array('open_answers', $pending_fields)): ?>
+          <div class="sc-mod-info">⏳ Des réponses sont en attente de validation.</div>
+          <?php else: ?>
+          <form method="post">
             <?php wp_nonce_field('sc_save_answers'); ?>
             <?php foreach ($open_questions as $i => $q): ?>
             <div class="sc-qa-item sc-locked">
               <div class="sc-q"><?= esc_html($q) ?></div>
-              <textarea name="sc_open_answers[<?= $i ?>]"
-                class="sc-textarea"
-                <?= !$has_sub ? 'disabled' : '' ?>
-                placeholder="Votre réponse..."
-              ><?= esc_textarea($saved_answers[$i] ?? '') ?></textarea>
+              <textarea name="sc_open_answers[<?= $i ?>]" class="sc-textarea"
+                placeholder="Votre réponse..."></textarea>
             </div>
             <?php endforeach; ?>
-            <?php if ($has_sub): ?>
-            <button type="submit" name="sc_save_answers" value="1" class="sc-btn" style="margin-top:16px">
-              💾 Enregistrer mes réponses
+            <p class="sc-mod-note">📋 Vos réponses seront soumises à validation avant publication.</p>
+            <button type="submit" name="sc_save_answers" value="1" class="sc-btn" style="margin-top:8px">
+              Soumettre mes réponses →
             </button>
-            <?php endif; ?>
           </form>
+          <?php endif; ?>
           <?php endif; ?>
 
           <hr style="margin:24px 0">
@@ -697,6 +726,13 @@ add_shortcode('societies_fiche', function($atts) {
         </a>
       </div>
 
+      <!-- REVENDIQUER CETTE FICHE -->
+      <?php $claim_url = get_permalink(get_option('sc_client_page_id')) ?: home_url('/mon-entreprise/'); ?>
+      <div class="sc2-claim-cta">
+        <span>Cette entreprise, c'est la vôtre ?</span>
+        <a href="<?= esc_url($claim_url) ?>" class="sc2-claim-link">Revendiquer cette fiche →</a>
+      </div>
+
       <!-- BRANDING -->
       <div class="sc2-footer">
         <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com">
@@ -760,6 +796,12 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-advert-link:hover{text-decoration:underline}
     .sc2-faq-icon-r{background:#e63946}
 
+    /* CLAIM CTA */
+    .sc2-claim-cta{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 20px;margin-top:12px;flex-wrap:wrap}
+    .sc2-claim-cta span{color:#475569;font-size:13px}
+    .sc2-claim-link{color:#1a2744;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap}
+    .sc2-claim-link:hover{color:#e63946;text-decoration:underline}
+
     /* FOOTER */
     .sc2-footer{margin-top:32px;padding-top:18px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;color:#9ca3af;font-size:12px}
     .sc2-footer img{height:28px;width:auto;opacity:.6}
@@ -771,6 +813,173 @@ add_shortcode('societies_fiche', function($atts) {
       .sc2-qa-grid{grid-template-columns:1fr}
     }
     </style>
+    <?php
+    return ob_get_clean();
+});
+
+// =============================================================================
+// PAGE D'ACCUEIL SOUS-DOMAINE [societies_home]
+// =============================================================================
+add_shortcode('societies_home', function() {
+    sc_enqueue_styles();
+    $status  = sc_api('/api/status');
+    $stats   = sc_api('/api/fiches/stats');
+    $sectors = sc_api('/api/seo/top-sectors');
+    $cities  = sc_api('/api/seo/top-cities');
+
+    $total_co   = number_format($status['rows'] ?? 0, 0, ',', ' ');
+    $total_done = number_format($stats['done'] ?? 0, 0, ',', ' ');
+    $logo_url   = rtrim(get_option('societies_api_url', ''), '/') . '/static/logo.jpg';
+    $claim_url  = get_permalink(get_option('sc_client_page_id')) ?: home_url('/mon-entreprise/');
+
+    ob_start(); ?>
+    <div class="sc-home">
+
+      <!-- HERO -->
+      <div class="sc-home-hero">
+        <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com" class="sc-home-logo">
+        <h1 class="sc-home-title">Avis et décryptage des entreprises françaises</h1>
+        <p class="sc-home-sub">Note clients, réputation et analyses pour des millions d'entreprises</p>
+        <div class="sc-home-sw">
+          <input type="text" id="sch-input" class="sc-home-si"
+                 placeholder="Rechercher une entreprise..." autocomplete="off"
+                 oninput="schSearch(this.value)">
+          <div id="sch-drop" class="sc-home-sd"></div>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="sc-home-stats">
+        <div class="sc-home-stat">
+          <div class="sc-home-stat-n"><?= $total_co ?></div>
+          <div class="sc-home-stat-l">entreprises référencées</div>
+        </div>
+        <div class="sc-home-stat">
+          <div class="sc-home-stat-n"><?= $total_done ?></div>
+          <div class="sc-home-stat-l">fiches analysées par IA</div>
+        </div>
+        <div class="sc-home-stat">
+          <div class="sc-home-stat-n">Gratuit</div>
+          <div class="sc-home-stat-l">pour revendiquer votre fiche</div>
+        </div>
+      </div>
+
+      <!-- TOP SECTEURS -->
+      <?php if (!empty($sectors['results'])): ?>
+      <div class="sc-home-section">
+        <h2 class="sc-home-sh">Secteurs populaires</h2>
+        <div class="sc-home-pills">
+          <?php foreach (array_slice($sectors['results'], 0, 20) as $s):
+            if (empty($s['sector'])) continue; ?>
+          <span class="sc-home-pill">
+            <?= esc_html($s['sector']) ?>
+            <span class="sc-home-pill-c"><?= number_format($s['count'] ?? 0, 0, ',', ' ') ?></span>
+          </span>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- TOP VILLES -->
+      <?php if (!empty($cities['results'])): ?>
+      <div class="sc-home-section">
+        <h2 class="sc-home-sh">Villes principales</h2>
+        <div class="sc-home-pills">
+          <?php foreach (array_slice($cities['results'], 0, 20) as $c):
+            if (empty($c['city'])) continue; ?>
+          <span class="sc-home-pill">
+            <?= esc_html($c['city']) ?>
+            <span class="sc-home-pill-c"><?= number_format($c['count'] ?? 0, 0, ',', ' ') ?></span>
+          </span>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- CTA PROPRIÉTAIRE -->
+      <div class="sc-home-owner">
+        <div>
+          <strong>Cette entreprise, c'est la vôtre ?</strong>
+          <p>Revendiquez votre fiche gratuitement et répondez aux questions de vos clients.</p>
+        </div>
+        <a href="<?= esc_url($claim_url) ?>" class="sc-btn sc-home-owner-btn">Revendiquer votre fiche →</a>
+      </div>
+
+    </div>
+    <style>
+    .sc-home{max-width:900px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+    /* Hero */
+    .sc-home-hero{background:#1a2744;border-radius:20px;padding:48px 48px 44px;text-align:center;color:#fff;margin-bottom:24px}
+    .sc-home-logo{height:42px;width:auto;margin-bottom:24px;opacity:.9}
+    .sc-home-title{font-size:30px;font-weight:800;margin:0 0 12px;line-height:1.25;color:#fff}
+    .sc-home-sub{font-size:15px;color:#94a3b8;margin:0 0 28px}
+    /* Search */
+    .sc-home-sw{position:relative;max-width:540px;margin:0 auto}
+    .sc-home-si{width:100%;padding:16px 22px;border:none;border-radius:12px;font-size:16px;outline:none;box-shadow:0 4px 24px rgba(0,0,0,.25);box-sizing:border-box}
+    .sc-home-sd{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);z-index:200;max-height:280px;overflow-y:auto}
+    .sc-home-sd a{display:block;padding:12px 18px;text-decoration:none;color:#1f2937;border-bottom:1px solid #f3f4f6;font-size:14px;transition:background .1s}
+    .sc-home-sd a:last-child{border-bottom:none}
+    .sc-home-sd a:hover{background:#f8fafc}
+    .sc-home-sd-meta{font-size:12px;color:#9ca3af;display:block}
+    /* Stats */
+    .sc-home-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}
+    .sc-home-stat{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:22px;text-align:center}
+    .sc-home-stat-n{font-size:26px;font-weight:800;color:#1a2744}
+    .sc-home-stat-l{font-size:13px;color:#6b7280;margin-top:4px}
+    /* Sections */
+    .sc-home-section{margin-bottom:24px}
+    .sc-home-sh{font-size:17px;font-weight:700;color:#1f2937;margin:0 0 14px;padding-bottom:8px;border-bottom:2px solid #e63946;display:inline-block}
+    .sc-home-pills{display:flex;flex-wrap:wrap;gap:8px}
+    .sc-home-pill{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:7px 14px;font-size:13px;color:#374151}
+    .sc-home-pill-c{background:#f1f5f9;color:#6b7280;font-size:11px;padding:2px 7px;border-radius:10px}
+    /* CTA owner */
+    .sc-home-owner{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#1a2744;border-radius:16px;padding:24px 32px;margin-top:8px;flex-wrap:wrap}
+    .sc-home-owner strong{color:#fff;font-size:17px}
+    .sc-home-owner p{color:#94a3b8;margin:6px 0 0;font-size:14px}
+    .sc-home-owner-btn{background:#e63946;white-space:nowrap}
+    .sc-home-owner-btn:hover{background:#c1121f}
+    @media(max-width:640px){
+      .sc-home-hero{padding:32px 20px}
+      .sc-home-title{font-size:22px}
+      .sc-home-stats{grid-template-columns:1fr}
+      .sc-home-owner{flex-direction:column;align-items:flex-start}
+    }
+    </style>
+    <script>
+    var _schT;
+    function schSearch(q) {
+        var drop = document.getElementById('sch-drop');
+        if (q.length < 2) { drop.style.display='none'; return; }
+        clearTimeout(_schT);
+        _schT = setTimeout(function() {
+            fetch('/?rest_route=/societies/v1/search&q=' + encodeURIComponent(q) + '&per_page=8')
+            .then(function(r){ return r.json(); })
+            .then(function(d) {
+                var results = d.results || [];
+                if (!results.length) { drop.style.display='none'; return; }
+                drop.innerHTML = results.map(function(c) {
+                    var meta = [c.category, c.city ? c.city : ''].filter(Boolean).join(' — ');
+                    return '<a href="#" onclick="schNav(event,\'' + c.title.replace(/'/g,"\\'").replace(/"/g,'&quot;') + '\'); return false;">'
+                        + '<strong>' + c.title + '</strong>'
+                        + (meta ? '<span class="sc-home-sd-meta">' + meta + '</span>' : '')
+                        + '</a>';
+                }).join('');
+                drop.style.display = 'block';
+            });
+        }, 250);
+    }
+    function schNav(e, title) {
+        fetch('/?rest_route=/societies/v1/page-url&title=' + encodeURIComponent(title))
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d.url) window.location.href = d.url; });
+    }
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.sc-home-sw')) {
+            var drop = document.getElementById('sch-drop');
+            if (drop) drop.style.display = 'none';
+        }
+    });
+    </script>
     <?php
     return ob_get_clean();
 });
@@ -910,6 +1119,8 @@ add_action('admin_menu', function() {
         'manage_options', 'societies-fiches', 'sc_admin_fiches');
     add_submenu_page('societies', 'Abonnements & Clients', 'Abonnements',
         'manage_options', 'societies-subscriptions', 'sc_admin_subscriptions');
+    add_submenu_page('societies', 'Modération fiches', 'Modération',
+        'manage_options', 'societies-moderation', 'sc_admin_moderation');
 });
 
 add_action('admin_init', function() {
@@ -1311,6 +1522,7 @@ function sc_admin_settings() {
     $test_result = null;
     if (isset($_POST['sc_test']) && check_admin_referer('sc_test')) {
         delete_transient('sc_session_cookie');
+        delete_transient('sc_csrf_token');
         $test_result = sc_api('/api/status');
     }
     ?>
@@ -1792,6 +2004,138 @@ function sc_admin_fiches() {
     <?php
 }
 
+// =============================================================================
+// PAGE ADMIN — MODÉRATION DES MODIFICATIONS
+// =============================================================================
+function sc_admin_moderation() {
+    // ── Actions Approuver / Rejeter ──────────────────────────────────────────
+    if (isset($_POST['sc_mod_approve']) && check_admin_referer('sc_mod_action')) {
+        $mod_id = intval($_POST['sc_mod_id'] ?? 0);
+        $result = sc_api('/api/modifications/' . $mod_id . '/approve', 'PUT');
+        if (!isset($result['error'])) {
+            // Email de validation à l'entreprise
+            $email   = $result['user_email'] ?? '';
+            $company = $result['company_title'] ?? '';
+            if ($email) {
+                $subject = 'TOPsocietes.com — Votre modification a été validée';
+                $message = "Bonjour,\n\nVotre modification pour la fiche « {$company} » a été validée et est maintenant visible sur TOPsocietes.com.\n\nCordialement,\nL'équipe TOPsocietes.com";
+                wp_mail($email, $subject, $message);
+            }
+            echo '<div class="notice notice-success"><p>✅ Modification validée' . ($email ? " — email envoyé à <strong>" . esc_html($email) . "</strong>" : '') . '.</p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>❌ ' . esc_html($result['error']) . '</p></div>';
+        }
+    }
+
+    if (isset($_POST['sc_mod_reject']) && check_admin_referer('sc_mod_action')) {
+        $mod_id = intval($_POST['sc_mod_id'] ?? 0);
+        $reason = sanitize_text_field($_POST['sc_mod_reason'] ?? '');
+        $result = sc_api('/api/modifications/' . $mod_id . '/reject', 'PUT', ['reason' => $reason]);
+        if (!isset($result['error'])) {
+            echo '<div class="notice notice-warning"><p>🚫 Modification rejetée.</p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>❌ ' . esc_html($result['error']) . '</p></div>';
+        }
+    }
+
+    // ── Affichage ─────────────────────────────────────────────────────────────
+    $filter  = sanitize_text_field($_GET['status'] ?? 'pending');
+    $page    = max(1, intval($_GET['mod_page'] ?? 1));
+    $data    = sc_api('/api/modifications?status=' . urlencode($filter) . '&page=' . $page . '&per_page=20');
+    $mods    = $data['results'] ?? [];
+    $total   = $data['total']   ?? 0;
+    $pages   = max(1, (int)ceil($total / 20));
+
+    $status_labels = ['pending' => '⏳ En attente', 'approved' => '✅ Validées', 'rejected' => '🚫 Rejetées'];
+    ?>
+    <div class="wrap">
+      <h1>📝 Modération des fiches</h1>
+
+      <!-- Filtres statut -->
+      <ul class="subsubsub" style="margin-bottom:16px">
+        <?php foreach ($status_labels as $s => $label): ?>
+        <?php $count_data = sc_api('/api/modifications?status=' . $s . '&per_page=1'); ?>
+        <li>
+          <a href="<?= admin_url('admin.php?page=societies-moderation&status=' . $s) ?>"
+             <?= $filter === $s ? 'style="font-weight:700"' : '' ?>>
+            <?= $label ?> <span class="count">(<?= $count_data['total'] ?? 0 ?>)</span>
+          </a>
+          <?= $s !== 'rejected' ? ' |' : '' ?>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+
+      <?php if (empty($mods)): ?>
+      <p style="color:#6b7280">Aucune modification <?= esc_html(strtolower($status_labels[$filter] ?? $filter)) ?>.</p>
+      <?php else: ?>
+      <table class="widefat striped">
+        <thead>
+          <tr>
+            <th>Entreprise</th>
+            <th>Type</th>
+            <th>Contenu soumis</th>
+            <th>Email</th>
+            <th>Date</th>
+            <?php if ($filter === 'pending'): ?><th>Actions</th><?php endif; ?>
+            <?php if ($filter === 'rejected'): ?><th>Raison</th><?php endif; ?>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($mods as $mod): ?>
+          <tr>
+            <td><strong><?= esc_html($mod['company_title']) ?></strong></td>
+            <td><?= $mod['field_name'] === 'intro_text' ? 'Présentation' : 'Réponses' ?></td>
+            <td style="max-width:320px;font-size:12px;color:#374151;word-break:break-word">
+              <?php
+              $preview = $mod['field_value'];
+              if ($mod['field_name'] === 'open_answers') {
+                  $parsed = json_decode($preview, true);
+                  if (is_array($parsed)) $preview = implode(' / ', array_column($parsed, 'r'));
+              }
+              echo esc_html(mb_substr($preview, 0, 180)) . (mb_strlen($preview) > 180 ? '…' : '');
+              ?>
+            </td>
+            <td style="font-size:12px"><?= esc_html($mod['user_email'] ?? '—') ?></td>
+            <td style="font-size:12px"><?= esc_html(substr($mod['submitted_at'] ?? '', 0, 16)) ?></td>
+            <?php if ($filter === 'pending'): ?>
+            <td>
+              <form method="post" style="display:inline">
+                <?php wp_nonce_field('sc_mod_action'); ?>
+                <input type="hidden" name="sc_mod_id" value="<?= intval($mod['id']) ?>">
+                <button name="sc_mod_approve" value="1" class="button button-primary button-small">✅ Valider</button>
+              </form>
+              <form method="post" style="display:inline;margin-left:4px"
+                    onsubmit="var r=prompt('Raison du refus (optionnel):','');if(r!==null)this.sc_mod_reason.value=r;else return false;">
+                <?php wp_nonce_field('sc_mod_action'); ?>
+                <input type="hidden" name="sc_mod_id" value="<?= intval($mod['id']) ?>">
+                <input type="hidden" name="sc_mod_reason" value="">
+                <button name="sc_mod_reject" value="1" class="button button-small" style="color:#ef4444">🚫 Refuser</button>
+              </form>
+            </td>
+            <?php endif; ?>
+            <?php if ($filter === 'rejected'): ?>
+            <td style="font-size:12px;color:#ef4444"><?= esc_html($mod['rejection_reason'] ?? '—') ?></td>
+            <?php endif; ?>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+
+      <?php if ($pages > 1): ?>
+      <div style="margin-top:12px">
+        <?php for ($p = 1; $p <= $pages; $p++): ?>
+        <a href="<?= admin_url('admin.php?page=societies-moderation&status=' . $filter . '&mod_page=' . $p) ?>"
+           class="button button-small" <?= $p === $page ? 'style="font-weight:700"' : '' ?>>
+          <?= $p ?>
+        </a>
+        <?php endfor; ?>
+      </div>
+      <?php endif; ?>
+      <?php endif; ?>
+    </div>
+    <?php
+}
+
 function sc_admin_subscriptions() {
     $users_with_sub = [];
     if (function_exists('wc_get_orders')) {
@@ -1902,6 +2246,22 @@ add_action('rest_api_init', function() {
         'callback'            => fn() => sc_api('/api/seo/top-cities'),
         'permission_callback' => '__return_true',
     ]);
+    // Résoudre le permalink d'une fiche par son titre — utilisé par [societies_home]
+    register_rest_route('societies/v1', '/page-url', [
+        'methods'             => 'GET',
+        'callback'            => function($r) {
+            $title = sanitize_text_field($r->get_param('title') ?? '');
+            if (!$title) return ['url' => null];
+            $pages = get_posts([
+                'post_type'   => 'page',
+                'name'        => sanitize_title($title),
+                'numberposts' => 1,
+                'post_status' => 'publish',
+            ]);
+            return ['url' => $pages ? get_permalink($pages[0]->ID) : null];
+        },
+        'permission_callback' => '__return_true',
+    ]);
 });
 
 // =============================================================================
@@ -1929,6 +2289,10 @@ function sc_enqueue_styles() {
     .sc-sub-banner{background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px 20px;margin:16px 0}
     .sc-success{background:#d1fae5;border:1px solid #10b981;border-radius:8px;padding:12px 16px;margin:12px 0;color:#065f46}
     .sc-error{background:#fee2e2;border:1px solid #ef4444;border-radius:8px;padding:12px 16px;margin:12px 0;color:#7f1d1d}
+    .sc-mod-pending{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin:12px 0;color:#1e40af;font-size:13px}
+    .sc-mod-item{margin-top:6px;padding-left:12px;color:#3b82f6;font-size:12px}
+    .sc-mod-info{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;color:#166534;font-size:13px;margin:10px 0}
+    .sc-mod-note{font-size:12px;color:#6b7280;margin:10px 0 4px;font-style:italic}
     </style>';
 }
 

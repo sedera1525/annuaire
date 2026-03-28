@@ -37,6 +37,7 @@ from services.fiches import get_setting, init_fiches_db
 from routers import auth as auth_router
 from routers import auto, generation, license as license_router, seo
 from routers import fiches as fiches_router
+from routers import modifications as modifications_router
 from routers import search
 
 # =============================================================================
@@ -167,8 +168,9 @@ async def auth_middleware(request: Request, call_next):
 app.include_router(auth_router.router)
 app.include_router(search.router,         prefix="/api")
 app.include_router(generation.router,     prefix="/api")
-app.include_router(fiches_router.router,  prefix="/api")
-app.include_router(auto.router,           prefix="/api")
+app.include_router(fiches_router.router,       prefix="/api")
+app.include_router(modifications_router.router, prefix="/api")
+app.include_router(auto.router,                prefix="/api")
 app.include_router(license_router.router, prefix="/api")
 app.include_router(seo.router,            prefix="/api")
 

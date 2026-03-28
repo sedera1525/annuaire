@@ -63,6 +63,19 @@ _MIGRATIONS: list[tuple[int, str]] = [
     (4, "ALTER TABLE sessions ADD COLUMN username TEXT DEFAULT '';"),
     (5, "ALTER TABLE sessions ADD COLUMN last_activity REAL DEFAULT 0;"),
     (6, "ALTER TABLE fiches ADD COLUMN bonus_text TEXT;"),
+    (7, """
+        CREATE TABLE IF NOT EXISTS fiche_modifications (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_title    TEXT NOT NULL,
+            user_email       TEXT,
+            field_name       TEXT NOT NULL,
+            field_value      TEXT NOT NULL,
+            status           TEXT DEFAULT 'pending',
+            submitted_at     TEXT DEFAULT (datetime('now')),
+            reviewed_at      TEXT,
+            rejection_reason TEXT
+        );
+    """),
 ]
 
 
@@ -244,3 +257,103 @@ def save_fiche(
         raise
     finally:
         conn.close()
+
+
+# =============================================================================
+# MODÉRATION DES MODIFICATIONS
+# =============================================================================
+
+def submit_modification(company_title: str, field_name: str, field_value: str,
+                        user_email: str | None = None) -> int:
+    """Enregistre une demande de modification en attente de validation."""
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        cur = conn.execute(
+            "INSERT INTO fiche_modifications(company_title, user_email, field_name, field_value) "
+            "VALUES (?, ?, ?, ?)",
+            [company_title, user_email, field_name, field_value],
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def get_modifications(status: str | None = None, company_title: str | None = None,
+                      page: int = 1, per_page: int = 25) -> dict:
+    conn = sqlite3.connect(FICHES_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        where, params = [], []
+        if status:
+            where.append("status = ?"); params.append(status)
+        if company_title:
+            where.append("company_title = ?"); params.append(company_title)
+        clause = "WHERE " + " AND ".join(where) if where else ""
+        total  = conn.execute(
+            f"SELECT COUNT(*) FROM fiche_modifications {clause}", params
+        ).fetchone()[0]
+        offset = (page - 1) * per_page
+        rows   = conn.execute(
+            f"SELECT * FROM fiche_modifications {clause} ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
+            params + [per_page, offset],
+        ).fetchall()
+        return {"total": total, "page": page, "per_page": per_page,
+                "results": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+def approve_modification(mod_id: int) -> dict:
+    """Valide une modification et l'applique à la fiche."""
+    conn = sqlite3.connect(FICHES_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        mod = conn.execute(
+            "SELECT * FROM fiche_modifications WHERE id = ?", [mod_id]
+        ).fetchone()
+        if not mod:
+            return {"error": "Modification introuvable"}
+        mod = dict(mod)
+        if mod["status"] != "pending":
+            return {"error": f"Modification déjà traitée (statut : {mod['status']})"}
+
+        # Appliquer la modification sur la fiche
+        field = mod["field_name"]
+        value = mod["field_value"]
+        if field == "intro_text":
+            conn.execute(
+                "UPDATE fiches SET intro_text = ? WHERE company_title = ?",
+                [value, mod["company_title"]],
+            )
+        elif field == "open_answers":
+            conn.execute(
+                "UPDATE fiches SET qa_open = ? WHERE company_title = ?",
+                [value, mod["company_title"]],
+            )
+
+        conn.execute(
+            "UPDATE fiche_modifications SET status = 'approved', reviewed_at = datetime('now') WHERE id = ?",
+            [mod_id],
+        )
+        conn.commit()
+        return {"ok": True, "user_email": mod["user_email"], "company_title": mod["company_title"]}
+    finally:
+        conn.close()
+
+
+def reject_modification(mod_id: int, reason: str | None = None) -> dict:
+    """Rejette une modification."""
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        affected = conn.execute(
+            "UPDATE fiche_modifications SET status = 'rejected', reviewed_at = datetime('now'), "
+            "rejection_reason = ? WHERE id = ? AND status = 'pending'",
+            [reason, mod_id],
+        ).rowcount
+        conn.commit()
+    finally:
+        conn.close()
+    if not affected:
+        return {"error": "Modification introuvable ou déjà traitée"}
+    return {"ok": True}
