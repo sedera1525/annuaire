@@ -37,11 +37,23 @@ services:
       WORDPRESS_DB_PASSWORD: ${WP_DB_PASSWORD:-wordpress}
       WORDPRESS_DB_NAME: wordpress
       WORDPRESS_TABLE_PREFIX: wp_
+      WORDPRESS_CONFIG_EXTRA: |
+        define('MAILPIT_HOST', 'mailpit');
+        define('MAILPIT_PORT', 1025);
     volumes:
       - wordpress_files:/var/www/html
       - ./wordpress/societies-connector:/var/www/html/wp-content/plugins/societies-connector
+      - ./wordpress/mu-plugins:/var/www/html/wp-content/mu-plugins
     depends_on:
       - wordpress-db
+      - mailpit
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8026:8025"   # UI web  → http://localhost:8026
+      - "1026:1025"   # SMTP
     restart: unless-stopped
 
   wordpress-setup:

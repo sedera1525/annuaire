@@ -68,6 +68,39 @@ add_filter('auto_update_plugin', function($update, $item) {
 // INTÉGRATION AUTOMATIQUE — crée les pages WP des nouvelles fiches générées
 // =============================================================================
 
+// Trouve ou crée une page WP (ville ou métier) sous un parent donné.
+function sc_get_or_create_parent_page(string $slug, string $display_title, int $parent_id = 0): int {
+    $existing = get_posts([
+        'post_type'   => 'page',
+        'post_status' => ['publish'],
+        'post_parent' => $parent_id,
+        'name'        => $slug,
+        'numberposts' => 1,
+    ]);
+    if ($existing) return (int) $existing[0]->ID;
+    $post_id = wp_insert_post([
+        'post_title'  => sanitize_text_field($display_title),
+        'post_name'   => $slug,
+        'post_status' => 'publish',
+        'post_type'   => 'page',
+        'post_parent' => $parent_id,
+    ]);
+    return is_wp_error($post_id) ? 0 : (int) $post_id;
+}
+
+// Résout le post_parent pour la structure /[ville]/[metier]/[nom]/.
+// Crée les pages intermédiaires si elles n'existent pas encore.
+// Retourne 0 en fallback si ville ou métier manquants.
+function sc_resolve_page_parent(string $company_title): int {
+    $data     = sc_api('/api/company/' . rawurlencode($company_title));
+    $city     = $data['city']     ?? '';
+    $category = $data['category'] ?? '';
+    if (!$city || !$category) return 0;
+    $city_id  = sc_get_or_create_parent_page(sanitize_title($city), $city, 0);
+    if (!$city_id) return 0;
+    return sc_get_or_create_parent_page(sanitize_title($category), $category, $city_id) ?: 0;
+}
+
 add_action('sc_auto_sync_fiches', 'sc_sync_fiches_to_pages');
 
 function sc_sync_fiches_to_pages(): void {
@@ -95,6 +128,7 @@ function sc_sync_fiches_to_pages(): void {
                 'post_content' => '[societies_fiche title="' . esc_attr($title) . '"]',
                 'post_status'  => 'publish',
                 'post_type'    => 'page',
+                'post_parent'  => sc_resolve_page_parent($title),
             ]);
             if (!is_wp_error($post_id)) {
                 update_post_meta($post_id, '_sc_company_title', $title);
@@ -1086,6 +1120,7 @@ add_action('wp_ajax_sc_bulk_create_batch', function() {
             'post_content' => '[societies_fiche title="' . esc_attr($title) . '"]',
             'post_status'  => 'publish',
             'post_type'    => 'page',
+            'post_parent'  => sc_resolve_page_parent($title),
         ]);
         if (!is_wp_error($post_id)) {
             update_post_meta($post_id, '_sc_company_title', $title);
@@ -1628,6 +1663,30 @@ function sc_admin_settings() {
 function sc_admin_fiches() {
     $tab = sanitize_key($_GET['tab'] ?? 'list');
 
+    // ── Action : migrer les slugs existants vers /[ville]/[metier]/[nom]/ ──────
+    $migrate_notice = null;
+    if (isset($_POST['sc_migrate_slugs']) && check_admin_referer('sc_migrate_slugs')) {
+        $pages = get_posts([
+            'post_type'      => 'page',
+            'post_status'    => ['publish', 'draft'],
+            'meta_key'       => '_sc_company_title',
+            'posts_per_page' => -1,
+            'post_parent'    => 0,
+        ]);
+        $migrated = 0;
+        $skipped  = 0;
+        foreach ($pages as $p) {
+            $title     = get_post_meta($p->ID, '_sc_company_title', true);
+            if (!$title) { $skipped++; continue; }
+            $parent_id = sc_resolve_page_parent($title);
+            if (!$parent_id) { $skipped++; continue; }
+            wp_update_post(['ID' => $p->ID, 'post_parent' => $parent_id]);
+            $migrated++;
+        }
+        $migrate_notice = ['type' => 'success',
+            'msg' => "{$migrated} pages migrées vers /ville/métier/nom/, {$skipped} ignorées (ville ou catégorie introuvable)."];
+    }
+
     // ── Action : créer toutes les pages manquantes en bulk ────────────────────
     $bulk_notice = null;
     if (isset($_POST['sc_create_all_pages']) && check_admin_referer('sc_create_all_pages')) {
@@ -1659,6 +1718,7 @@ function sc_admin_fiches() {
                     'post_content' => '[societies_fiche title="' . esc_attr($title) . '"]',
                     'post_status'  => 'publish',
                     'post_type'    => 'page',
+                    'post_parent'  => sc_resolve_page_parent($title),
                 ]);
                 if (!is_wp_error($post_id)) {
                     update_post_meta($post_id, '_sc_company_title', $title);
@@ -1696,6 +1756,7 @@ function sc_admin_fiches() {
                     'post_content' => '[societies_fiche title="' . esc_attr($company_title) . '"]',
                     'post_status'  => 'publish',
                     'post_type'    => 'page',
+                    'post_parent'  => sc_resolve_page_parent($company_title),
                 ]);
                 if (!is_wp_error($post_id)) {
                     update_post_meta($post_id, '_sc_company_title', $company_title);
@@ -1766,12 +1827,23 @@ function sc_admin_fiches() {
       <?php endif; ?>
 
       <?php if ($tab === 'list'): ?>
-      <div style="margin-bottom:16px">
+      <?php if ($migrate_notice): ?>
+      <div class="notice notice-<?= $migrate_notice['type'] ?> is-dismissible"><p><?= esc_html($migrate_notice['msg']) ?></p></div>
+      <?php endif; ?>
+
+      <div style="margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button id="sc-bulk-btn" class="button button-primary" onclick="scBulkStart()">
           📄 Créer toutes les pages manquantes
         </button>
-        <span id="sc-bulk-status" style="margin-left:12px;font-size:13px;color:#666"></span>
-        <div id="sc-bulk-bar" style="display:none;margin-top:8px;background:#e5e7eb;border-radius:4px;height:8px;width:400px;max-width:100%">
+        <form method="post" style="display:inline"
+              onsubmit="return confirm('Migrer les slugs des pages existantes vers /ville/métier/nom/ ? Cette opération est irréversible.')">
+          <?php wp_nonce_field('sc_migrate_slugs'); ?>
+          <button name="sc_migrate_slugs" value="1" class="button">
+            🔀 Migrer les slugs existants → /ville/métier/nom/
+          </button>
+        </form>
+        <span id="sc-bulk-status" style="font-size:13px;color:#666"></span>
+        <div id="sc-bulk-bar" style="display:none;background:#e5e7eb;border-radius:4px;height:8px;width:400px;max-width:100%">
           <div id="sc-bulk-fill" style="background:#1a2744;height:8px;border-radius:4px;width:0%;transition:width .3s"></div>
         </div>
       </div>
@@ -2073,7 +2145,7 @@ function sc_admin_moderation() {
           <tr>
             <th>Entreprise</th>
             <th>Type</th>
-            <th>Contenu soumis</th>
+            <th>Modification (actuel → proposé)</th>
             <th>Email</th>
             <th>Date</th>
             <?php if ($filter === 'pending'): ?><th>Actions</th><?php endif; ?>
@@ -2082,18 +2154,56 @@ function sc_admin_moderation() {
         </thead>
         <tbody>
           <?php foreach ($mods as $mod): ?>
+          <?php
+          $fiche       = sc_api('/api/fiche/' . urlencode($mod['company_title']));
+          $field       = $mod['field_name'];
+          $new_val     = $mod['field_value'];
+          $current_raw = '';
+          if ($field === 'intro_text') {
+              $current_raw = $fiche['intro_text'] ?? '';
+          } elseif ($field === 'open_answers') {
+              $current_raw = $fiche['qa_open'] ?? '[]';
+          }
+          ?>
           <tr>
             <td><strong><?= esc_html($mod['company_title']) ?></strong></td>
-            <td><?= $mod['field_name'] === 'intro_text' ? 'Présentation' : 'Réponses' ?></td>
-            <td style="max-width:320px;font-size:12px;color:#374151;word-break:break-word">
-              <?php
-              $preview = $mod['field_value'];
-              if ($mod['field_name'] === 'open_answers') {
-                  $parsed = json_decode($preview, true);
-                  if (is_array($parsed)) $preview = implode(' / ', array_column($parsed, 'r'));
-              }
-              echo esc_html(mb_substr($preview, 0, 180)) . (mb_strlen($preview) > 180 ? '…' : '');
-              ?>
+            <td><?= $field === 'intro_text' ? 'Présentation' : 'Réponses' ?></td>
+            <td style="max-width:400px;font-size:12px;word-break:break-word">
+              <?php if ($field === 'intro_text'): ?>
+                <?php if ($current_raw): ?>
+                <div style="background:#f3f4f6;border-left:3px solid #9ca3af;padding:6px 8px;margin-bottom:6px;color:#6b7280">
+                  <span style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Actuel</span><br>
+                  <?= esc_html(mb_substr($current_raw, 0, 200)) ?><?= mb_strlen($current_raw) > 200 ? '…' : '' ?>
+                </div>
+                <?php endif; ?>
+                <div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:6px 8px;color:#166534">
+                  <span style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Proposé</span><br>
+                  <?= esc_html(mb_substr($new_val, 0, 200)) ?><?= mb_strlen($new_val) > 200 ? '…' : '' ?>
+                </div>
+              <?php else: ?>
+                <?php
+                $current_answers = json_decode($current_raw, true) ?: [];
+                $new_answers     = json_decode($new_val, true) ?: [];
+                foreach ($new_answers as $i => $item):
+                    $q       = esc_html($item['q'] ?? '');
+                    $new_r   = $item['r'] ?? '';
+                    $cur_r   = $current_answers[$i]['r'] ?? '';
+                ?>
+                <div style="margin-bottom:8px">
+                  <div style="font-weight:600;color:#374151;margin-bottom:2px"><?= $q ?></div>
+                  <?php if ($cur_r): ?>
+                  <div style="background:#f3f4f6;border-left:3px solid #9ca3af;padding:4px 8px;color:#6b7280;margin-bottom:2px">
+                    <span style="font-size:10px;font-weight:600;text-transform:uppercase">Actuel</span> <?= esc_html(mb_substr($cur_r, 0, 120)) ?>
+                  </div>
+                  <?php endif; ?>
+                  <?php if ($new_r): ?>
+                  <div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:4px 8px;color:#166534">
+                    <span style="font-size:10px;font-weight:600;text-transform:uppercase">Proposé</span> <?= esc_html(mb_substr($new_r, 0, 120)) ?>
+                  </div>
+                  <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </td>
             <td style="font-size:12px"><?= esc_html($mod['user_email'] ?? '—') ?></td>
             <td style="font-size:12px"><?= esc_html(substr($mod['submitted_at'] ?? '', 0, 16)) ?></td>

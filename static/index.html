@@ -804,6 +804,21 @@
     </div>
   </div>
 
+  <!-- Import CSV -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px">
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">⬆ Import CSV</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Importe des fiches pré-générées. Colonnes : <code>company_title</code>, <code>intro_text</code>, <code>bonus_text</code>, <code>qa_answered</code>, <code>qa_open</code></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <input type="file" id="csvFileInput" accept=".csv"
+             style="font-size:13px;color:var(--text);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer">
+      <button onclick="importCsv()" id="csvImportBtn"
+              style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">
+        ⬆ Importer
+      </button>
+    </div>
+    <div id="csvImportResult" style="margin-top:12px;font-size:13px"></div>
+  </div>
+
   <!-- Stats bar -->
   <div id="fichesStats" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>
 
@@ -2183,6 +2198,7 @@ function copyLicenseKey() {
 document.getElementById('pluginModal').addEventListener('click', e => {
   if (e.target === document.getElementById('pluginModal')) closePluginModal();
 });
+
 </script>
 
 <div class="log-panel collapsed" id="logPanel" style="display:none">
@@ -2201,6 +2217,35 @@ document.getElementById('pluginModal').addEventListener('click', e => {
 // AUTO-GÉNÉRATION
 // ═══════════════════════════════════════════════════════════════════════
 let _autoInterval = null;
+
+async function importCsv() {
+  const input = document.getElementById('csvFileInput');
+  const res   = document.getElementById('csvImportResult');
+  const btn   = document.getElementById('csvImportBtn');
+  if (!input.files.length) { res.style.color='#f59e0b'; res.textContent='Sélectionnez un fichier CSV.'; return; }
+  const csrf = document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrf_token='))?.split('=')[1]||'';
+  const form = new FormData();
+  form.append('file', input.files[0]);
+  btn.disabled = true;
+  res.style.color = 'var(--muted)';
+  res.textContent = '⏳ Import en cours...';
+  try {
+    const r = await fetch('/api/import/csv', { method: 'POST', headers: { 'X-CSRF-Token': csrf }, body: form });
+    const d = await r.json();
+    if (r.ok) {
+      res.style.color = '#22c55e';
+      res.textContent = `✅ ${d.inserted} insérées, ${d.skipped} déjà existantes, ${d.errors} erreurs.`;
+      loadFichesStats();
+    } else {
+      res.style.color = '#ef4444';
+      res.textContent = `❌ ${d.detail || r.status}`;
+    }
+  } catch(e) {
+    res.style.color = '#ef4444';
+    res.textContent = `❌ Erreur réseau : ${e.message}`;
+  }
+  btn.disabled = false;
+}
 
 async function autoGenStart() {
   const concurrency = parseInt(document.getElementById('autoConcurrency').value);

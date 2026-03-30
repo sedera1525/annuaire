@@ -18,4 +18,5 @@ amelioration5.md
 *.gz
 docs/
 docker-compose.prod.yml
-.claude/settings.json
+ .claude/settings.json
+ mailpit-smtp.php
