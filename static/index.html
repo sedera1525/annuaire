@@ -631,7 +631,7 @@
   <div class="logo"><img src="/static/logo.jpg" alt="TOPsocietes.com"></div>
   <nav style="display:flex;gap:4px;margin-left:16px">
     <button class="nav-btn active" id="navSearch" onclick="showView('search')">🔍 Annuaire</button>
-    <button class="nav-btn" id="navFiches" onclick="showView('fiches')">📄 Fiches IA</button>
+    <button class="nav-btn" id="navFiches" onclick="showView('fiches')">📄 Fiches Entreprises</button>
   </nav>
   <div class="db-status">
     <div class="status-dot" id="statusDot"></div>
@@ -848,9 +848,9 @@
       <thead>
         <tr>
           <th>Entreprise</th>
-          <th>Générée le</th>
-          <th>Modèle</th>
-          <th>Tokens</th>
+          <th>Catégorie</th>
+          <th>Ville</th>
+          <th>Note</th>
           <th style="text-align:right">Actions</th>
         </tr>
       </thead>
@@ -1708,8 +1708,10 @@ function renderFichesTable(rows, deleted) {
     return;
   }
   tbody.innerHTML = rows.map(f => {
-    const date = f.generated_at ? f.generated_at.slice(0, 16).replace('T', ' ') : '—';
-    const t = escHtml(f.company_title);
+    const t       = escHtml(f.company_title);
+    const cat     = escHtml(f.category || '—');
+    const city    = escHtml(f.city    || '—');
+    const rating  = f.rating_value ? `★ ${parseFloat(f.rating_value).toFixed(1)}` : '—';
     const actions = deleted
       ? `<button class="btn-icon success" data-action="restore" data-title="${t}" title="Restaurer">↩ Restaurer</button>`
       : `<button class="btn-icon" data-action="view" data-title="${t}" title="Voir la fiche">👁 Voir</button>
@@ -1719,9 +1721,9 @@ function renderFichesTable(rows, deleted) {
          <button class="btn-icon danger" data-action="delete" data-title="${t}" title="Supprimer">🗑</button>`;
     return `<tr>
       <td class="td-title"><span title="${t}">${t}</span></td>
-      <td style="color:var(--muted);white-space:nowrap">${date}</td>
-      <td style="color:var(--muted)">${escHtml(f.model || '—')}</td>
-      <td style="color:var(--muted)">${f.completion_tokens || '—'}</td>
+      <td style="color:var(--muted)">${cat}</td>
+      <td style="color:var(--muted)">${city}</td>
+      <td style="color:var(--muted)">${rating}</td>
       <td style="text-align:right;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end">${actions}</td>
     </tr>`;
   }).join('');

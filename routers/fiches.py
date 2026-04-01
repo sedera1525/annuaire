@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from core.config import FICHES_DB
+from core.db import get_conn
 from models import UpdateFicheRequest
 from services.fiches import get_fiche, save_fiche
 
@@ -62,8 +63,28 @@ def list_fiches(
             f"FROM fiches WHERE {where} ORDER BY generated_at DESC LIMIT ? OFFSET ?",
             params + [per_page, offset],
         ).fetchall()
+        results = [dict(r) for r in rows]
+        # Enrichit avec category, city, rating_value depuis DuckDB
+        if results:
+            titles = [r["company_title"] for r in results]
+            placeholders = ", ".join("?" * len(titles))
+            try:
+                duck = get_conn()
+                company_rows = duck.execute(
+                    f"SELECT title, category, city, rating_value FROM companies "
+                    f"WHERE title IN ({placeholders})",
+                    titles,
+                ).fetchall()
+                company_map = {r[0]: {"category": r[1], "city": r[2], "rating_value": r[3]} for r in company_rows}
+                for r in results:
+                    info = company_map.get(r["company_title"], {})
+                    r["category"]     = info.get("category") or ""
+                    r["city"]         = info.get("city") or ""
+                    r["rating_value"] = info.get("rating_value")
+            except Exception:
+                pass
         return {
-            "results": [dict(r) for r in rows],
+            "results": results,
             "total":   total,
             "page":    page,
             "pages":   max(1, (total + per_page - 1) // per_page),
