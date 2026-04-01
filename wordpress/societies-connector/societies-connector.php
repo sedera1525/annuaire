@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.8.0
+ * Version:      1.9.1
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.4.0');
+define('SC_VERSION', '1.9.1');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
