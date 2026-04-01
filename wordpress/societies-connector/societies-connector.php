@@ -1897,9 +1897,17 @@ function sc_admin_fiches() {
 
       <?php if ($tab === 'list'): ?>
         <?php
-        $page = max(1, intval($_GET['paged'] ?? 1));
-        $q    = sanitize_text_field($_GET['q'] ?? '');
-        $data = sc_api("/api/fiches?page={$page}&per_page=25" . ($q ? '&q=' . urlencode($q) : ''));
+        $page     = max(1, intval($_GET['paged']    ?? 1));
+        $q        = sanitize_text_field($_GET['q']   ?? '');
+        $sort_by  = in_array($_GET['sort_by'] ?? '', ['rating', 'generated_at'], true) ? $_GET['sort_by'] : 'generated_at';
+        $sort_dir = ($_GET['sort_dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $data     = sc_api("/api/fiches?page={$page}&per_page=25&sort_by={$sort_by}&sort_dir={$sort_dir}" . ($q ? '&q=' . urlencode($q) : ''));
+
+        // URL de base pour les liens de tri (sans paged ni sort)
+        $sort_base = admin_url('admin.php?page=societies-fiches&tab=list' . ($q ? '&q=' . urlencode($q) : ''));
+        $note_dir  = ($sort_by === 'rating' && $sort_dir === 'desc') ? 'asc' : 'desc';
+        $note_url  = $sort_base . '&sort_by=rating&sort_dir=' . $note_dir;
+        $note_icon = $sort_by === 'rating' ? ($sort_dir === 'asc' ? ' ▲' : ' ▼') : '';
         ?>
         <form method="get" style="margin-bottom:16px">
           <input type="hidden" name="page" value="societies-fiches">
@@ -1920,7 +1928,7 @@ function sc_admin_fiches() {
               <th style="width:30%">Entreprise</th>
               <th>Catégorie</th>
               <th>Ville</th>
-              <th>Note</th>
+              <th><a href="<?= esc_url($note_url) ?>" style="text-decoration:none;color:inherit">Note<?= $note_icon ?></a></th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1981,7 +1989,11 @@ function sc_admin_fiches() {
         // Pagination
         $total_pages = (int)($data['pages'] ?? 1);
         if ($total_pages > 1):
-            $base_url = admin_url("admin.php?page=societies-fiches&tab=list" . ($q ? '&q=' . urlencode($q) : '') . '&paged=%#%');
+            $base_url = admin_url("admin.php?page=societies-fiches&tab=list"
+                . ($q       ? '&q='        . urlencode($q)       : '')
+                . ($sort_by !== 'generated_at' ? '&sort_by=' . urlencode($sort_by) : '')
+                . ($sort_dir !== 'desc'         ? '&sort_dir=' . urlencode($sort_dir) : '')
+                . '&paged=%#%');
         ?>
         <div class="tablenav bottom" style="margin-top:12px">
           <div class="tablenav-pages">

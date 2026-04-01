@@ -41,6 +41,8 @@ def list_fiches(
     q:              Optional[str] = None,
     deleted:        bool = False,
     include_errors: bool = False,
+    sort_by:        str  = "generated_at",
+    sort_dir:       str  = "desc",
 ):
     conn = sqlite3.connect(FICHES_DB)
     conn.row_factory = sqlite3.Row
@@ -83,6 +85,11 @@ def list_fiches(
                     r["rating_value"] = info.get("rating_value")
             except Exception:
                 pass
+            if sort_by == "rating":
+                results.sort(
+                    key=lambda r: r.get("rating_value") or 0,
+                    reverse=(sort_dir != "asc"),
+                )
         return {
             "results": results,
             "total":   total,
