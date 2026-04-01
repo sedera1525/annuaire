@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.1
+ * Version:      1.9.2
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.1');
+define('SC_VERSION', '1.9.2');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -656,6 +656,10 @@ add_shortcode('societies_fiche', function($atts) {
     $gen_date    = $fiche['generated_at'] ?? '';
     $qa_answered = $fiche['qa_answered'] ?? [];
     $qa_open     = $fiche['qa_open'] ?? [];
+    // Fallback : utilise les questions templates si qa_open n'est pas encore stocké
+    if (empty($qa_open) && !empty($fiche['open_questions'])) {
+        $qa_open = array_map(fn($q) => ['q' => $q, 'r' => ''], $fiche['open_questions']);
+    }
     $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
 
