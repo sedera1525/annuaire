@@ -1917,15 +1917,16 @@ function sc_admin_fiches() {
         <table class="wp-list-table widefat fixed striped">
           <thead>
             <tr>
-              <th style="width:35%">Entreprise</th>
-              <th>Généré le</th>
-              <th>Modèle</th>
-              <th>Tokens</th>
+              <th style="width:30%">Entreprise</th>
+              <th>Catégorie</th>
+              <th>Ville</th>
+              <th>Note</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($data['results'] as $f):
+              $company = sc_api('/api/company/' . rawurlencode($f['company_title']));
               // Vérifier si une page WP existe déjà
               $wp_pages = get_posts([
                   'post_type'   => 'page',
@@ -1938,9 +1939,9 @@ function sc_admin_fiches() {
             ?>
             <tr>
               <td><strong><?= esc_html($f['company_title']) ?></strong></td>
-              <td><?= esc_html(substr($f['generated_at'] ?? '', 0, 16)) ?></td>
-              <td><?= esc_html($f['model'] ?? '—') ?></td>
-              <td><?= number_format($f['completion_tokens'] ?? 0) ?></td>
+              <td><?= esc_html($company['category'] ?? '—') ?></td>
+              <td><?= esc_html($company['city'] ?? '—') ?></td>
+              <td><?= ($company['rating_value'] ?? 0) ? '★ ' . number_format((float)$company['rating_value'], 1) : '—' ?></td>
               <td style="white-space:nowrap">
                 <form method="post" style="display:inline">
                   <input type="hidden" name="page" value="societies-fiches">
@@ -1978,15 +1979,23 @@ function sc_admin_fiches() {
 
         <?php
         // Pagination
-        if (($data['pages'] ?? 1) > 1):
-            $base_url = admin_url("admin.php?page=societies-fiches&tab=list" . ($q ? '&q=' . urlencode($q) : ''));
+        $total_pages = (int)($data['pages'] ?? 1);
+        if ($total_pages > 1):
+            $base_url = admin_url("admin.php?page=societies-fiches&tab=list" . ($q ? '&q=' . urlencode($q) : '') . '&paged=%#%');
         ?>
-        <div style="margin-top:16px">
-          <?php for ($i = 1; $i <= $data['pages']; $i++): ?>
-          <a href="<?= $base_url ?>&paged=<?= $i ?>"
-             class="button<?= $i === $page ? ' button-primary' : '' ?>"
-             style="margin-right:4px"><?= $i ?></a>
-          <?php endfor; ?>
+        <div class="tablenav bottom" style="margin-top:12px">
+          <div class="tablenav-pages">
+            <span class="displaying-num"><?= number_format($data['total'] ?? 0, 0, ',', ' ') ?> fiches</span>
+            <?php echo paginate_links([
+                'base'      => $base_url,
+                'format'    => '',
+                'current'   => $page,
+                'total'     => $total_pages,
+                'prev_text' => '&laquo;',
+                'next_text' => '&raquo;',
+                'type'      => 'plain',
+            ]); ?>
+          </div>
         </div>
         <?php endif; ?>
 
