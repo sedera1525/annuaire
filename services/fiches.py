@@ -76,6 +76,30 @@ _MIGRATIONS: list[tuple[int, str]] = [
             rejection_reason TEXT
         );
     """),
+    (8, """
+        CREATE TABLE IF NOT EXISTS subscription_packs (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            name         TEXT NOT NULL,
+            slug         TEXT UNIQUE NOT NULL,
+            price_ht     REAL NOT NULL,
+            color        TEXT DEFAULT '#10b981',
+            description  TEXT,
+            features     TEXT,
+            wc_product_id INTEGER,
+            created_at   TEXT DEFAULT (datetime('now')),
+            updated_at   TEXT DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO subscription_packs (name, slug, price_ht, color, description, features) VALUES
+        ('Pack Essentiel', 'pack-essentiel', 29.0, '#10b981',
+         'Une présence en ligne claire et professionnelle',
+         '["Réponses aux 6 questions clés","Fiche entreprise complète","Présentation de votre activité"]'),
+        ('Pack Visibilité', 'pack-visibilite', 49.0, '#3b82f6',
+         'Renforcez votre crédibilité et donnez envie de vous contacter',
+         '["Tout Pack Essentiel","Badge Entreprise vérifiée par TOPsocietes.com","Produits et services (jusqu''à 10)","Zone d''intervention","Site web","Intervention rapide"]'),
+        ('Pack Premium', 'pack-premium', 69.0, '#8b5cf6',
+         'Démarquez-vous clairement et inspirez un maximum de confiance',
+         '["Tout Pack Visibilité","Badge Entreprise conseillée par TOPsocietes.com","Dépannage urgent","Devis gratuit","Artisan ponctuel et soigneux","Certifié RGE","Type de projets (Maison / Appartement / Commerce)","Marques (jusqu''à 10)","Compteur de visite de cette page"]');
+    """),
 ]
 
 
