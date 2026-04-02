@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.2
+ * Version:      1.9.3
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.2');
+define('SC_VERSION', '1.9.3');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -673,12 +673,12 @@ add_shortcode('societies_fiche', function($atts) {
       <!-- HERO -->
       <div class="sc2-hero">
         <div class="sc2-hero-inner">
-          <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com" class="sc2-hero-logo">
           <h1 class="sc2-hero-name"><?= esc_html($company['title']) ?></h1>
-          <?php if (!empty($company['category']) || !empty($company['city'])): ?>
+          <?php if (!empty($company['category']) || !empty($company['city']) || !empty($company['phone'])): ?>
           <div class="sc2-hero-sub">
             <?php if (!empty($company['category'])): ?><span><?= esc_html($company['category']) ?></span><?php endif; ?>
             <?php if (!empty($company['city'])): ?><span>📍 <?= esc_html($company['city']) ?><?= !empty($company['zip_code']) ? ' ' . esc_html($company['zip_code']) : '' ?></span><?php endif; ?>
+            <?php if (!empty($company['phone'])): ?><span>📞 <a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $company['phone'])) ?>" style="color:inherit;text-decoration:none"><?= esc_html($company['phone']) ?></a></span><?php endif; ?>
           </div>
           <?php endif; ?>
         </div>
@@ -692,14 +692,11 @@ add_shortcode('societies_fiche', function($atts) {
       </div>
 
       <!-- CONTACT BAR -->
-      <?php $has_contact = !empty($company['phone']) || !empty($company['website']) || !empty($company['address']); ?>
+      <?php $has_contact = !empty($company['website']) || !empty($company['address']); ?>
       <?php if ($has_contact): ?>
       <div class="sc2-contact-bar">
         <?php if (!empty($company['address'])): ?>
         <span class="sc2-contact-item">📍 <?= esc_html($company['address']) ?></span>
-        <?php endif; ?>
-        <?php if (!empty($company['phone'])): ?>
-        <a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $company['phone'])) ?>" class="sc2-contact-item sc2-contact-link">📞 <?= esc_html($company['phone']) ?></a>
         <?php endif; ?>
         <?php if (!empty($company['website'])): ?>
         <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-contact-item sc2-contact-link">🌐 <?= esc_html(preg_replace('/^https?:\/\/(www\.)?/', '', rtrim($company['website'], '/'))) ?></a>
@@ -771,11 +768,6 @@ add_shortcode('societies_fiche', function($atts) {
         <a href="<?= esc_url($claim_url) ?>" class="sc2-claim-link">Revendiquer cette fiche →</a>
       </div>
 
-      <!-- BRANDING -->
-      <div class="sc2-footer">
-        <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com">
-        <span>Fiche entreprise — TOPsocietes.com</span>
-      </div>
 
     </div>
     <style>
