@@ -48,7 +48,7 @@ def _cb_reset() -> None:
 
 OPEN_QUESTIONS_TEMPLATE = [
     "Comment fonctionne réellement le service client de l'entreprise {nom} en cas de problème ?",
-    "Les clients fidèles de l'entreprise {nom} recommandent-ils vraiment leurs services ?",
+    "Les clients fidèles de l'entreprise {nom} recommandent-ils vraiment ses services ?",
     "Les tarifs de l'entreprise {nom} sont-ils transparents ?",
     "Les délais annoncés par l'entreprise {nom} sont-ils respectés ?",
     "Le rapport qualité-prix de l'entreprise {nom} est-il intéressant ?",

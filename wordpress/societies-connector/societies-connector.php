@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.3
+ * Version:      1.9.4
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.3');
+define('SC_VERSION', '1.9.4');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -632,6 +632,144 @@ add_shortcode('societies_by_city', function($atts) {
 });
 
 // =============================================================================
+// SHORTCODE MOTEUR DE RECHERCHE [societies_search]
+// =============================================================================
+
+add_shortcode('societies_search', function($atts) {
+    $atts = shortcode_atts(['per_page' => 24, 'placeholder' => 'Nom, ville, secteur d\'activité...'], $atts);
+    $uid  = 'sc-search-' . wp_rand(1000, 9999);
+    $ajax_url = admin_url('admin-ajax.php');
+    ob_start(); ?>
+    <div id="<?= esc_attr($uid) ?>" class="sc-search-wrap">
+      <div class="sc-search-bar">
+        <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-search-input"
+               placeholder="<?= esc_attr($atts['placeholder']) ?>"
+               oninput="scSearchDebounce('<?= esc_js($uid) ?>')">
+        <span class="sc-search-icon">🔍</span>
+      </div>
+      <div id="<?= esc_attr($uid) ?>-status" class="sc-search-status"></div>
+      <div id="<?= esc_attr($uid) ?>-results" class="sc-search-results"></div>
+      <div id="<?= esc_attr($uid) ?>-more" style="text-align:center;margin-top:20px;display:none">
+        <button onclick="scSearchLoadMore('<?= esc_js($uid) ?>')" class="sc-search-more-btn">Charger plus</button>
+      </div>
+    </div>
+
+    <style>
+    .sc-search-wrap{max-width:860px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+    .sc-search-bar{position:relative;margin-bottom:20px}
+    .sc-search-input{width:100%;box-sizing:border-box;padding:14px 48px 14px 18px;font-size:16px;border:2px solid #e2e8f0;border-radius:12px;outline:none;transition:border-color .2s}
+    .sc-search-input:focus{border-color:#e63946}
+    .sc-search-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none}
+    .sc-search-status{font-size:13px;color:#6b7280;margin-bottom:12px;min-height:18px}
+    .sc-search-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .sc-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;text-decoration:none;color:inherit;display:block;transition:box-shadow .2s,transform .15s}
+    .sc-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);transform:translateY(-2px);text-decoration:none}
+    .sc-card-name{font-size:15px;font-weight:700;color:#1a2744;margin-bottom:6px;line-height:1.3}
+    .sc-card-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+    .sc-card-tag{background:#f1f5f9;color:#475569;font-size:11px;padding:3px 8px;border-radius:20px}
+    .sc-card-rating{display:flex;align-items:center;gap:6px;font-size:13px}
+    .sc-card-stars{color:#f59e0b;letter-spacing:1px}
+    .sc-card-score{font-weight:700;color:#e63946}
+    .sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}
+    .sc-search-more-btn{background:#1a2744;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer}
+    @media(max-width:600px){.sc-search-results{grid-template-columns:1fr}}
+    </style>
+
+    <script>
+    (function(){
+      var _scTimers = {};
+      var _scPages  = {};
+      window.scSearchDebounce = function(uid) {
+        clearTimeout(_scTimers[uid]);
+        _scTimers[uid] = setTimeout(function(){ scSearch(uid, 1); }, 350);
+      };
+      window.scSearch = function(uid, page) {
+        var q     = document.getElementById(uid+'-q').value.trim();
+        var status = document.getElementById(uid+'-status');
+        var results = document.getElementById(uid+'-results');
+        var more   = document.getElementById(uid+'-more');
+        _scPages[uid] = page;
+        if (q.length < 2) { results.innerHTML = ''; status.textContent = ''; more.style.display='none'; return; }
+        status.textContent = 'Recherche...';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?= esc_js($ajax_url) ?>');
+        xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
+        xhr.onload = function() {
+          var d = JSON.parse(xhr.responseText || '{}');
+          if (!d.success) { status.textContent = 'Erreur.'; return; }
+          var items = d.data.results || [];
+          var total = d.data.total || 0;
+          status.textContent = total + ' entreprise' + (total > 1 ? 's' : '') + ' trouvée' + (total > 1 ? 's' : '');
+          var html = items.map(function(c) {
+            var stars = '★★★★★';
+            var tags  = '';
+            if (c.category) tags += '<span class="sc-card-tag">'+esc(c.category)+'</span>';
+            if (c.city)     tags += '<span class="sc-card-tag">📍 '+esc(c.city)+'</span>';
+            return '<a href="'+esc(c.url||'#')+'" class="sc-card">'
+              +'<div class="sc-card-name">'+esc(c.title)+'</div>'
+              +(tags ? '<div class="sc-card-meta">'+tags+'</div>' : '')
+              +'<div class="sc-card-rating"><span class="sc-card-stars">'+stars+'</span>'
+              +'<span class="sc-card-score">5.0</span>'
+              +'<span class="sc-card-note">Note interne</span></div>'
+              +'</a>';
+          }).join('');
+          if (page === 1) results.innerHTML = html;
+          else results.innerHTML += html;
+          more.style.display = (items.length >= <?= intval($atts['per_page']) ?> && total > (page * <?= intval($atts['per_page']) ?>)) ? '' : 'none';
+        };
+        xhr.send('action=sc_search&q='+encodeURIComponent(q)+'&page='+page+'&per_page=<?= intval($atts['per_page']) ?>');
+      };
+      window.scSearchLoadMore = function(uid) {
+        scSearch(uid, (_scPages[uid] || 1) + 1);
+      };
+      function esc(s) {
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+    })();
+    </script>
+    <?php return ob_get_clean();
+});
+
+// AJAX handler — public (nopriv)
+add_action('wp_ajax_sc_search',        'sc_search_ajax_handler');
+add_action('wp_ajax_nopriv_sc_search', 'sc_search_ajax_handler');
+function sc_search_ajax_handler() {
+    $q        = sanitize_text_field($_POST['q'] ?? '');
+    $page     = max(1, intval($_POST['page'] ?? 1));
+    $per_page = min(50, max(6, intval($_POST['per_page'] ?? 24)));
+
+    if (strlen($q) < 2) { wp_send_json_error(['message' => 'Query trop courte']); }
+
+    $data = sc_api('/api/search?q=' . rawurlencode($q) . '&page=' . $page . '&per_page=' . $per_page);
+    if (isset($data['error'])) { wp_send_json_error($data); }
+
+    $companies = $data['results'] ?? [];
+
+    // Résolution des permalinks via _sc_company_title meta
+    $titles = array_column($companies, 'title');
+    $url_map = [];
+    if (!empty($titles)) {
+        foreach ($titles as $t) {
+            $pages = get_posts([
+                'post_type'   => 'page',
+                'post_status' => 'publish',
+                'meta_key'    => '_sc_company_title',
+                'meta_value'  => $t,
+                'numberposts' => 1,
+                'fields'      => 'ids',
+            ]);
+            if ($pages) $url_map[$t] = get_permalink($pages[0]);
+        }
+    }
+
+    foreach ($companies as &$c) {
+        $c['url'] = $url_map[$c['title']] ?? '';
+    }
+
+    wp_send_json_success(['results' => $companies, 'total' => $data['total'] ?? count($companies)]);
+}
+
+// =============================================================================
 // SHORTCODE FICHE COMPLÈTE [societies_fiche title="Nom Entreprise"]
 // =============================================================================
 
@@ -663,10 +801,6 @@ add_shortcode('societies_fiche', function($atts) {
     $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
 
-    $stars_full  = (int) round((float)$rating);
-    $stars_empty = 5 - $stars_full;
-    $stars_html  = str_repeat('★', $stars_full) . str_repeat('☆', $stars_empty);
-
     ob_start(); ?>
     <div class="sc2-wrap">
 
@@ -682,13 +816,12 @@ add_shortcode('societies_fiche', function($atts) {
           </div>
           <?php endif; ?>
         </div>
-        <?php if ($rating): ?>
+        <!-- NOTE INTERNE 5⭐ -->
         <div class="sc2-hero-rating">
-          <div class="sc2-hero-score"><?= number_format((float)$rating, 1) ?></div>
-          <div class="sc2-hero-stars"><?= $stars_html ?></div>
-          <?php if ($votes): ?><div class="sc2-hero-votes"><?= number_format((int)$votes, 0, ',', ' ') ?> avis</div><?php endif; ?>
+          <div class="sc2-hero-score">5.0</div>
+          <div class="sc2-hero-stars">★★★★★</div>
+          <div class="sc2-hero-votes sc2-hero-disclaimer">Note interne</div>
         </div>
-        <?php endif; ?>
       </div>
 
       <!-- CONTACT BAR -->
@@ -703,6 +836,9 @@ add_shortcode('societies_fiche', function($atts) {
         <?php endif; ?>
       </div>
       <?php endif; ?>
+
+      <!-- DISCLAIMER NOTE -->
+      <div class="sc2-disclaimer">⭐ Note interne basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
 
       <?php if ($intro && $status === 'done'): ?>
       <!-- PRÉSENTATION -->
@@ -764,7 +900,7 @@ add_shortcode('societies_fiche', function($atts) {
       <!-- REVENDIQUER CETTE FICHE -->
       <?php $claim_url = get_permalink(get_option('sc_client_page_id')) ?: home_url('/mon-entreprise/'); ?>
       <div class="sc2-claim-cta">
-        <span>Cette entreprise, c'est la vôtre ?</span>
+        <span>Cette entreprise est la vôtre ?</span>
         <a href="<?= esc_url($claim_url) ?>" class="sc2-claim-link">Revendiquer cette fiche →</a>
       </div>
 
@@ -784,6 +920,7 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-hero-score{font-size:42px;font-weight:800;color:#e63946;line-height:1}
     .sc2-hero-stars{color:#f59e0b;font-size:18px;letter-spacing:2px;margin:4px 0}
     .sc2-hero-votes{color:#94a3b8;font-size:12px}
+    .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center}
 
     /* CONTACT BAR */
     .sc2-contact-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 20px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px}
@@ -792,6 +929,7 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-contact-link:hover{text-decoration:underline}
 
     /* INTRO */
+    .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:6px 12px;margin-bottom:12px}
     .sc2-intro-card{background:#1a2744;border-radius:12px;padding:24px 28px;margin-bottom:16px}
     .sc2-intro-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px;color:#94a3b8}
     .sc2-intro-text{margin:0;color:#e2e8f0;line-height:1.8;font-size:15px}
@@ -929,7 +1067,7 @@ add_shortcode('societies_home', function() {
       <!-- CTA PROPRIÉTAIRE -->
       <div class="sc-home-owner">
         <div>
-          <strong>Cette entreprise, c'est la vôtre ?</strong>
+          <strong>Cette entreprise est la vôtre ?</strong>
           <p>Revendiquez votre fiche gratuitement et répondez aux questions de vos clients.</p>
         </div>
         <a href="<?= esc_url($claim_url) ?>" class="sc-btn sc-home-owner-btn">Revendiquer votre fiche →</a>

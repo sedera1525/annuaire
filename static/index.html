@@ -686,6 +686,7 @@
     <div style="display:flex;gap:8px">
       <button onclick="openWcSettingsModal()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 14px;font-size:13px;cursor:pointer">⚙️ Clés API WooCommerce</button>
       <button onclick="syncPacksToWc()" id="btnSyncPacks" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">🔄 Synchroniser les packs → WooCommerce</button>
+      <button onclick="publishSearchPage()" id="btnPublishSearch" style="background:#6c8aff;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">📄 Publier page recherche → WP</button>
     </div>
   </div>
 
@@ -2523,6 +2524,27 @@ async function loadSubscriptions() {
       </table>`;
   } catch(e) {
     el.textContent = '❌ Erreur : ' + e.message;
+  }
+}
+
+// --- Publication page recherche WP ---
+async function publishSearchPage() {
+  const btn = document.getElementById('btnPublishSearch');
+  const el  = document.getElementById('wcSyncStatus');
+  btn.disabled = true;
+  el.textContent = '🔄 Publication en cours...';
+  try {
+    const r = await fetch('/api/wp/publish-search-page', {
+      method: 'POST', headers: {'X-CSRF-Token': getCsrf()},
+    });
+    const d = await r.json();
+    if (d.detail) { el.textContent = '❌ ' + d.detail; return; }
+    const action = d.action === 'created' ? '✅ Page créée' : '🔄 Page mise à jour';
+    el.innerHTML = `${action} — <a href="${d.url}" target="_blank" style="color:var(--accent)">${d.url}</a>`;
+  } catch(e) {
+    el.textContent = '❌ Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
 }
 

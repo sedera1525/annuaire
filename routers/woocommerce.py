@@ -269,3 +269,57 @@ def list_subscriptions(page: int = 1, per_page: int = 25, status: str = "active"
 
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Erreur WooCommerce : {e}")
+
+
+# =============================================================================
+# PUBLICATION PAGE MOTEUR DE RECHERCHE DANS WORDPRESS
+# =============================================================================
+
+@router.post("/wp/publish-search-page", dependencies=[Depends(require_admin)])
+def publish_search_page():
+    """Crée ou met à jour la page moteur de recherche WordPress avec [societies_search]."""
+    wp_url = get_setting("wc_url") or ""
+    ck     = get_setting("wc_consumer_key") or ""
+    cs     = get_setting("wc_consumer_secret") or ""
+    if not wp_url or not ck or not cs:
+        raise HTTPException(status_code=400, detail="Clés WooCommerce non configurées")
+
+    base = wp_url.rstrip("/") + "/wp-json/wp/v2"
+    auth = (ck, cs)
+
+    page_slug    = "recherche-entreprises"
+    page_title   = "Recherche d'entreprises"
+    page_content = "<!-- wp:shortcode -->[societies_search]<!-- /wp:shortcode -->"
+
+    # Vérifie si la page existe déjà
+    try:
+        r = httpx.get(f"{base}/pages", params={"slug": page_slug, "status": "any"}, auth=auth, timeout=10)
+        r.raise_for_status()
+        existing = r.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Erreur WP REST API : {e}")
+
+    payload = {
+        "title":   page_title,
+        "slug":    page_slug,
+        "content": page_content,
+        "status":  "publish",
+    }
+
+    try:
+        if existing:
+            page_id = existing[0]["id"]
+            r2 = httpx.put(f"{base}/pages/{page_id}", json=payload, auth=auth, timeout=10)
+            r2.raise_for_status()
+            page_link = r2.json().get("link", "")
+            logger.info(f"Page recherche mise à jour (id={page_id})")
+            return {"action": "updated", "id": page_id, "url": page_link}
+        else:
+            r2 = httpx.post(f"{base}/pages", json=payload, auth=auth, timeout=10)
+            r2.raise_for_status()
+            page_id   = r2.json()["id"]
+            page_link = r2.json().get("link", "")
+            logger.info(f"Page recherche créée (id={page_id})")
+            return {"action": "created", "id": page_id, "url": page_link}
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Erreur création page : {e}")
