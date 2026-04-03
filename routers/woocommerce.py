@@ -43,14 +43,17 @@ class PackRequest(BaseModel):
 # HELPERS
 # =============================================================================
 
-def _wc_auth() -> tuple[str, tuple[str, str]]:
-    """Retourne (base_url, (ck, cs)) depuis les settings."""
+def _wc_auth() -> tuple[str, dict]:
+    """Retourne (base_url, wc_params) depuis les settings.
+    On passe ck/cs en query string plutôt qu'en Basic Auth car
+    certains hébergements (CGI/FastCGI) suppriment le header Authorization.
+    """
     wp_url = get_setting("wc_url") or ""
     ck     = get_setting("wc_consumer_key") or ""
     cs     = get_setting("wc_consumer_secret") or ""
     if not wp_url or not ck or not cs:
         raise HTTPException(status_code=400, detail="Clés WooCommerce non configurées")
-    return wp_url.rstrip("/") + "/wp-json/wc/v3", (ck, cs)
+    return wp_url.rstrip("/") + "/wp-json/wc/v3", {"consumer_key": ck, "consumer_secret": cs}
 
 
 def _get_packs() -> list[dict]:
@@ -166,9 +169,9 @@ def delete_pack(pack_id: int):
 @router.get("/wc/status", dependencies=[Depends(require_admin)])
 def wc_status():
     """Vérifie la connexion WooCommerce."""
-    base, auth = _wc_auth()
+    base, wc_params = _wc_auth()
     try:
-        r = httpx.get(f"{base}/products", params={"per_page": 1}, auth=auth, timeout=10)
+        r = httpx.get(f"{base}/products", params={**wc_params, "per_page": 1}, timeout=10)
         r.raise_for_status()
         return {"connected": True}
     except httpx.HTTPError as e:
@@ -178,7 +181,7 @@ def wc_status():
 @router.post("/wc/sync-packs", dependencies=[Depends(require_admin)])
 def sync_packs():
     """Envoie tous les packs vers WooCommerce (crée ou met à jour)."""
-    base, auth = _wc_auth()
+    base, wc_params = _wc_auth()
     packs = _get_packs()
     created, updated, errors = [], [], []
 
@@ -204,21 +207,19 @@ def sync_packs():
                 wc_id = pack.get("wc_product_id")
 
                 if wc_id:
-                    # Vérifie que le produit existe encore dans WC
-                    chk = httpx.get(f"{base}/products/{wc_id}", auth=auth, timeout=10)
+                    chk = httpx.get(f"{base}/products/{wc_id}", params=wc_params, timeout=10)
                     if chk.status_code == 404:
-                        wc_id = None  # supprimé côté WC, on recrée
+                        wc_id = None
 
                 if wc_id:
-                    r = httpx.put(f"{base}/products/{wc_id}", json=payload, auth=auth, timeout=10)
+                    r = httpx.put(f"{base}/products/{wc_id}", params=wc_params, json=payload, timeout=10)
                     r.raise_for_status()
                     updated.append({"id": wc_id, "name": pack["name"]})
                     logger.info(f"Pack WC mis à jour : {pack['name']} (id={wc_id})")
                 else:
-                    r = httpx.post(f"{base}/products", json=payload, auth=auth, timeout=10)
+                    r = httpx.post(f"{base}/products", params=wc_params, json=payload, timeout=10)
                     r.raise_for_status()
                     wc_id = r.json()["id"]
-                    # Sauvegarde l'ID WooCommerce
                     conn.execute(
                         "UPDATE subscription_packs SET wc_product_id=?, updated_at=datetime('now') WHERE id=?",
                         [wc_id, pack["id"]],
@@ -243,23 +244,22 @@ def sync_packs():
 @router.get("/wc/subscriptions", dependencies=[Depends(require_admin)])
 def list_subscriptions(page: int = 1, per_page: int = 25, status: str = "active"):
     """Récupère les abonnements depuis WooCommerce."""
-    base, auth = _wc_auth()
-    # YITH stocke les abonnements comme des orders avec meta
-    # On récupère via l'endpoint orders filtré par le tag sc-pack
+    base, wc_params = _wc_auth()
     try:
         params = {
+            **wc_params,
             "per_page": per_page,
             "page":     page,
             "status":   status,
         }
         # Tente d'abord l'endpoint YITH subscriptions s'il existe
-        r = httpx.get(f"{base}/yith/subscriptions", params=params, auth=auth, timeout=15)
+        r = httpx.get(f"{base}/yith/subscriptions", params=params, timeout=15)
         if r.status_code == 200:
             data = r.json()
             return {"source": "yith", "results": data, "page": page}
 
         # Fallback : orders WooCommerce classiques
-        r2 = httpx.get(f"{base}/orders", params={**params, "meta_key": "_sc_pack"}, auth=auth, timeout=15)
+        r2 = httpx.get(f"{base}/orders", params={**params, "meta_key": "_sc_pack"}, timeout=15)
         r2.raise_for_status()
         orders = r2.json()
         results = []
