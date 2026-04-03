@@ -26,6 +26,8 @@ class WcSettingsRequest(BaseModel):
     wc_url:             str
     wc_consumer_key:    str
     wc_consumer_secret: str
+    wp_user:            str = ""
+    wp_app_password:    str = ""
 
 
 class PackRequest(BaseModel):
@@ -79,6 +81,8 @@ def wc_get_settings():
         "wc_url":          get_setting("wc_url") or "",
         "wc_consumer_key": get_setting("wc_consumer_key") or "",
         "has_secret":      bool(get_setting("wc_consumer_secret")),
+        "wp_user":         get_setting("wp_user") or "",
+        "has_wp_password": bool(get_setting("wp_app_password")),
     }
 
 
@@ -87,7 +91,11 @@ def wc_save_settings(data: WcSettingsRequest):
     set_setting("wc_url",             data.wc_url.rstrip("/"))
     set_setting("wc_consumer_key",    data.wc_consumer_key.strip())
     set_setting("wc_consumer_secret", data.wc_consumer_secret.strip())
-    logger.info("Clés WooCommerce mises à jour")
+    if data.wp_user:
+        set_setting("wp_user", data.wp_user.strip())
+    if data.wp_app_password:
+        set_setting("wp_app_password", data.wp_app_password.strip())
+    logger.info("Clés WooCommerce + WP mises à jour")
     return {"ok": True}
 
 
@@ -277,23 +285,29 @@ def list_subscriptions(page: int = 1, per_page: int = 25, status: str = "active"
 
 @router.post("/wp/publish-search-page", dependencies=[Depends(require_admin)])
 def publish_search_page():
-    """Crée ou met à jour la page moteur de recherche WordPress avec [societies_search]."""
-    wp_url = get_setting("wc_url") or ""
-    ck     = get_setting("wc_consumer_key") or ""
-    cs     = get_setting("wc_consumer_secret") or ""
-    if not wp_url or not ck or not cs:
-        raise HTTPException(status_code=400, detail="Clés WooCommerce non configurées")
+    """Crée ou met à jour la page moteur de recherche WordPress avec [societies_search].
+    Utilise les Application Passwords WP (différent des clés WooCommerce).
+    """
+    wp_url   = get_setting("wc_url") or ""
+    wp_user  = get_setting("wp_user") or ""
+    wp_pass  = get_setting("wp_app_password") or ""
+    if not wp_url or not wp_user or not wp_pass:
+        raise HTTPException(
+            status_code=400,
+            detail="Identifiants WordPress (wp_user / wp_app_password) non configurés dans les réglages"
+        )
 
     base = wp_url.rstrip("/") + "/wp-json/wp/v2"
-    auth = (ck, cs)
+    # WP Application Passwords : Basic Auth avec username:app_password
+    auth = (wp_user, wp_pass.replace(" ", ""))
 
     page_slug    = "recherche-entreprises"
     page_title   = "Recherche d'entreprises"
     page_content = "<!-- wp:shortcode -->[societies_search]<!-- /wp:shortcode -->"
 
-    # Vérifie si la page existe déjà
     try:
-        r = httpx.get(f"{base}/pages", params={"slug": page_slug, "status": "any"}, auth=auth, timeout=10)
+        # Cherche la page existante (status=publish uniquement pour éviter 400 sans auth élevée)
+        r = httpx.get(f"{base}/pages", params={"slug": page_slug}, auth=auth, timeout=10)
         r.raise_for_status()
         existing = r.json()
     except httpx.HTTPError as e:
