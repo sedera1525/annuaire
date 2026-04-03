@@ -19,6 +19,31 @@ router = APIRouter(tags=["woocommerce"])
 
 
 # =============================================================================
+# ENDPOINT PUBLIC — packs tarifaires (sans authentification)
+# =============================================================================
+
+@router.get("/public/packs")
+def public_packs():
+    """Retourne les packs tarifaires (endpoint public, sans auth)."""
+    packs = _get_packs()
+    wc_url = (get_setting("wc_url") or "").rstrip("/")
+    result = []
+    for p in packs:
+        item = {
+            "name":        p["name"],
+            "slug":        p["slug"],
+            "price_ht":    p["price_ht"],
+            "color":       p["color"] or "#10b981",
+            "description": p["description"] or "",
+            "features":    p["features"],
+        }
+        if p.get("wc_product_id") and wc_url:
+            item["buy_url"] = f"{wc_url}/?add-to-cart={p['wc_product_id']}"
+        result.append(item)
+    return {"packs": result}
+
+
+# =============================================================================
 # MODELS
 # =============================================================================
 

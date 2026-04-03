@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.5
+ * Version:      1.9.6
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.5');
+define('SC_VERSION', '1.9.6');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -627,6 +627,93 @@ add_shortcode('societies_by_city', function($atts) {
         <?php endif; ?>
       </div>
       <?php endforeach; ?>
+    </div>
+    <?php return ob_get_clean();
+});
+
+// =============================================================================
+// SHORTCODE PAGE TARIFAIRE [societies_pricing]
+// =============================================================================
+
+add_shortcode('societies_pricing', function($atts) {
+    $api_url = rtrim(get_option('societies_api_url', ''), '/');
+    if (!$api_url) return '<p>API Societies non configurée.</p>';
+
+    $resp = wp_remote_get($api_url . '/api/public/packs', ['timeout' => 8, 'sslverify' => false]);
+    if (is_wp_error($resp)) return '<p>Impossible de charger les offres.</p>';
+    $data  = json_decode(wp_remote_retrieve_body($resp), true);
+    $packs = $data['packs'] ?? [];
+    if (empty($packs)) return '<p>Aucun pack disponible.</p>';
+
+    ob_start(); ?>
+    <style>
+    .scp-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+              padding:40px 20px 60px;max-width:1100px;margin:0 auto;text-align:center}
+    .scp-header{margin-bottom:48px}
+    .scp-title{font-size:34px;font-weight:800;color:#1a2744;margin:0 0 12px}
+    .scp-sub{font-size:16px;color:#6b7280;max-width:520px;margin:0 auto}
+    .scp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;text-align:left}
+    .scp-card{background:#fff;border:2px solid #e8edf3;border-radius:20px;
+              padding:32px 28px;display:flex;flex-direction:column;gap:0;
+              transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden}
+    .scp-card:hover{transform:translateY(-6px);box-shadow:0 16px 48px rgba(0,0,0,.1)}
+    .scp-card.featured{border-color:var(--sc-color,#10b981);box-shadow:0 8px 32px rgba(0,0,0,.08)}
+    .scp-card.featured::before{content:'Populaire';position:absolute;top:18px;right:-28px;
+      background:var(--sc-color,#10b981);color:#fff;font-size:11px;font-weight:700;
+      padding:4px 36px;transform:rotate(45deg);letter-spacing:.5px}
+    .scp-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.8px;
+               text-transform:uppercase;color:var(--sc-color,#10b981);
+               background:color-mix(in srgb,var(--sc-color,#10b981) 12%,transparent);
+               padding:4px 12px;border-radius:20px;margin-bottom:20px}
+    .scp-price{margin-bottom:8px}
+    .scp-price-amount{font-size:48px;font-weight:900;color:#1a2744;line-height:1}
+    .scp-price-cur{font-size:24px;font-weight:700;vertical-align:super;margin-right:2px;color:#1a2744}
+    .scp-price-period{font-size:14px;color:#9ca3af;margin-left:4px}
+    .scp-desc{font-size:14px;color:#6b7280;margin:0 0 28px;line-height:1.6}
+    .scp-btn{display:block;text-align:center;background:var(--sc-color,#10b981);
+             color:#fff;font-size:15px;font-weight:700;padding:14px 24px;
+             border-radius:12px;text-decoration:none;margin-bottom:28px;
+             transition:opacity .2s;cursor:pointer}
+    .scp-btn:hover{opacity:.88;text-decoration:none;color:#fff}
+    .scp-divider{border:none;border-top:1px solid #f1f5f9;margin:0 0 20px}
+    .scp-features{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
+    .scp-feature{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#374151;line-height:1.45}
+    .scp-check{color:var(--sc-color,#10b981);font-size:16px;flex-shrink:0;margin-top:1px}
+    @media(max-width:640px){.scp-grid{grid-template-columns:1fr}.scp-title{font-size:26px}}
+    </style>
+
+    <div class="scp-wrap">
+      <div class="scp-header">
+        <h2 class="scp-title">Choisissez votre offre</h2>
+        <p class="scp-sub">Boostez la visibilité de votre entreprise. Sans engagement, résiliable à tout moment.</p>
+      </div>
+      <div class="scp-grid">
+      <?php foreach ($packs as $i => $pack):
+          $color   = esc_attr($pack['color']);
+          $name    = esc_html($pack['name']);
+          $price   = intval($pack['price_ht']);
+          $desc    = esc_html($pack['description']);
+          $feats   = $pack['features'] ?? [];
+          $buy_url = esc_url($pack['buy_url'] ?? '#');
+          $featured = ($i === 1); // carte du milieu mise en avant
+      ?>
+        <div class="scp-card<?= $featured ? ' featured' : '' ?>" style="--sc-color:<?= $color ?>">
+          <span class="scp-badge"><?= $name ?></span>
+          <div class="scp-price">
+            <span class="scp-price-cur">€</span><span class="scp-price-amount"><?= $price ?></span>
+            <span class="scp-price-period">HT / mois</span>
+          </div>
+          <p class="scp-desc"><?= $desc ?></p>
+          <a class="scp-btn" href="<?= $buy_url ?>">Commencer →</a>
+          <hr class="scp-divider">
+          <ul class="scp-features">
+            <?php foreach ($feats as $f): ?>
+              <li class="scp-feature"><span class="scp-check">✓</span><?= esc_html($f) ?></li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+      <?php endforeach; ?>
+      </div>
     </div>
     <?php return ob_get_clean();
 });
