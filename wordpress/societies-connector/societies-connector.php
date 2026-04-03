@@ -636,95 +636,183 @@ add_shortcode('societies_by_city', function($atts) {
 // =============================================================================
 
 add_shortcode('societies_search', function($atts) {
-    $atts = shortcode_atts(['per_page' => 24, 'placeholder' => 'Nom, ville, secteur d\'activité...'], $atts);
-    $uid  = 'sc-search-' . wp_rand(1000, 9999);
+    $atts     = shortcode_atts(['per_page' => 24], $atts);
+    $uid      = 'sc-search-' . wp_rand(1000, 9999);
     $ajax_url = admin_url('admin-ajax.php');
     ob_start(); ?>
-    <div id="<?= esc_attr($uid) ?>" class="sc-search-wrap">
-      <div class="sc-search-bar">
-        <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-search-input"
-               placeholder="<?= esc_attr($atts['placeholder']) ?>"
-               oninput="scSearchDebounce('<?= esc_js($uid) ?>')">
-        <span class="sc-search-icon">🔍</span>
+
+    <style>
+    /* ── Masque sidebar & conteneur thème ── */
+    .site-sidebar,.sidebar,.widget-area,.secondary,#secondary,
+    aside.sidebar,#sidebar,.col-sidebar,.right-sidebar,
+    [class*="sidebar"]:not(.sc-search-wrap){display:none!important}
+    .site-content,.content-area,#primary,.col-content,
+    .main-content,.entry-content,.page-content{width:100%!important;max-width:100%!important;float:none!important}
+    .container,.site-inner,.content-wrap{max-width:100%!important;padding:0!important}
+
+    /* ── Hero ── */
+    .sc-hero{background:linear-gradient(135deg,#0f1f44 0%,#1a2744 60%,#e63946 100%);
+             padding:60px 20px 50px;text-align:center;margin:-40px -9999px 0;position:relative}
+    .sc-hero-title{font-size:36px;font-weight:800;color:#fff;margin:0 0 6px;letter-spacing:-.5px}
+    .sc-hero-sub{font-size:15px;color:rgba(255,255,255,.65);margin:0 0 32px}
+    .sc-hero-bar{position:relative;max-width:680px;margin:0 auto}
+    .sc-hero-input{width:100%;box-sizing:border-box;padding:18px 60px 18px 24px;
+                   font-size:17px;border:none;border-radius:14px;outline:none;
+                   box-shadow:0 8px 32px rgba(0,0,0,.25);color:#1f2937;background:#fff}
+    .sc-hero-input:focus{box-shadow:0 8px 32px rgba(230,57,70,.35)}
+    .sc-hero-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+                 background:#e63946;border:none;border-radius:10px;
+                 width:44px;height:44px;cursor:pointer;font-size:18px;
+                 display:flex;align-items:center;justify-content:center;transition:background .2s}
+    .sc-hero-btn:hover{background:#c82333}
+    .sc-hero-stats{display:flex;gap:28px;justify-content:center;margin-top:20px;flex-wrap:wrap}
+    .sc-hero-stat{color:rgba(255,255,255,.8);font-size:13px}
+    .sc-hero-stat strong{color:#fff;font-size:20px;font-weight:800;display:block}
+
+    /* ── Body ── */
+    .sc-body{max-width:1200px;margin:0 auto;padding:32px 20px 60px;
+             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+    .sc-toolbar{display:flex;align-items:center;justify-content:space-between;
+                margin-bottom:24px;flex-wrap:wrap;gap:12px}
+    .sc-status{font-size:14px;color:#6b7280;font-weight:500}
+    .sc-filters{display:flex;gap:8px;flex-wrap:wrap}
+    .sc-filter-btn{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;
+                   padding:5px 14px;font-size:12px;color:#475569;cursor:pointer;transition:all .15s}
+    .sc-filter-btn:hover,.sc-filter-btn.active{background:#1a2744;color:#fff;border-color:#1a2744}
+
+    /* ── Grille résultats ── */
+    .sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+    .sc-card{background:#fff;border:1px solid #e8edf3;border-radius:14px;
+             padding:20px 22px;text-decoration:none;color:inherit;display:flex;
+             flex-direction:column;gap:10px;transition:box-shadow .2s,transform .15s;
+             box-shadow:0 1px 4px rgba(0,0,0,.05)}
+    .sc-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1);transform:translateY(-3px);text-decoration:none}
+    .sc-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .sc-card-name{font-size:15px;font-weight:700;color:#1a2744;line-height:1.35}
+    .sc-card-badge{background:#e63946;color:#fff;font-size:10px;font-weight:700;
+                   padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+    .sc-card-tags{display:flex;flex-wrap:wrap;gap:5px}
+    .sc-card-tag{background:#f1f5f9;color:#64748b;font-size:11px;padding:3px 9px;border-radius:20px}
+    .sc-card-tag-city{background:#eff6ff;color:#3b82f6}
+    .sc-card-footer{display:flex;align-items:center;justify-content:space-between;
+                    padding-top:10px;border-top:1px solid #f1f5f9}
+    .sc-card-stars{color:#f59e0b;font-size:14px;letter-spacing:1px}
+    .sc-card-score{font-size:15px;font-weight:800;color:#e63946}
+    .sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}
+    .sc-card-arrow{color:#94a3b8;font-size:16px;transition:transform .15s}
+    .sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#e63946}
+
+    /* ── États ── */
+    .sc-empty{text-align:center;padding:60px 20px;color:#94a3b8}
+    .sc-empty-icon{font-size:48px;margin-bottom:12px}
+    .sc-empty-title{font-size:18px;font-weight:600;color:#374151;margin-bottom:6px}
+    .sc-loader{display:flex;justify-content:center;padding:40px}
+    .sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#e63946;
+                border-radius:50%;animation:sc-spin .7s linear infinite}
+    @keyframes sc-spin{to{transform:rotate(360deg)}}
+    .sc-more-wrap{text-align:center;margin-top:32px}
+    .sc-more-btn{background:#1a2744;color:#fff;border:none;border-radius:10px;
+                 padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;
+                 transition:background .2s}
+    .sc-more-btn:hover{background:#e63946}
+
+    @media(max-width:640px){
+      .sc-hero{padding:40px 16px 36px}
+      .sc-hero-title{font-size:26px}
+      .sc-grid{grid-template-columns:1fr}
+    }
+    </style>
+
+    <!-- HERO -->
+    <div class="sc-hero">
+      <h1 class="sc-hero-title">Trouvez une entreprise</h1>
+      <p class="sc-hero-sub">Accédez aux fiches de 4,6 millions d'entreprises françaises</p>
+      <div class="sc-hero-bar">
+        <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-hero-input"
+               placeholder="Nom d'entreprise, ville, secteur d'activité..."
+               oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
+               autocomplete="off">
+        <button class="sc-hero-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">🔍</button>
       </div>
-      <div id="<?= esc_attr($uid) ?>-status" class="sc-search-status"></div>
-      <div id="<?= esc_attr($uid) ?>-results" class="sc-search-results"></div>
-      <div id="<?= esc_attr($uid) ?>-more" style="text-align:center;margin-top:20px;display:none">
-        <button onclick="scSearchLoadMore('<?= esc_js($uid) ?>')" class="sc-search-more-btn">Charger plus</button>
+      <div class="sc-hero-stats">
+        <div class="sc-hero-stat"><strong>4 600 000+</strong>entreprises référencées</div>
+        <div class="sc-hero-stat"><strong>⭐ 5.0</strong>note moyenne interne</div>
+        <div class="sc-hero-stat"><strong>Gratuit</strong>accès aux fiches</div>
       </div>
     </div>
 
-    <style>
-    .sc-search-wrap{max-width:860px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-    .sc-search-bar{position:relative;margin-bottom:20px}
-    .sc-search-input{width:100%;box-sizing:border-box;padding:14px 48px 14px 18px;font-size:16px;border:2px solid #e2e8f0;border-radius:12px;outline:none;transition:border-color .2s}
-    .sc-search-input:focus{border-color:#e63946}
-    .sc-search-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none}
-    .sc-search-status{font-size:13px;color:#6b7280;margin-bottom:12px;min-height:18px}
-    .sc-search-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-    .sc-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;text-decoration:none;color:inherit;display:block;transition:box-shadow .2s,transform .15s}
-    .sc-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);transform:translateY(-2px);text-decoration:none}
-    .sc-card-name{font-size:15px;font-weight:700;color:#1a2744;margin-bottom:6px;line-height:1.3}
-    .sc-card-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-    .sc-card-tag{background:#f1f5f9;color:#475569;font-size:11px;padding:3px 8px;border-radius:20px}
-    .sc-card-rating{display:flex;align-items:center;gap:6px;font-size:13px}
-    .sc-card-stars{color:#f59e0b;letter-spacing:1px}
-    .sc-card-score{font-weight:700;color:#e63946}
-    .sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}
-    .sc-search-more-btn{background:#1a2744;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer}
-    @media(max-width:600px){.sc-search-results{grid-template-columns:1fr}}
-    </style>
+    <!-- BODY -->
+    <div class="sc-body">
+      <div class="sc-toolbar">
+        <div id="<?= esc_attr($uid) ?>-status" class="sc-status"></div>
+      </div>
+      <div id="<?= esc_attr($uid) ?>-results"></div>
+      <div id="<?= esc_attr($uid) ?>-more" class="sc-more-wrap" style="display:none">
+        <button class="sc-more-btn" onclick="scSearchLoadMore('<?= esc_js($uid) ?>')">Voir plus de résultats</button>
+      </div>
+    </div>
 
     <script>
     (function(){
-      var _scTimers = {};
-      var _scPages  = {};
-      window.scSearchDebounce = function(uid) {
+      var _scTimers={}, _scPages={};
+      window.scSearchDebounce=function(uid){
         clearTimeout(_scTimers[uid]);
-        _scTimers[uid] = setTimeout(function(){ scSearch(uid, 1); }, 350);
+        _scTimers[uid]=setTimeout(function(){scSearch(uid,1);},400);
       };
-      window.scSearch = function(uid, page) {
-        var q     = document.getElementById(uid+'-q').value.trim();
-        var status = document.getElementById(uid+'-status');
-        var results = document.getElementById(uid+'-results');
-        var more   = document.getElementById(uid+'-more');
-        _scPages[uid] = page;
-        if (q.length < 2) { results.innerHTML = ''; status.textContent = ''; more.style.display='none'; return; }
-        status.textContent = 'Recherche...';
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '<?= esc_js($ajax_url) ?>');
+      window.scSearch=function(uid,page){
+        var q=document.getElementById(uid+'-q').value.trim();
+        var statusEl=document.getElementById(uid+'-status');
+        var resultsEl=document.getElementById(uid+'-results');
+        var moreEl=document.getElementById(uid+'-more');
+        _scPages[uid]=page;
+        if(q.length<2){
+          resultsEl.innerHTML='';statusEl.textContent='';moreEl.style.display='none';
+          return;
+        }
+        if(page===1){
+          resultsEl.innerHTML='<div class="sc-loader"><div class="sc-spinner"></div></div>';
+          statusEl.textContent='';
+        }
+        var xhr=new XMLHttpRequest();
+        xhr.open('POST','<?= esc_js($ajax_url) ?>');
         xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
-        xhr.onload = function() {
-          var d = JSON.parse(xhr.responseText || '{}');
-          if (!d.success) { status.textContent = 'Erreur.'; return; }
-          var items = d.data.results || [];
-          var total = d.data.total || 0;
-          status.textContent = total + ' entreprise' + (total > 1 ? 's' : '') + ' trouvée' + (total > 1 ? 's' : '');
-          var html = items.map(function(c) {
-            var stars = '★★★★★';
-            var tags  = '';
-            if (c.category) tags += '<span class="sc-card-tag">'+esc(c.category)+'</span>';
-            if (c.city)     tags += '<span class="sc-card-tag">📍 '+esc(c.city)+'</span>';
+        xhr.onload=function(){
+          var d=JSON.parse(xhr.responseText||'{}');
+          if(!d.success){
+            resultsEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">⚠️</div><div class="sc-empty-title">Une erreur est survenue</div></div>';
+            return;
+          }
+          var items=d.data.results||[];
+          var total=d.data.total||0;
+          if(items.length===0&&page===1){
+            resultsEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">🔍</div><div class="sc-empty-title">Aucun résultat pour "'+esc(q)+'"</div><p>Essayez avec un autre nom, une ville ou un secteur.</p></div>';
+            statusEl.textContent='';moreEl.style.display='none';return;
+          }
+          statusEl.textContent=total.toLocaleString('fr-FR')+' entreprise'+(total>1?'s':'')+' trouvée'+(total>1?'s':'');
+          var html=items.map(function(c){
+            var tags='';
+            if(c.category) tags+='<span class="sc-card-tag">'+esc(c.category)+'</span>';
+            if(c.city)     tags+='<span class="sc-card-tag sc-card-tag-city">📍 '+esc(c.city)+'</span>';
             return '<a href="'+esc(c.url||'#')+'" class="sc-card">'
+              +'<div class="sc-card-header">'
               +'<div class="sc-card-name">'+esc(c.title)+'</div>'
-              +(tags ? '<div class="sc-card-meta">'+tags+'</div>' : '')
-              +'<div class="sc-card-rating"><span class="sc-card-stars">'+stars+'</span>'
-              +'<span class="sc-card-score">5.0</span>'
-              +'<span class="sc-card-note">Note interne</span></div>'
+              +'<span class="sc-card-badge">Fiche</span>'
+              +'</div>'
+              +(tags?'<div class="sc-card-tags">'+tags+'</div>':'')
+              +'<div class="sc-card-footer">'
+              +'<div><span class="sc-card-stars">★★★★★</span> <span class="sc-card-score">5.0</span> <span class="sc-card-note">Note interne</span></div>'
+              +'<span class="sc-card-arrow">→</span>'
+              +'</div>'
               +'</a>';
           }).join('');
-          if (page === 1) results.innerHTML = html;
-          else results.innerHTML += html;
-          more.style.display = (items.length >= <?= intval($atts['per_page']) ?> && total > (page * <?= intval($atts['per_page']) ?>)) ? '' : 'none';
+          if(page===1) resultsEl.innerHTML='<div class="sc-grid">'+html+'</div>';
+          else resultsEl.querySelector('.sc-grid').insertAdjacentHTML('beforeend',html);
+          moreEl.style.display=(items.length>=<?= intval($atts['per_page']) ?> && total>(page*<?= intval($atts['per_page']) ?>))?'':'none';
         };
         xhr.send('action=sc_search&q='+encodeURIComponent(q)+'&page='+page+'&per_page=<?= intval($atts['per_page']) ?>');
       };
-      window.scSearchLoadMore = function(uid) {
-        scSearch(uid, (_scPages[uid] || 1) + 1);
-      };
-      function esc(s) {
-        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-      }
+      window.scSearchLoadMore=function(uid){ scSearch(uid,(_scPages[uid]||1)+1); };
+      function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
     })();
     </script>
     <?php return ob_get_clean();
