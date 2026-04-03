@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.6
+ * Version:      1.9.7
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.6');
+define('SC_VERSION', '1.9.7');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -639,7 +639,14 @@ add_shortcode('societies_pricing', function($atts) {
     $api_url = rtrim(get_option('societies_api_url', ''), '/');
     if (!$api_url) return '<p>API Societies non configurée.</p>';
 
-    $resp = wp_remote_get($api_url . '/api/public/packs', ['timeout' => 8, 'sslverify' => false]);
+    // Supprime les credentials éventuels de l'URL (user:pass@host) — l'endpoint est public
+    $parsed   = parse_url($api_url);
+    $base_url = ($parsed['scheme'] ?? 'http') . '://'
+              . ($parsed['host'] ?? '')
+              . (isset($parsed['port']) ? ':' . $parsed['port'] : '')
+              . rtrim($parsed['path'] ?? '', '/');
+
+    $resp = wp_remote_get($base_url . '/api/public/packs', ['timeout' => 8, 'sslverify' => false]);
     if (is_wp_error($resp)) return '<p>Impossible de charger les offres.</p>';
     $data  = json_decode(wp_remote_retrieve_body($resp), true);
     $packs = $data['packs'] ?? [];
