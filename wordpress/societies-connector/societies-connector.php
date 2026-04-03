@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.4
+ * Version:      1.9.5
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.4');
+define('SC_VERSION', '1.9.5');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -642,36 +642,45 @@ add_shortcode('societies_search', function($atts) {
     ob_start(); ?>
 
     <style>
-    /* ── Masque sidebar & conteneur thème ── */
+    /* ── Masque sidebar & force pleine largeur ── */
     .site-sidebar,.sidebar,.widget-area,.secondary,#secondary,
     aside.sidebar,#sidebar,.col-sidebar,.right-sidebar,
     [class*="sidebar"]:not(.sc-search-wrap){display:none!important}
+    /* Reset layout colonnes thème */
+    #page,#wrapper,.site,.hfeed{display:block!important}
     .site-content,.content-area,#primary,.col-content,
-    .main-content,.entry-content,.page-content{width:100%!important;max-width:100%!important;float:none!important}
-    .container,.site-inner,.content-wrap{max-width:100%!important;padding:0!important}
+    .main-content,.entry-content,.page-content,
+    .hentry,.entry,.post,.page{width:100%!important;max-width:100%!important;
+      float:none!important;margin-left:0!important;margin-right:0!important;
+      padding-left:0!important;padding-right:0!important}
+    .container,.site-inner,.content-wrap,.wrapper{max-width:100%!important;padding:0!important}
 
-    /* ── Hero ── */
-    .sc-hero{background:linear-gradient(135deg,#0f1f44 0%,#1a2744 60%,#e63946 100%);
-             padding:60px 20px 50px;text-align:center;margin:-40px -9999px 0;position:relative}
-    .sc-hero-title{font-size:36px;font-weight:800;color:#fff;margin:0 0 6px;letter-spacing:-.5px}
-    .sc-hero-sub{font-size:15px;color:rgba(255,255,255,.65);margin:0 0 32px}
-    .sc-hero-bar{position:relative;max-width:680px;margin:0 auto}
+    /* ── Hero pleine largeur sans fond bleu ── */
+    .sc-hero{background:#fff;border-bottom:1px solid #e8edf3;
+             position:relative;left:50%;right:50%;
+             margin-left:-50vw;margin-right:-50vw;width:100vw;
+             padding:64px 20px 52px;text-align:center}
+    .sc-hero-title{font-size:38px;font-weight:800;color:#1a2744;margin:0 0 8px;letter-spacing:-.5px}
+    .sc-hero-sub{font-size:16px;color:#6b7280;margin:0 0 32px}
+    .sc-hero-bar{position:relative;max-width:700px;margin:0 auto}
     .sc-hero-input{width:100%;box-sizing:border-box;padding:18px 60px 18px 24px;
-                   font-size:17px;border:none;border-radius:14px;outline:none;
-                   box-shadow:0 8px 32px rgba(0,0,0,.25);color:#1f2937;background:#fff}
-    .sc-hero-input:focus{box-shadow:0 8px 32px rgba(230,57,70,.35)}
+                   font-size:17px;border:2px solid #e2e8f0;border-radius:14px;outline:none;
+                   box-shadow:0 4px 20px rgba(0,0,0,.07);color:#1f2937;background:#fff;
+                   transition:border-color .2s,box-shadow .2s}
+    .sc-hero-input:focus{border-color:#e63946;box-shadow:0 4px 20px rgba(230,57,70,.15)}
     .sc-hero-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);
                  background:#e63946;border:none;border-radius:10px;
                  width:44px;height:44px;cursor:pointer;font-size:18px;
                  display:flex;align-items:center;justify-content:center;transition:background .2s}
     .sc-hero-btn:hover{background:#c82333}
-    .sc-hero-stats{display:flex;gap:28px;justify-content:center;margin-top:20px;flex-wrap:wrap}
-    .sc-hero-stat{color:rgba(255,255,255,.8);font-size:13px}
-    .sc-hero-stat strong{color:#fff;font-size:20px;font-weight:800;display:block}
+    .sc-hero-stats{display:flex;gap:32px;justify-content:center;margin-top:24px;flex-wrap:wrap}
+    .sc-hero-stat{color:#6b7280;font-size:13px;text-align:center}
+    .sc-hero-stat strong{color:#1a2744;font-size:22px;font-weight:800;display:block}
 
     /* ── Body ── */
-    .sc-body{max-width:1200px;margin:0 auto;padding:32px 20px 60px;
-             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+    .sc-body{width:100%;max-width:1400px;margin:0 auto;padding:32px 24px 60px;
+             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+             box-sizing:border-box}
     .sc-toolbar{display:flex;align-items:center;justify-content:space-between;
                 margin-bottom:24px;flex-wrap:wrap;gap:12px}
     .sc-status{font-size:14px;color:#6b7280;font-weight:500}
@@ -681,7 +690,9 @@ add_shortcode('societies_search', function($atts) {
     .sc-filter-btn:hover,.sc-filter-btn.active{background:#1a2744;color:#fff;border-color:#1a2744}
 
     /* ── Grille résultats ── */
-    .sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+    .sc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+    @media(max-width:1200px){.sc-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:860px){.sc-grid{grid-template-columns:repeat(2,1fr)}}
     .sc-card{background:#fff;border:1px solid #e8edf3;border-radius:14px;
              padding:20px 22px;text-decoration:none;color:inherit;display:flex;
              flex-direction:column;gap:10px;transition:box-shadow .2s,transform .15s;
@@ -717,7 +728,7 @@ add_shortcode('societies_search', function($atts) {
     .sc-more-btn:hover{background:#e63946}
 
     @media(max-width:640px){
-      .sc-hero{padding:40px 16px 36px}
+      .sc-hero{padding:40px 16px 36px;left:0;right:0;margin-left:0;margin-right:0;width:100%}
       .sc-hero-title{font-size:26px}
       .sc-grid{grid-template-columns:1fr}
     }
