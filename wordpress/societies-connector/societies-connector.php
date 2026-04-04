@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.0.2
+ * Version:      2.0.3
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.0.2');
+define('SC_VERSION', '2.0.3');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -801,6 +801,9 @@ add_shortcode('societies_search', function($atts) {
     }
     ob_start(); ?>
     <style>
+    /* Masque le spinner de chargement du thème Apus/Findus (JS du thème non chargé sur cette page) */
+    .apus-page-loading{display:none!important}
+
     /* Reset sidebar & Elementor */
     .site-sidebar,.sidebar,.widget-area,.secondary,#secondary,aside.sidebar,
     #sidebar,.col-sidebar,.right-sidebar,[class*="sidebar"]:not(.sc-wrap){display:none!important}
@@ -812,13 +815,20 @@ add_shortcode('societies_search', function($atts) {
     .elementor-container,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;padding:0!important}
     .elementor-column{width:100%!important;padding:0!important}
     .elementor-section{padding:0!important;margin:0!important}
+    /* Casse le confinement col-md-8 du thème pour la page moteur de recherche */
+    .main-page,.col-md-8,.col-sm-12,.row{width:100%!important;max-width:100%!important;
+      margin-left:0!important;margin-right:0!important;padding-left:0!important;padding-right:0!important;
+      float:none!important}
+    .container.inner{max-width:100%!important;padding:0!important}
+    body.page-id-<?= intval(get_the_ID()) ?> .sc-wrap{overflow-x:hidden}
 
     /* ─── Wrap global ─── */
     .sc-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box}
 
-    /* ─── Hero ─── */
+    /* ─── Hero — pleine largeur viewport ─── */
     .sc-hero{background:linear-gradient(160deg,#fff 60%,#fff5f5 100%);
-             padding:60px 32px 52px;text-align:center;box-sizing:border-box}
+             padding:60px 32px 52px;text-align:center;box-sizing:border-box;
+             width:100vw;position:relative;left:50%;margin-left:-50vw}
     .sc-hero-title{font-size:42px;font-weight:900;color:#1a2744;margin:0 0 12px;
                    letter-spacing:-1.5px;line-height:1.1}
     .sc-hero-title em{color:#e63946;font-style:normal}
@@ -1019,11 +1029,7 @@ add_shortcode('societies_search', function($atts) {
     <?php
     $html = ob_get_clean();
 
-    // JS injecté via wp_add_inline_script pour éviter wpautop/wptexturize d'Elementor
-    if (!wp_script_is('sc-search-engine', 'registered')) {
-        wp_register_script('sc-search-engine', false, [], false, true);
-    }
-    wp_enqueue_script('sc-search-engine');
+    // JS injecté via wp_footer pour contourner les filtres Elementor et le cache WP
 
     $pp = intval($atts['per_page']);
     $js = "
@@ -1110,7 +1116,13 @@ add_shortcode('societies_search', function($atts) {
     window.scEsc=function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); };
   }
 })();";
-    wp_add_inline_script('sc-search-engine', $js);
+    static $sc_search_js_done = false;
+    if (!$sc_search_js_done) {
+        $sc_search_js_done = true;
+        add_action('wp_footer', function() use ($js) {
+            echo '<script id="sc-search-engine">' . $js . '</script>';
+        }, 5);
+    }
     return $html;
 });
 
@@ -1178,10 +1190,7 @@ add_shortcode('societies_categories', function($atts) {
     $search_page = esc_js($atts['search_page']);
     $pp = $per_page;
 
-    if (!wp_script_is('sc-cats-engine', 'registered')) {
-        wp_register_script('sc-cats-engine', false, [], false, true);
-    }
-    wp_enqueue_script('sc-cats-engine');
+    // JS injecté via wp_footer pour contourner les filtres Elementor et le cache WP
     $js = "
 (function(){
   var scAllCats={$all_json};
@@ -1207,7 +1216,13 @@ add_shortcode('societies_categories', function($atts) {
     if(scCatsOffset>=scAllCats.length&&btn) btn.style.display='none';
   };
 })();";
-    wp_add_inline_script('sc-cats-engine', $js);
+    static $sc_cats_js_done = false;
+    if (!$sc_cats_js_done) {
+        $sc_cats_js_done = true;
+        add_action('wp_footer', function() use ($js) {
+            echo '<script id="sc-cats-engine">' . $js . '</script>';
+        }, 5);
+    }
     return $html;
 });
 
