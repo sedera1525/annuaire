@@ -100,6 +100,12 @@ _MIGRATIONS: list[tuple[int, str]] = [
          'Démarquez-vous clairement et inspirez un maximum de confiance',
          '["Tout Pack Visibilité","Badge Entreprise conseillée par TOPsocietes.com","Dépannage urgent","Devis gratuit","Artisan ponctuel et soigneux","Certifié RGE","Type de projets (Maison / Appartement / Commerce)","Marques (jusqu''à 10)","Compteur de visite de cette page"]');
     """),
+    (9, """
+        UPDATE subscription_packs SET description='Une présence en ligne claire et professionnelle',features='["Réponses aux questions clés","Fiche entreprise complète","Présentation détaillée de votre activité"]' WHERE slug='pack-essentiel';
+        UPDATE subscription_packs SET description='Donnez envie de vous contacter',features='["Tout le Pack Essentiel","Entreprise vérifiée par TOPsocietes.com","Produits et services (jusqu''à 10)","Zone d''intervention","Lien vers votre site web","Mention Intervention rapide","Note 5 étoiles offerte 30 jours"]' WHERE slug='pack-visibilite';
+        UPDATE subscription_packs SET description='Inspirez confiance et démarquez-vous clairement',features='["Tout le Pack Visibilité","Entreprise conseillée par TOPsocietes.com","Dépannage urgent","Devis gratuit","Artisan ponctuel et soigneux","Certifié RGE","Types de projets","Marques (jusqu''à 10)","Compteur de visites","Note 5 étoiles offerte 30 jours"]' WHERE slug='pack-premium';
+        INSERT OR IGNORE INTO subscription_packs (name,slug,price_ht,color,description,features) VALUES ('Pack Master','pack-master',89.0,'#7c3aed','Le maximum pour votre e-réputation','["Tout le Pack Premium","Note 5 étoiles en permanence","Note basée sur nos critères internes d''e-réputation"]');
+    """),
 ]
 
 

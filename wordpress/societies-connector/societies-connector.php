@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.0.3
+ * Version:      2.0.4
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.0.3');
+define('SC_VERSION', '2.0.4');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -665,9 +665,10 @@ add_shortcode('societies_pricing', function($atts) {
               transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden}
     .scp-card:hover{transform:translateY(-6px);box-shadow:0 16px 48px rgba(0,0,0,.1)}
     .scp-card.featured{border-color:var(--sc-color,#10b981);box-shadow:0 8px 32px rgba(0,0,0,.08)}
-    .scp-card.featured::before{content:'Populaire';position:absolute;top:18px;right:-28px;
+    .scp-card.featured::before{content:'Le plus choisi';position:absolute;top:18px;right:-32px;
       background:var(--sc-color,#10b981);color:#fff;font-size:11px;font-weight:700;
-      padding:4px 36px;transform:rotate(45deg);letter-spacing:.5px}
+      padding:4px 40px;transform:rotate(45deg);letter-spacing:.5px}
+    .scp-star-offer{display:flex;align-items:flex-start;gap:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:#92400e;line-height:1.5}
     .scp-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.8px;
                text-transform:uppercase;color:var(--sc-color,#10b981);
                background:color-mix(in srgb,var(--sc-color,#10b981) 12%,transparent);
@@ -696,13 +697,15 @@ add_shortcode('societies_pricing', function($atts) {
       </div>
       <div class="scp-grid">
       <?php foreach ($packs as $i => $pack):
-          $color   = esc_attr($pack['color']);
-          $name    = esc_html($pack['name']);
-          $price   = intval($pack['price_ht']);
-          $desc    = esc_html($pack['description']);
-          $feats   = $pack['features'] ?? [];
-          $buy_url = esc_url($pack['buy_url'] ?? '#');
-          $featured = ($i === 1); // carte du milieu mise en avant
+          $color    = esc_attr($pack['color']);
+          $name     = esc_html($pack['name']);
+          $price    = intval($pack['price_ht']);
+          $desc     = esc_html($pack['description']);
+          $feats    = $pack['features'] ?? [];
+          $slug     = $pack['slug'] ?? '';
+          $buy_url  = esc_url($pack['buy_url'] ?? '#');
+          $featured = ($slug === 'pack-premium');
+          $has_star_offer = in_array($slug, ['pack-visibilite', 'pack-premium']);
       ?>
         <div class="scp-card<?= $featured ? ' featured' : '' ?>" style="--sc-color:<?= $color ?>">
           <span class="scp-badge"><?= $name ?></span>
@@ -711,6 +714,9 @@ add_shortcode('societies_pricing', function($atts) {
             <span class="scp-price-period">HT / mois</span>
           </div>
           <p class="scp-desc"><?= $desc ?></p>
+          <?php if ($has_star_offer): ?>
+          <div class="scp-star-offer">⭐ <span><strong>Option gratuite valable 30 jours :</strong> Badge Note 5⭐<br>Si vous souhaitez ce badge en permanence, souscrivez au Pack Master.</span></div>
+          <?php endif; ?>
           <a class="scp-btn" href="<?= $buy_url ?>">Commencer →</a>
           <hr class="scp-divider">
           <ul class="scp-features">
@@ -1318,6 +1324,7 @@ add_shortcode('societies_fiche', function($atts) {
     $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
 
+    $claim_url = get_permalink(get_option('sc_client_page_id')) ?: home_url('/mon-entreprise/');
     ob_start(); ?>
     <div class="sc2-wrap">
 
@@ -1333,11 +1340,11 @@ add_shortcode('societies_fiche', function($atts) {
           </div>
           <?php endif; ?>
         </div>
-        <!-- NOTE INTERNE 5⭐ -->
-        <div class="sc2-hero-rating">
-          <div class="sc2-hero-score">5.0</div>
-          <div class="sc2-hero-stars">★★★★★</div>
-          <div class="sc2-hero-votes sc2-hero-disclaimer">Note interne</div>
+        <!-- NOTE : Données insuffisantes (note 5* uniquement si abonnement badge activé) -->
+        <div class="sc2-hero-rating sc2-hero-rating-nodata">
+          <div class="sc2-nodata-icon">📊</div>
+          <div class="sc2-nodata-label">Données insuffisantes</div>
+          <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">👉 Aidez-nous à améliorer cette fiche</a>
         </div>
       </div>
 
@@ -1354,8 +1361,7 @@ add_shortcode('societies_fiche', function($atts) {
       </div>
       <?php endif; ?>
 
-      <!-- DISCLAIMER NOTE -->
-      <div class="sc2-disclaimer">⭐ Note interne basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
+      <!-- DISCLAIMER NOTE déplacé en bas de page -->
 
       <?php if ($intro && $status === 'done'): ?>
       <!-- PRÉSENTATION -->
@@ -1381,6 +1387,21 @@ add_shortcode('societies_fiche', function($atts) {
       <?php endif; ?>
 
       <?php if (!empty($qa_open)): ?>
+      <!-- CTA BULLE — visible avant la zone verrouillée (disparaît si abonné) -->
+      <div class="sc2-cta-bar">
+        <a href="<?= esc_url($claim_url) ?>" class="sc2-cta-bar-link">👉 Complétez votre fiche entreprise</a>
+      </div>
+      <div class="sc2-cta-bubble">
+        <div class="sc2-cta-bubble-title">Complétez gratuitement votre fiche entreprise pour :</div>
+        <ul class="sc2-cta-bubble-list">
+          <li>✅ Améliorer votre visibilité en ligne</li>
+          <li>✅ Renforcer votre image professionnelle</li>
+          <li>✅ Modifier et répondre aux questions</li>
+          <li>✅ Contrôler votre présentation</li>
+          <li>✅ Booster votre business et rassurer vos futurs clients</li>
+        </ul>
+        <a href="<?= esc_url($claim_url) ?>" class="sc2-cta-bubble-btn">👉 Gérer gratuitement ma fiche entreprise</a>
+      </div>
       <!-- QUESTIONS OUVERTES -->
       <div class="sc2-section">
         <h2 class="sc2-section-title">Questions fréquentes</h2>
@@ -1407,6 +1428,15 @@ add_shortcode('societies_fiche', function($atts) {
       </div>
       <?php endif; ?>
 
+      <!-- REVENDIQUER — en premier, plus visible (disparaît si abonné) -->
+      <div class="sc2-claim-cta-main">
+        <div class="sc2-claim-cta-main-text">
+          <strong>Cette entreprise est la vôtre ?</strong>
+          <span>Reprenez le contrôle de votre image en ligne.</span>
+        </div>
+        <a href="<?= esc_url($claim_url) ?>" class="sc2-claim-btn">Revendiquer cette fiche →</a>
+      </div>
+
       <!-- BANDEAU PUBLICITAIRE -->
       <div class="sc2-advert">
         <a href="https://www.topsocietes.com" target="_blank" rel="noopener" class="sc2-advert-link">
@@ -1414,13 +1444,8 @@ add_shortcode('societies_fiche', function($atts) {
         </a>
       </div>
 
-      <!-- REVENDIQUER CETTE FICHE -->
-      <?php $claim_url = get_permalink(get_option('sc_client_page_id')) ?: home_url('/mon-entreprise/'); ?>
-      <div class="sc2-claim-cta">
-        <span>Cette entreprise est la vôtre ?</span>
-        <a href="<?= esc_url($claim_url) ?>" class="sc2-claim-link">Revendiquer cette fiche →</a>
-      </div>
-
+      <!-- DISCLAIMER déplacé en bas de page -->
+      <div class="sc2-disclaimer">⭐ Note interne basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
 
     </div>
     <style>
@@ -1481,11 +1506,30 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-advert-link:hover{text-decoration:underline}
     .sc2-faq-icon-r{background:#e63946}
 
-    /* CLAIM CTA */
-    .sc2-claim-cta{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 20px;margin-top:12px;flex-wrap:wrap}
-    .sc2-claim-cta span{color:#475569;font-size:13px}
-    .sc2-claim-link{color:#1a2744;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap}
-    .sc2-claim-link:hover{color:#e63946;text-decoration:underline}
+    /* NOTE DONNÉES INSUFFISANTES */
+    .sc2-hero-rating-nodata{text-align:center;background:rgba(255,255,255,.08);border-radius:12px;padding:14px 18px;flex-shrink:0;max-width:200px}
+    .sc2-nodata-icon{font-size:28px;margin-bottom:4px}
+    .sc2-nodata-label{font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:8px}
+    .sc2-nodata-link{display:block;font-size:11px;color:#e63946;text-decoration:none;line-height:1.4;font-weight:600}
+    .sc2-nodata-link:hover{text-decoration:underline}
+
+    /* CTA BULLE avant zone verrouillée */
+    .sc2-cta-bar{margin:24px 0 0;padding:12px 20px;background:#fff9f0;border:1.5px solid #fde68a;border-radius:10px}
+    .sc2-cta-bar-link{font-size:15px;font-weight:700;color:#1a2744;text-decoration:none}
+    .sc2-cta-bar-link:hover{color:#e63946;text-decoration:underline}
+    .sc2-cta-bubble{background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:12px;padding:20px 24px;margin:12px 0 24px}
+    .sc2-cta-bubble-title{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:12px}
+    .sc2-cta-bubble-list{margin:0 0 16px;padding:0 0 0 20px;list-style:none}
+    .sc2-cta-bubble-list li{font-size:13px;color:#374151;padding:3px 0;padding-left:0;list-style:none}
+    .sc2-cta-bubble-btn{display:inline-block;background:#1a2744;color:#fff;font-size:13px;font-weight:700;padding:10px 18px;border-radius:8px;text-decoration:none}
+    .sc2-cta-bubble-btn:hover{background:#e63946;color:#fff}
+
+    /* CLAIM CTA PRINCIPAL */
+    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#1a2744 0%,#2d3f6b 100%);border-radius:12px;padding:20px 24px;margin-top:24px;flex-wrap:wrap}
+    .sc2-claim-cta-main-text strong{display:block;font-size:16px;font-weight:800;color:#fff;margin-bottom:4px}
+    .sc2-claim-cta-main-text span{font-size:13px;color:#94a3b8}
+    .sc2-claim-btn{background:#e63946;color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;white-space:nowrap;flex-shrink:0}
+    .sc2-claim-btn:hover{background:#c82333;color:#fff}
 
     /* FOOTER */
     .sc2-footer{margin-top:32px;padding-top:18px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;color:#9ca3af;font-size:12px}
@@ -1495,11 +1539,28 @@ add_shortcode('societies_fiche', function($atts) {
       .sc2-hero{padding:22px 18px;flex-direction:column;align-items:flex-start}
       .sc2-hero-name{font-size:20px}
       .sc2-hero-rating{align-self:flex-start}
+      .sc2-hero-rating-nodata{max-width:100%}
       .sc2-qa-grid{grid-template-columns:1fr}
+      .sc2-claim-cta-main{flex-direction:column;align-items:flex-start}
     }
     </style>
     <?php
-    return ob_get_clean();
+    $html = ob_get_clean();
+    // Traduit "Show Sidebar" du thème Findus en français via wp_footer
+    add_action('wp_footer', function() {
+        echo '<script>
+(function(){
+  function translateSidebar(){
+    document.querySelectorAll(".show-sidebar-button,.sidebar-toggle,[data-toggle=\"sidebar\"]").forEach(function(el){
+      if(el.textContent.trim()==="Show Sidebar") el.textContent="Afficher la barre lat\u00e9rale";
+    });
+  }
+  document.addEventListener("DOMContentLoaded",translateSidebar);
+  setTimeout(translateSidebar,800);
+})();
+</script>';
+    }, 20);
+    return $html;
 });
 
 // =============================================================================
