@@ -7,7 +7,7 @@ import secrets
 import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from core.auth import require_admin
@@ -73,9 +73,8 @@ def _build_zip() -> io.BytesIO:
 
 
 @router.get("/plugin/info")
-def plugin_info(request: "Request"):
+def plugin_info(request: Request):
     """Endpoint public — infos de mise à jour pour le plugin WordPress."""
-    from fastapi import Request
     base = str(request.base_url).rstrip("/")
     version = _plugin_version()
     return {
@@ -92,12 +91,11 @@ def plugin_info(request: "Request"):
 
 
 @router.get("/plugin/download")
-def download_plugin(license: str = "", request: "Request" = None):
+def download_plugin(license: str = "", request: Request = None):
     """
     Télécharge le ZIP du plugin.
     Accepte soit une session admin, soit une clé de licence valide (?license=XXXX).
     """
-    from fastapi import Request
     # Auth via clé de licence
     if license:
         stored_hash = get_setting("license_hash")
