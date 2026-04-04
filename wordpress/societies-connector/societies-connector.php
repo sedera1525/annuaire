@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.8
+ * Version:      1.9.9
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.8');
+define('SC_VERSION', '1.9.9');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -756,16 +756,24 @@ add_shortcode('societies_search', function($atts) {
              padding:64px 20px 52px;text-align:center}
     .sc-hero-title{font-size:38px;font-weight:800;color:#1a2744;margin:0 0 8px;letter-spacing:-.5px}
     .sc-hero-sub{font-size:16px;color:#6b7280;margin:0 0 32px}
-    .sc-hero-bar{position:relative;max-width:700px;margin:0 auto}
-    .sc-hero-input{width:100%;box-sizing:border-box;padding:18px 60px 18px 24px;
-                   font-size:17px;border:2px solid #e2e8f0;border-radius:14px;outline:none;
-                   box-shadow:0 4px 20px rgba(0,0,0,.07);color:#1f2937;background:#fff;
-                   transition:border-color .2s,box-shadow .2s}
-    .sc-hero-input:focus{border-color:#e63946;box-shadow:0 4px 20px rgba(230,57,70,.15)}
-    .sc-hero-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);
-                 background:#e63946;border:none;border-radius:10px;
-                 width:44px;height:44px;cursor:pointer;font-size:18px;
-                 display:flex;align-items:center;justify-content:center;transition:background .2s}
+    .sc-hero-bar{max-width:960px;margin:0 auto;
+                 display:flex;align-items:center;gap:0;
+                 background:#fff;border:2px solid #e2e8f0;border-radius:16px;
+                 box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden}
+    .sc-hero-field{display:flex;align-items:center;flex:1;min-width:0;
+                   border-right:1px solid #e2e8f0;padding:0 16px}
+    .sc-hero-field:last-of-type{border-right:none}
+    .sc-hero-field-icon{font-size:16px;margin-right:8px;flex-shrink:0;color:#94a3b8}
+    .sc-hero-field-wrap{display:flex;flex-direction:column;flex:1;min-width:0}
+    .sc-hero-field-label{font-size:10px;font-weight:700;text-transform:uppercase;
+                         letter-spacing:.6px;color:#94a3b8;margin-bottom:1px}
+    .sc-hero-input{width:100%;border:none;outline:none;font-size:14px;color:#1f2937;
+                   background:transparent;padding:12px 0 8px}
+    .sc-hero-input::placeholder{color:#b0b8c4}
+    .sc-hero-btn{background:#e63946;border:none;border-radius:0 13px 13px 0;
+                 padding:0 28px;height:100%;min-height:60px;cursor:pointer;
+                 font-size:15px;font-weight:700;color:#fff;white-space:nowrap;
+                 display:flex;align-items:center;gap:8px;transition:background .2s;flex-shrink:0}
     .sc-hero-btn:hover{background:#c82333}
     .sc-hero-stats{display:flex;gap:32px;justify-content:center;margin-top:24px;flex-wrap:wrap}
     .sc-hero-stat{color:#6b7280;font-size:13px;text-align:center}
@@ -821,6 +829,13 @@ add_shortcode('societies_search', function($atts) {
                  transition:background .2s}
     .sc-more-btn:hover{background:#e63946}
 
+    @media(max-width:860px){
+      .sc-hero-bar{flex-direction:column;border-radius:16px;overflow:visible;background:transparent;
+                   border:none;box-shadow:none;gap:10px}
+      .sc-hero-field{border:2px solid #e2e8f0;border-radius:12px;background:#fff;
+                     border-right:2px solid #e2e8f0!important}
+      .sc-hero-btn{border-radius:12px;width:100%;justify-content:center;min-height:50px}
+    }
     @media(max-width:640px){
       .sc-hero{padding:40px 16px 36px;left:0;right:0;margin-left:0;margin-right:0;width:100%}
       .sc-hero-title{font-size:26px}
@@ -833,11 +848,37 @@ add_shortcode('societies_search', function($atts) {
       <h1 class="sc-hero-title">Trouvez une entreprise</h1>
       <p class="sc-hero-sub">Accédez aux fiches de 4,6 millions d'entreprises françaises</p>
       <div class="sc-hero-bar">
-        <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-hero-input"
-               placeholder="Nom d'entreprise, ville, secteur d'activité..."
-               oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
-               autocomplete="off">
-        <button class="sc-hero-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">🔍</button>
+        <div class="sc-hero-field">
+          <span class="sc-hero-field-icon">🔍</span>
+          <div class="sc-hero-field-wrap">
+            <span class="sc-hero-field-label">Recherche</span>
+            <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-hero-input"
+                   placeholder="Nom, ville, catégorie..."
+                   oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
+                   autocomplete="off">
+          </div>
+        </div>
+        <div class="sc-hero-field">
+          <span class="sc-hero-field-icon">📍</span>
+          <div class="sc-hero-field-wrap">
+            <span class="sc-hero-field-label">Localisation</span>
+            <input type="text" id="<?= esc_attr($uid) ?>-city" class="sc-hero-input"
+                   placeholder="Ville ou code postal..."
+                   oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
+                   autocomplete="off">
+          </div>
+        </div>
+        <div class="sc-hero-field">
+          <span class="sc-hero-field-icon">🏢</span>
+          <div class="sc-hero-field-wrap">
+            <span class="sc-hero-field-label">Secteur d'activité</span>
+            <input type="text" id="<?= esc_attr($uid) ?>-sector" class="sc-hero-input"
+                   placeholder="Ex: Restaurant, Médecin..."
+                   oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
+                   autocomplete="off">
+          </div>
+        </div>
+        <button class="sc-hero-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">🔍 Rechercher</button>
       </div>
       <div class="sc-hero-stats">
         <div class="sc-hero-stat"><strong>4 600 000+</strong>entreprises référencées</div>
@@ -866,11 +907,14 @@ add_shortcode('societies_search', function($atts) {
       };
       window.scSearch=function(uid,page){
         var q=document.getElementById(uid+'-q').value.trim();
+        var city=(document.getElementById(uid+'-city')||{}).value||'';
+        var sector=(document.getElementById(uid+'-sector')||{}).value||'';
+        city=city.trim(); sector=sector.trim();
         var statusEl=document.getElementById(uid+'-status');
         var resultsEl=document.getElementById(uid+'-results');
         var moreEl=document.getElementById(uid+'-more');
         _scPages[uid]=page;
-        if(q.length<2){
+        if(q.length<2&&city.length<2&&sector.length<2){
           resultsEl.innerHTML='';statusEl.textContent='';moreEl.style.display='none';
           return;
         }
@@ -914,7 +958,7 @@ add_shortcode('societies_search', function($atts) {
           else resultsEl.querySelector('.sc-grid').insertAdjacentHTML('beforeend',html);
           moreEl.style.display=(items.length>=<?= intval($atts['per_page']) ?> && total>(page*<?= intval($atts['per_page']) ?>))?'':'none';
         };
-        xhr.send('action=sc_search&q='+encodeURIComponent(q)+'&page='+page+'&per_page=<?= intval($atts['per_page']) ?>');
+        xhr.send('action=sc_search&q='+encodeURIComponent(q)+'&city='+encodeURIComponent(city)+'&sector='+encodeURIComponent(sector)+'&page='+page+'&per_page=<?= intval($atts['per_page']) ?>');
       };
       window.scSearchLoadMore=function(uid){ scSearch(uid,(_scPages[uid]||1)+1); };
       function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -928,12 +972,19 @@ add_action('wp_ajax_sc_search',        'sc_search_ajax_handler');
 add_action('wp_ajax_nopriv_sc_search', 'sc_search_ajax_handler');
 function sc_search_ajax_handler() {
     $q        = sanitize_text_field($_POST['q'] ?? '');
+    $city     = sanitize_text_field($_POST['city'] ?? '');
+    $sector   = sanitize_text_field($_POST['sector'] ?? '');
     $page     = max(1, intval($_POST['page'] ?? 1));
     $per_page = min(50, max(6, intval($_POST['per_page'] ?? 24)));
 
-    if (strlen($q) < 2) { wp_send_json_error(['message' => 'Query trop courte']); }
+    if (strlen($q) < 2 && strlen($city) < 2 && strlen($sector) < 2) {
+        wp_send_json_error(['message' => 'Query trop courte']);
+    }
 
-    $data = sc_api('/api/search?q=' . rawurlencode($q) . '&page=' . $page . '&per_page=' . $per_page);
+    $qs  = 'q=' . rawurlencode($q) . '&page=' . $page . '&per_page=' . $per_page;
+    if ($city)   $qs .= '&city='   . rawurlencode($city);
+    if ($sector) $qs .= '&sector=' . rawurlencode($sector);
+    $data = sc_api('/api/search?' . $qs);
     if (isset($data['error'])) { wp_send_json_error($data); }
 
     $companies = $data['results'] ?? [];
