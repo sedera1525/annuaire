@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.0.1
+ * Version:      2.0.2
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.0.1');
+define('SC_VERSION', '2.0.2');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -726,102 +726,161 @@ add_shortcode('societies_pricing', function($atts) {
 });
 
 // =============================================================================
+// HELPERS MOTEUR DE RECHERCHE
+// =============================================================================
+
+function sc_category_icon(string $cat): string {
+    $c = mb_strtolower($cat);
+    $map = [
+        'restaurant' => '🍕','restaur' => '🍕','traiteur' => '🍽️','alimentation' => '🛒',
+        'boulang' => '🥖','pâtisserie' => '🍰','boucherie' => '🥩','épicerie' => '🛒',
+        'santé' => '🏥','médecin' => '🏥','médical' => '🏥','pharmacie' => '💊',
+        'dentiste' => '🦷','vétérin' => '🐾','optique' => '👓',
+        'artisan' => '🔧','plombier' => '🔧','électric' => '⚡','menuisier' => '🪚',
+        'maçon' => '🧱','peintre' => '🎨','couvreur' => '🏠','chauffage' => '🔥',
+        'immobilier' => '🏠','agence immob' => '🏠','promoteur' => '🏗️',
+        'construction' => '🏗️','btp' => '🏗️','architecte' => '📐',
+        'transport' => '🚗','déménag' => '🚛','taxi' => '🚕','logistique' => '📦',
+        'commerce' => '🛒','magasin' => '🛍️','boutique' => '🛍️','grande surface' => '🏪',
+        'technologie' => '💻','informatique' => '💻','web' => '🌐','numérique' => '💻',
+        'télécommunication' => '📱','téléphonie' => '📱',
+        'éducation' => '🎓','école' => '🎓','formation' => '📚','université' => '🎓',
+        'enseignement' => '🎓','cours' => '📚',
+        'finance' => '💰','banque' => '🏦','assurance' => '🛡️','comptable' => '📊',
+        'conseil' => '💼','consulting' => '💼','avocat' => '⚖️','notaire' => '📜',
+        'beauté' => '💄','coiffure' => '✂️','esthétique' => '💅','spa' => '🧖',
+        'sport' => '⚽','fitness' => '💪','gym' => '💪','salle de sport' => '🏋️',
+        'hôtel' => '🏨','hébergement' => '🏨','camping' => '⛺','tourisme' => '✈️',
+        'agriculture' => '🌾','jardinerie' => '🌿','paysag' => '🌳',
+        'industrie' => '⚙️','manufacture' => '🏭','usine' => '🏭',
+        'auto' => '🚗','garage' => '🔧','carrosserie' => '🚘',
+        'imprimerie' => '🖨️','publicité' => '📢','communication' => '📣',
+        'nettoyage' => '🧹','entretien' => '🧽','gardiennage' => '🔒',
+        'social' => '🤝','association' => '🤝','humanitaire' => '❤️',
+    ];
+    foreach ($map as $key => $icon) {
+        if (mb_strpos($c, $key) !== false) return $icon;
+    }
+    return '🏢';
+}
+
+function sc_format_count(int $n): string {
+    if ($n >= 1000000) return round($n / 1000000, 1) . 'M+';
+    if ($n >= 1000)    return round($n / 1000) . 'k+';
+    return (string)$n;
+}
+
+function sc_get_categories_clean(): array {
+    $parsed   = parse_url(rtrim(get_option('societies_api_url', ''), '/'));
+    $base_url = ($parsed['scheme'] ?? 'http') . '://'
+              . ($parsed['host'] ?? '')
+              . (isset($parsed['port']) ? ':' . $parsed['port'] : '')
+              . rtrim($parsed['path'] ?? '', '/');
+    $resp = wp_remote_get($base_url . '/api/categories', ['timeout' => 6, 'sslverify' => false]);
+    if (is_wp_error($resp)) return [];
+    $data = json_decode(wp_remote_retrieve_body($resp), true);
+    return is_array($data) ? $data : [];
+}
+
+// =============================================================================
 // SHORTCODE MOTEUR DE RECHERCHE [societies_search]
 // =============================================================================
 
 add_shortcode('societies_search', function($atts) {
-    $atts     = shortcode_atts(['per_page' => 24], $atts);
+    $atts     = shortcode_atts(['per_page' => 24, 'cats_page' => '/toutes-les-categories/'], $atts);
     $uid      = 'sc-search-' . wp_rand(1000, 9999);
     $ajax_url = admin_url('admin-ajax.php');
+
+    // 8 catégories aléatoires
+    $all_cats = sc_get_categories_clean();
+    if (!empty($all_cats)) {
+        shuffle($all_cats);
+        $display_cats = array_slice($all_cats, 0, 8);
+    } else {
+        $display_cats = [];
+    }
     ob_start(); ?>
-
     <style>
-    /* ── Masque sidebar & force pleine largeur ── */
-    .site-sidebar,.sidebar,.widget-area,.secondary,#secondary,
-    aside.sidebar,#sidebar,.col-sidebar,.right-sidebar,
-    [class*="sidebar"]:not(.sc-search-wrap){display:none!important}
-    /* Reset layout colonnes thème */
+    /* Reset sidebar & Elementor */
+    .site-sidebar,.sidebar,.widget-area,.secondary,#secondary,aside.sidebar,
+    #sidebar,.col-sidebar,.right-sidebar,[class*="sidebar"]:not(.sc-wrap){display:none!important}
     #page,#wrapper,.site,.hfeed{display:block!important}
-    .site-content,.content-area,#primary,.col-content,
-    .main-content,.entry-content,.page-content,
-    .hentry,.entry,.post,.page{width:100%!important;max-width:100%!important;
-      float:none!important;margin-left:0!important;margin-right:0!important;
-      padding-left:0!important;padding-right:0!important}
-    .container,.site-inner,.content-wrap,.wrapper{max-width:100%!important;padding:0!important}
+    .site-content,.content-area,#primary,.col-content,.main-content,
+    .entry-content,.page-content,.hentry,.entry{width:100%!important;max-width:100%!important;
+      float:none!important;margin:0!important;padding:0!important}
+    .container,.site-inner,.content-wrap,.wrapper,
+    .elementor-container,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;padding:0!important}
+    .elementor-column{width:100%!important;padding:0!important}
+    .elementor-section{padding:0!important;margin:0!important}
 
-    /* ── Force pleine largeur Elementor ── */
-    .elementor-section:has(.sc-hero),.elementor-section:has(.sc-body),
-    .elementor-section:has(.sc-wrap){padding:0!important;margin:0!important}
-    .elementor-section:has(.sc-hero) .elementor-container,
-    .elementor-section:has(.sc-body) .elementor-container,
-    .elementor-section:has(.sc-wrap) .elementor-container{max-width:100%!important;padding:0!important}
-    .elementor-section:has(.sc-hero) .elementor-column,
-    .elementor-section:has(.sc-body) .elementor-column,
-    .elementor-section:has(.sc-wrap) .elementor-column{width:100%!important;padding:0!important}
-    .elementor-section:has(.sc-hero) .elementor-widget-container,
-    .elementor-section:has(.sc-body) .elementor-widget-container,
-    .elementor-section:has(.sc-wrap) .elementor-widget-container{padding:0!important}
+    /* ─── Wrap global ─── */
+    .sc-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:100%;box-sizing:border-box}
 
-    /* ── Hero ── */
-    .sc-hero{background:#f8fafc;border-bottom:2px solid #e8edf3;
-             width:100%;padding:56px 40px 48px;text-align:center;box-sizing:border-box}
-    .sc-hero-title{font-size:40px;font-weight:900;color:#1a2744;margin:0 0 10px;
-                   letter-spacing:-1px;line-height:1.15}
-    .sc-hero-sub{font-size:16px;color:#64748b;margin:0 0 36px;max-width:500px;
+    /* ─── Hero ─── */
+    .sc-hero{background:linear-gradient(160deg,#fff 60%,#fff5f5 100%);
+             padding:60px 32px 52px;text-align:center;box-sizing:border-box}
+    .sc-hero-title{font-size:42px;font-weight:900;color:#1a2744;margin:0 0 12px;
+                   letter-spacing:-1.5px;line-height:1.1}
+    .sc-hero-title em{color:#e63946;font-style:normal}
+    .sc-hero-sub{font-size:16px;color:#64748b;margin:0 0 36px;line-height:1.6;max-width:480px;
                  display:block;margin-left:auto;margin-right:auto}
+    .sc-hero-sub strong{color:#1a2744}
 
-    /* Barre de recherche */
-    .sc-hero-bar{max-width:900px;margin:0 auto;display:flex;align-items:stretch;
-                 background:#fff;border:1.5px solid #dde3ec;border-radius:18px;
-                 box-shadow:0 6px 32px rgba(26,39,68,.08);overflow:hidden;height:68px}
+    /* Barre recherche */
+    .sc-hero-bar{max-width:860px;margin:0 auto;display:flex;align-items:stretch;
+                 background:#fff;border:1.5px solid #dde3ec;border-radius:20px;
+                 box-shadow:0 8px 40px rgba(26,39,68,.1);overflow:hidden;min-height:70px}
     .sc-hero-field{display:flex;align-items:center;flex:1;min-width:0;
-                   border-right:1.5px solid #e8edf3;padding:0 20px;position:relative}
+                   border-right:1.5px solid #edf1f7;padding:0 20px;cursor:text}
     .sc-hero-field:hover{background:#fafbfc}
-    .sc-hero-field-icon{font-size:18px;margin-right:10px;flex-shrink:0}
+    .sc-hero-field-icon{font-size:17px;margin-right:10px;flex-shrink:0;opacity:.7}
     .sc-hero-field-wrap{display:flex;flex-direction:column;flex:1;min-width:0;justify-content:center}
-    .sc-hero-field-label{font-size:10px;font-weight:800;text-transform:uppercase;
-                         letter-spacing:.8px;color:#e63946;margin-bottom:3px}
+    .sc-hero-field-label{font-size:9px;font-weight:800;text-transform:uppercase;
+                         letter-spacing:1px;color:#e63946;margin-bottom:3px}
     .sc-hero-input{width:100%;border:none;outline:none;font-size:14px;font-weight:500;
-                   color:#1f2937;background:transparent;padding:0;line-height:1.4}
+                   color:#1f2937;background:transparent;padding:0;line-height:1.5}
     .sc-hero-input::placeholder{color:#c4cdd8;font-weight:400}
-    .sc-hero-btn{background:linear-gradient(135deg,#e63946,#c82333);border:none;
-                 padding:0 32px;cursor:pointer;font-size:15px;font-weight:700;color:#fff;
-                 white-space:nowrap;display:flex;align-items:center;gap:8px;
-                 transition:opacity .2s;flex-shrink:0;letter-spacing:.2px}
-    .sc-hero-btn:hover{opacity:.9}
+    .sc-hero-btn{background:#e63946;border:none;width:64px;flex-shrink:0;cursor:pointer;
+                 display:flex;align-items:center;justify-content:center;font-size:22px;
+                 transition:background .2s;color:#fff}
+    .sc-hero-btn:hover{background:#c82333}
 
     /* Stats */
-    .sc-hero-stats{display:flex;gap:0;justify-content:center;margin-top:28px;
-                   max-width:560px;margin-left:auto;margin-right:auto;
-                   background:#fff;border:1.5px solid #e8edf3;border-radius:14px;
-                   overflow:hidden}
-    .sc-hero-stat{flex:1;padding:14px 20px;text-align:center;border-right:1.5px solid #e8edf3}
-    .sc-hero-stat:last-child{border-right:none}
-    .sc-hero-stat strong{color:#1a2744;font-size:18px;font-weight:900;display:block;
-                         letter-spacing:-.3px}
-    .sc-hero-stat span{color:#94a3b8;font-size:11px;font-weight:500;text-transform:uppercase;
-                       letter-spacing:.4px}
+    .sc-hero-stats{display:flex;gap:16px;justify-content:center;margin-top:28px;flex-wrap:wrap}
+    .sc-hero-stat{display:flex;align-items:center;gap:10px;background:#fff;
+                  border:1.5px solid #edf1f7;border-radius:12px;padding:10px 18px;
+                  box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .sc-hero-stat-icon{font-size:22px;flex-shrink:0}
+    .sc-hero-stat-text strong{display:block;font-size:16px;font-weight:800;color:#1a2744;line-height:1.2}
+    .sc-hero-stat-text span{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;font-weight:600}
 
-    /* ── Body ── */
-    .sc-body{width:100%;max-width:1400px;margin:0 auto;padding:32px 24px 60px;
-             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-             box-sizing:border-box}
-    .sc-toolbar{display:flex;align-items:center;justify-content:space-between;
-                margin-bottom:24px;flex-wrap:wrap;gap:12px}
-    .sc-status{font-size:14px;color:#6b7280;font-weight:500}
-    .sc-filters{display:flex;gap:8px;flex-wrap:wrap}
-    .sc-filter-btn{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;
-                   padding:5px 14px;font-size:12px;color:#475569;cursor:pointer;transition:all .15s}
-    .sc-filter-btn:hover,.sc-filter-btn.active{background:#1a2744;color:#fff;border-color:#1a2744}
+    /* ─── Catégories ─── */
+    .sc-cats-section{padding:48px 32px 60px;max-width:1200px;margin:0 auto;box-sizing:border-box}
+    .sc-cats-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+    .sc-cats-title{font-size:24px;font-weight:800;color:#1a2744;margin:0 0 4px}
+    .sc-cats-sub{font-size:14px;color:#94a3b8;margin:0}
+    .sc-cats-link{font-size:14px;font-weight:700;color:#e63946;text-decoration:none;white-space:nowrap}
+    .sc-cats-link:hover{text-decoration:underline}
+    .sc-cats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .sc-cat-card{background:#fff;border:1.5px solid #edf1f7;border-radius:16px;
+                 padding:24px 20px 20px;text-align:center;text-decoration:none;color:inherit;
+                 display:block;transition:box-shadow .2s,transform .15s,border-color .2s;
+                 box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .sc-cat-card:hover{box-shadow:0 8px 32px rgba(230,57,70,.12);
+                       border-color:#e63946;transform:translateY(-4px);text-decoration:none}
+    .sc-cat-icon{font-size:40px;margin-bottom:12px;display:block}
+    .sc-cat-name{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:4px;line-height:1.3}
+    .sc-cat-count{font-size:12px;color:#f59e0b;font-weight:600}
 
-    /* ── Grille résultats ── */
+    /* ─── Résultats recherche ─── */
+    .sc-results-wrap{max-width:1400px;margin:0 auto;padding:0 32px 60px;box-sizing:border-box}
+    .sc-status{font-size:14px;color:#6b7280;font-weight:500;margin-bottom:20px}
     .sc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
     @media(max-width:1200px){.sc-grid{grid-template-columns:repeat(3,1fr)}}
-    @media(max-width:860px){.sc-grid{grid-template-columns:repeat(2,1fr)}}
-    .sc-card{background:#fff;border:1px solid #e8edf3;border-radius:14px;
-             padding:20px 22px;text-decoration:none;color:inherit;display:flex;
-             flex-direction:column;gap:10px;transition:box-shadow .2s,transform .15s;
-             box-shadow:0 1px 4px rgba(0,0,0,.05)}
+    @media(max-width:860px){.sc-grid{grid-template-columns:repeat(2,1fr)}.sc-cats-grid{grid-template-columns:repeat(2,1fr)}}
+    .sc-card{background:#fff;border:1.5px solid #edf1f7;border-radius:14px;padding:20px 22px;
+             text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:10px;
+             transition:box-shadow .2s,transform .15s;box-shadow:0 1px 4px rgba(0,0,0,.05)}
     .sc-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1);transform:translateY(-3px);text-decoration:none}
     .sc-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
     .sc-card-name{font-size:15px;font-weight:700;color:#1a2744;line-height:1.35}
@@ -832,13 +891,11 @@ add_shortcode('societies_search', function($atts) {
     .sc-card-tag-city{background:#eff6ff;color:#3b82f6}
     .sc-card-footer{display:flex;align-items:center;justify-content:space-between;
                     padding-top:10px;border-top:1px solid #f1f5f9}
-    .sc-card-stars{color:#f59e0b;font-size:14px;letter-spacing:1px}
+    .sc-card-stars{color:#f59e0b;font-size:14px}
     .sc-card-score{font-size:15px;font-weight:800;color:#e63946}
     .sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}
     .sc-card-arrow{color:#94a3b8;font-size:16px;transition:transform .15s}
     .sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#e63946}
-
-    /* ── États ── */
     .sc-empty{text-align:center;padding:60px 20px;color:#94a3b8}
     .sc-empty-icon{font-size:48px;margin-bottom:12px}
     .sc-empty-title{font-size:18px;font-weight:600;color:#374151;margin-bottom:6px}
@@ -848,31 +905,30 @@ add_shortcode('societies_search', function($atts) {
     @keyframes sc-spin{to{transform:rotate(360deg)}}
     .sc-more-wrap{text-align:center;margin-top:32px}
     .sc-more-btn{background:#1a2744;color:#fff;border:none;border-radius:10px;
-                 padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;
-                 transition:background .2s}
+                 padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}
     .sc-more-btn:hover{background:#e63946}
 
-    @media(max-width:860px){
-      .sc-hero{padding:36px 20px 32px}
-      .sc-hero-bar{flex-direction:column;height:auto;border-radius:16px;
-                   overflow:visible;background:transparent;border:none;
-                   box-shadow:none;gap:10px}
-      .sc-hero-field{border:1.5px solid #dde3ec;border-radius:12px;background:#fff;height:58px}
-      .sc-hero-btn{border-radius:12px;width:100%;justify-content:center;height:54px}
-      .sc-hero-stats{flex-direction:column;max-width:280px}
-      .sc-hero-stat{border-right:none;border-bottom:1.5px solid #e8edf3;padding:10px 16px}
-      .sc-hero-stat:last-child{border-bottom:none}
-    }
     @media(max-width:640px){
+      .sc-hero{padding:36px 16px 32px}
       .sc-hero-title{font-size:28px}
+      .sc-hero-bar{flex-direction:column;min-height:auto;background:transparent;
+                   border:none;box-shadow:none;border-radius:0;gap:10px;overflow:visible}
+      .sc-hero-field{border:1.5px solid #dde3ec;border-radius:14px;background:#fff;
+                     min-height:58px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+      .sc-hero-btn{border-radius:14px;width:100%;min-height:52px}
+      .sc-cats-grid{grid-template-columns:repeat(2,1fr)}
       .sc-grid{grid-template-columns:1fr}
+      .sc-cats-section,.sc-results-wrap{padding-left:16px;padding-right:16px}
     }
     </style>
 
+    <!-- WRAP -->
+    <div class="sc-wrap">
+
     <!-- HERO -->
     <div class="sc-hero">
-      <h1 class="sc-hero-title">Trouvez une entreprise</h1>
-      <p class="sc-hero-sub">Accédez aux fiches de 4,6 millions d'entreprises françaises</p>
+      <h1 class="sc-hero-title">Trouvez une <em>entreprise</em></h1>
+      <p class="sc-hero-sub">Accédez instantanément aux fiches détaillées de <strong>4,6 millions</strong> d'entreprises françaises.</p>
       <div class="sc-hero-bar">
         <div class="sc-hero-field">
           <span class="sc-hero-field-icon">🔍</span>
@@ -904,25 +960,61 @@ add_shortcode('societies_search', function($atts) {
                    autocomplete="off">
           </div>
         </div>
-        <button class="sc-hero-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">🔍 Rechercher</button>
+        <button class="sc-hero-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">🔍</button>
       </div>
       <div class="sc-hero-stats">
-        <div class="sc-hero-stat"><strong>4 600 000+</strong><span>Entreprises</span></div>
-        <div class="sc-hero-stat"><strong>⭐ 5.0</strong><span>Note moyenne</span></div>
-        <div class="sc-hero-stat"><strong>100% Gratuit</strong><span>Accès aux fiches</span></div>
+        <div class="sc-hero-stat">
+          <span class="sc-hero-stat-icon">🌍</span>
+          <div class="sc-hero-stat-text"><strong>4 600 000+</strong><span>Entreprises</span></div>
+        </div>
+        <div class="sc-hero-stat">
+          <span class="sc-hero-stat-icon">⭐</span>
+          <div class="sc-hero-stat-text"><strong>5.0</strong><span>Note moyenne</span></div>
+        </div>
+        <div class="sc-hero-stat">
+          <span class="sc-hero-stat-icon">✅</span>
+          <div class="sc-hero-stat-text"><strong>100% Gratuit</strong><span>Accès aux fiches</span></div>
+        </div>
       </div>
     </div>
 
-    <!-- BODY -->
-    <div class="sc-body">
-      <div class="sc-toolbar">
-        <div id="<?= esc_attr($uid) ?>-status" class="sc-status"></div>
-      </div>
+    <!-- RÉSULTATS (masqués par défaut) -->
+    <div class="sc-results-wrap" id="<?= esc_attr($uid) ?>-results-wrap" style="display:none">
+      <div id="<?= esc_attr($uid) ?>-status" class="sc-status"></div>
       <div id="<?= esc_attr($uid) ?>-results"></div>
       <div id="<?= esc_attr($uid) ?>-more" class="sc-more-wrap" style="display:none">
         <button class="sc-more-btn" onclick="scSearchLoadMore('<?= esc_js($uid) ?>')">Voir plus de résultats</button>
       </div>
     </div>
+
+    <!-- CATÉGORIES -->
+    <?php if (!empty($display_cats)): ?>
+    <div class="sc-cats-section" id="<?= esc_attr($uid) ?>-cats">
+      <div class="sc-cats-header">
+        <div>
+          <h2 class="sc-cats-title">Explorez par secteur</h2>
+          <p class="sc-cats-sub">Découvrez les entreprises les plus recherchées par catégorie.</p>
+        </div>
+        <a href="<?= esc_url($atts['cats_page']) ?>" class="sc-cats-link">Voir tout →</a>
+      </div>
+      <div class="sc-cats-grid">
+        <?php foreach ($display_cats as $cat):
+            $icon  = sc_category_icon($cat['category']);
+            $label = sc_format_count(intval($cat['count']));
+        ?>
+        <a href="<?= esc_url(get_permalink()) ?>?sector=<?= urlencode($cat['category']) ?>"
+           class="sc-cat-card"
+           onclick="scSetSector('<?= esc_js($uid) ?>','<?= esc_js($cat['category']) ?>');return false;">
+          <span class="sc-cat-icon"><?= $icon ?></span>
+          <div class="sc-cat-name"><?= esc_html($cat['category']) ?></div>
+          <div class="sc-cat-count"><?= esc_html($label) ?> entreprises</div>
+        </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
+    </div><!-- .sc-wrap -->
 
     <?php
     $html = ob_get_clean();
@@ -942,6 +1034,14 @@ add_shortcode('societies_search', function($atts) {
       clearTimeout(_scTimers[uid]);
       _scTimers[uid]=setTimeout(function(){scSearch(uid,1);},400);
     };
+    window.scSetSector=function(uid,sector){
+      var sEl=document.getElementById(uid+'-sector');
+      if(sEl){sEl.value=sector;}
+      var catsEl=document.getElementById(uid+'-cats');
+      if(catsEl) catsEl.style.display='none';
+      document.getElementById(uid+'-results-wrap').style.display='block';
+      scSearch(uid,1);
+    };
     window.scSearch=function(uid,page){
       var q=document.getElementById(uid+'-q').value.trim();
       var cityEl=document.getElementById(uid+'-city');
@@ -951,12 +1051,18 @@ add_shortcode('societies_search', function($atts) {
       var statusEl=document.getElementById(uid+'-status');
       var resultsEl=document.getElementById(uid+'-results');
       var moreEl=document.getElementById(uid+'-more');
+      var resultsWrap=document.getElementById(uid+'-results-wrap');
+      var catsEl=document.getElementById(uid+'-cats');
       _scPages[uid]=page;
       var hasInput=(q.length>=2)||(city.length>=2)||(sector.length>=2);
       if(!hasInput){
         resultsEl.innerHTML='';statusEl.textContent='';moreEl.style.display='none';
+        if(resultsWrap) resultsWrap.style.display='none';
+        if(catsEl) catsEl.style.display='block';
         return;
       }
+      if(resultsWrap) resultsWrap.style.display='block';
+      if(catsEl && page===1) catsEl.style.display='none';
       if(page===1){
         resultsEl.innerHTML='<div class=\"sc-loader\"><div class=\"sc-spinner\"></div></div>';
         statusEl.textContent='';
@@ -1005,6 +1111,103 @@ add_shortcode('societies_search', function($atts) {
   }
 })();";
     wp_add_inline_script('sc-search-engine', $js);
+    return $html;
+});
+
+// =============================================================================
+// SHORTCODE TOUTES LES CATÉGORIES [societies_categories]
+// =============================================================================
+
+add_shortcode('societies_categories', function($atts) {
+    $atts      = shortcode_atts(['per_page' => 12, 'search_page' => '/recherche-entreprises/'], $atts);
+    $per_page  = intval($atts['per_page']);
+    $ajax_url  = admin_url('admin-ajax.php');
+    $all_cats  = sc_get_categories_clean();
+    $initial   = array_slice($all_cats, 0, $per_page);
+    $has_more  = count($all_cats) > $per_page;
+    $uid       = 'sc-cats-' . wp_rand(1000,9999);
+
+    ob_start(); ?>
+    <style>
+    .sc-allcats-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+                     max-width:1200px;margin:0 auto;padding:40px 32px 60px;box-sizing:border-box}
+    .sc-allcats-title{font-size:32px;font-weight:900;color:#1a2744;margin:0 0 6px}
+    .sc-allcats-sub{font-size:15px;color:#94a3b8;margin:0 0 32px}
+    .sc-allcats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .sc-allcats-more{text-align:center;margin-top:32px}
+    .sc-allcats-btn{background:#1a2744;color:#fff;border:none;border-radius:12px;
+                    padding:14px 40px;font-size:15px;font-weight:700;cursor:pointer;
+                    transition:background .2s}
+    .sc-allcats-btn:hover{background:#e63946}
+    .sc-allcats-btn:disabled{opacity:.5;cursor:not-allowed}
+    @media(max-width:860px){.sc-allcats-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:480px){.sc-allcats-grid{grid-template-columns:repeat(2,1fr)}.sc-allcats-wrap{padding:24px 16px 40px}}
+    </style>
+    <div class="sc-allcats-wrap">
+      <h1 class="sc-allcats-title">Toutes les catégories</h1>
+      <p class="sc-allcats-sub">Explorez les entreprises par secteur d'activité.</p>
+      <div class="sc-allcats-grid" id="<?= esc_attr($uid) ?>-grid">
+        <?php foreach ($initial as $cat):
+            $icon  = sc_category_icon($cat['category']);
+            $label = sc_format_count(intval($cat['count']));
+        ?>
+        <a href="<?= esc_url($atts['search_page']) ?>?sector=<?= urlencode($cat['category']) ?>"
+           class="sc-cat-card">
+          <span class="sc-cat-icon"><?= $icon ?></span>
+          <div class="sc-cat-name"><?= esc_html($cat['category']) ?></div>
+          <div class="sc-cat-count"><?= esc_html($label) ?> entreprises</div>
+        </a>
+        <?php endforeach; ?>
+      </div>
+      <?php if ($has_more): ?>
+      <div class="sc-allcats-more">
+        <button class="sc-allcats-btn" id="<?= esc_attr($uid) ?>-btn"
+                onclick="scLoadMoreCats('<?= esc_js($uid) ?>')">
+          Charger plus de catégories
+        </button>
+      </div>
+      <?php endif; ?>
+    </div>
+    <?php
+    $html = ob_get_clean();
+
+    // Toutes les catégories encodées en JSON pour le JS
+    $all_json = wp_json_encode(array_map(function($c) {
+        return ['category' => $c['category'], 'count' => $c['count']];
+    }, $all_cats));
+    $search_page = esc_js($atts['search_page']);
+    $pp = $per_page;
+
+    if (!wp_script_is('sc-cats-engine', 'registered')) {
+        wp_register_script('sc-cats-engine', false, [], false, true);
+    }
+    wp_enqueue_script('sc-cats-engine');
+    $js = "
+(function(){
+  var scAllCats={$all_json};
+  var scCatsOffset={$pp};
+  var scCatsPerLoad=12;
+  window.scLoadMoreCats=function(uid){
+    var grid=document.getElementById(uid+'-grid');
+    var btn=document.getElementById(uid+'-btn');
+    var batch=scAllCats.slice(scCatsOffset,scCatsOffset+scCatsPerLoad);
+    if(!batch.length){if(btn)btn.style.display='none';return;}
+    var icons={};
+    batch.forEach(function(c){
+      var count=c.count>=1000000?Math.round(c.count/1000000*10)/10+'M+':c.count>=1000?Math.round(c.count/1000)+'k+':c.count;
+      grid.insertAdjacentHTML('beforeend',
+        '<a href=\"{$search_page}?sector='+encodeURIComponent(c.category)+'\" class=\"sc-cat-card\">'+
+        '<span class=\"sc-cat-icon\">\ud83c\udfe2</span>'+
+        '<div class=\"sc-cat-name\">'+c.category+'</div>'+
+        '<div class=\"sc-cat-count\">'+count+' entreprises</div>'+
+        '</a>'
+      );
+    });
+    scCatsOffset+=scCatsPerLoad;
+    if(scCatsOffset>=scAllCats.length&&btn) btn.style.display='none';
+  };
+})();";
+    wp_add_inline_script('sc-cats-engine', $js);
     return $html;
 });
 
