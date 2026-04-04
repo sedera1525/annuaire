@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.9
+ * Version:      2.0.0
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.9');
+define('SC_VERSION', '2.0.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -898,73 +898,88 @@ add_shortcode('societies_search', function($atts) {
       </div>
     </div>
 
-    <script>
-    (function(){
-      var _scTimers={}, _scPages={};
-      window.scSearchDebounce=function(uid){
-        clearTimeout(_scTimers[uid]);
-        _scTimers[uid]=setTimeout(function(){scSearch(uid,1);},400);
-      };
-      window.scSearch=function(uid,page){
-        var q=document.getElementById(uid+'-q').value.trim();
-        var city=(document.getElementById(uid+'-city')||{}).value||'';
-        var sector=(document.getElementById(uid+'-sector')||{}).value||'';
-        city=city.trim(); sector=sector.trim();
-        var statusEl=document.getElementById(uid+'-status');
-        var resultsEl=document.getElementById(uid+'-results');
-        var moreEl=document.getElementById(uid+'-more');
-        _scPages[uid]=page;
-        if(q.length<2&&city.length<2&&sector.length<2){
-          resultsEl.innerHTML='';statusEl.textContent='';moreEl.style.display='none';
+    <?php
+    $html = ob_get_clean();
+
+    // JS injecté via wp_add_inline_script pour éviter wpautop/wptexturize d'Elementor
+    if (!wp_script_is('sc-search-engine', 'registered')) {
+        wp_register_script('sc-search-engine', false, [], false, true);
+    }
+    wp_enqueue_script('sc-search-engine');
+
+    $pp = intval($atts['per_page']);
+    $js = "
+(function(){
+  var _scTimers={}, _scPages={};
+  if(!window.scSearchDebounce){
+    window.scSearchDebounce=function(uid){
+      clearTimeout(_scTimers[uid]);
+      _scTimers[uid]=setTimeout(function(){scSearch(uid,1);},400);
+    };
+    window.scSearch=function(uid,page){
+      var q=document.getElementById(uid+'-q').value.trim();
+      var cityEl=document.getElementById(uid+'-city');
+      var sectorEl=document.getElementById(uid+'-sector');
+      var city=cityEl?cityEl.value.trim():'';
+      var sector=sectorEl?sectorEl.value.trim():'';
+      var statusEl=document.getElementById(uid+'-status');
+      var resultsEl=document.getElementById(uid+'-results');
+      var moreEl=document.getElementById(uid+'-more');
+      _scPages[uid]=page;
+      var hasInput=(q.length>=2)||(city.length>=2)||(sector.length>=2);
+      if(!hasInput){
+        resultsEl.innerHTML='';statusEl.textContent='';moreEl.style.display='none';
+        return;
+      }
+      if(page===1){
+        resultsEl.innerHTML='<div class=\"sc-loader\"><div class=\"sc-spinner\"></div></div>';
+        statusEl.textContent='';
+      }
+      var xhr=new XMLHttpRequest();
+      xhr.open('POST','" . esc_js($ajax_url) . "');
+      xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
+      xhr.onload=function(){
+        var d=JSON.parse(xhr.responseText||'{}');
+        if(!d.success){
+          resultsEl.innerHTML='<div class=\"sc-empty\"><div class=\"sc-empty-icon\">\u26a0\ufe0f</div><div class=\"sc-empty-title\">Une erreur est survenue</div></div>';
           return;
         }
-        if(page===1){
-          resultsEl.innerHTML='<div class="sc-loader"><div class="sc-spinner"></div></div>';
-          statusEl.textContent='';
+        var items=d.data.results||[];
+        var total=d.data.total||0;
+        if(items.length===0&&page===1){
+          resultsEl.innerHTML='<div class=\"sc-empty\"><div class=\"sc-empty-icon\">\ud83d\udd0d</div><div class=\"sc-empty-title\">Aucun r\u00e9sultat pour \"'+scEsc(q)+'\"</div><p>Essayez avec un autre nom, une ville ou un secteur.</p></div>';
+          statusEl.textContent='';moreEl.style.display='none';return;
         }
-        var xhr=new XMLHttpRequest();
-        xhr.open('POST','<?= esc_js($ajax_url) ?>');
-        xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
-        xhr.onload=function(){
-          var d=JSON.parse(xhr.responseText||'{}');
-          if(!d.success){
-            resultsEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">⚠️</div><div class="sc-empty-title">Une erreur est survenue</div></div>';
-            return;
-          }
-          var items=d.data.results||[];
-          var total=d.data.total||0;
-          if(items.length===0&&page===1){
-            resultsEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">🔍</div><div class="sc-empty-title">Aucun résultat pour "'+esc(q)+'"</div><p>Essayez avec un autre nom, une ville ou un secteur.</p></div>';
-            statusEl.textContent='';moreEl.style.display='none';return;
-          }
-          statusEl.textContent=total.toLocaleString('fr-FR')+' entreprise'+(total>1?'s':'')+' trouvée'+(total>1?'s':'');
-          var html=items.map(function(c){
-            var tags='';
-            if(c.category) tags+='<span class="sc-card-tag">'+esc(c.category)+'</span>';
-            if(c.city)     tags+='<span class="sc-card-tag sc-card-tag-city">📍 '+esc(c.city)+'</span>';
-            return '<a href="'+esc(c.url||'#')+'" class="sc-card">'
-              +'<div class="sc-card-header">'
-              +'<div class="sc-card-name">'+esc(c.title)+'</div>'
-              +'<span class="sc-card-badge">Fiche</span>'
-              +'</div>'
-              +(tags?'<div class="sc-card-tags">'+tags+'</div>':'')
-              +'<div class="sc-card-footer">'
-              +'<div><span class="sc-card-stars">★★★★★</span> <span class="sc-card-score">5.0</span> <span class="sc-card-note">Note interne</span></div>'
-              +'<span class="sc-card-arrow">→</span>'
-              +'</div>'
-              +'</a>';
-          }).join('');
-          if(page===1) resultsEl.innerHTML='<div class="sc-grid">'+html+'</div>';
-          else resultsEl.querySelector('.sc-grid').insertAdjacentHTML('beforeend',html);
-          moreEl.style.display=(items.length>=<?= intval($atts['per_page']) ?> && total>(page*<?= intval($atts['per_page']) ?>))?'':'none';
-        };
-        xhr.send('action=sc_search&q='+encodeURIComponent(q)+'&city='+encodeURIComponent(city)+'&sector='+encodeURIComponent(sector)+'&page='+page+'&per_page=<?= intval($atts['per_page']) ?>');
+        statusEl.textContent=total.toLocaleString('fr-FR')+' entreprise'+(total>1?'s':'')+' trouv\u00e9e'+(total>1?'s':'');
+        var html=items.map(function(c){
+          var tags='';
+          if(c.category) tags+='<span class=\"sc-card-tag\">'+scEsc(c.category)+'</span>';
+          if(c.city) tags+='<span class=\"sc-card-tag sc-card-tag-city\">\ud83d\udccd '+scEsc(c.city)+'</span>';
+          return '<a href=\"'+scEsc(c.url||'#')+'\" class=\"sc-card\">'
+            +'<div class=\"sc-card-header\">'
+            +'<div class=\"sc-card-name\">'+scEsc(c.title)+'</div>'
+            +'<span class=\"sc-card-badge\">Fiche</span>'
+            +'</div>'
+            +(tags?'<div class=\"sc-card-tags\">'+tags+'</div>':'')
+            +'<div class=\"sc-card-footer\">'
+            +'<div><span class=\"sc-card-stars\">\u2605\u2605\u2605\u2605\u2605</span> <span class=\"sc-card-score\">5.0</span> <span class=\"sc-card-note\">Note interne</span></div>'
+            +'<span class=\"sc-card-arrow\">\u2192</span>'
+            +'</div>'
+            +'</a>';
+        }).join('');
+        if(page===1) resultsEl.innerHTML='<div class=\"sc-grid\">'+html+'</div>';
+        else resultsEl.querySelector('.sc-grid').insertAdjacentHTML('beforeend',html);
+        var pp={$pp};
+        moreEl.style.display=(items.length>=pp&&total>(page*pp))?'':'none';
       };
-      window.scSearchLoadMore=function(uid){ scSearch(uid,(_scPages[uid]||1)+1); };
-      function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-    })();
-    </script>
-    <?php return ob_get_clean();
+      xhr.send('action=sc_search&q='+encodeURIComponent(q)+'&city='+encodeURIComponent(city)+'&sector='+encodeURIComponent(sector)+'&page='+page+'&per_page={$pp}');
+    };
+    window.scSearchLoadMore=function(uid){ scSearch(uid,(_scPages[uid]||1)+1); };
+    window.scEsc=function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); };
+  }
+})();";
+    wp_add_inline_script('sc-search-engine', $js);
+    return $html;
 });
 
 // AJAX handler — public (nopriv)
