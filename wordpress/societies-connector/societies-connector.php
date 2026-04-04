@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.0.0
+ * Version:      2.0.1
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.0.0');
+define('SC_VERSION', '2.0.1');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -749,35 +749,58 @@ add_shortcode('societies_search', function($atts) {
       padding-left:0!important;padding-right:0!important}
     .container,.site-inner,.content-wrap,.wrapper{max-width:100%!important;padding:0!important}
 
-    /* ── Hero pleine largeur sans fond bleu ── */
-    .sc-hero{background:#fff;border-bottom:1px solid #e8edf3;
-             position:relative;left:50%;right:50%;
-             margin-left:-50vw;margin-right:-50vw;width:100vw;
-             padding:64px 20px 52px;text-align:center}
-    .sc-hero-title{font-size:38px;font-weight:800;color:#1a2744;margin:0 0 8px;letter-spacing:-.5px}
-    .sc-hero-sub{font-size:16px;color:#6b7280;margin:0 0 32px}
-    .sc-hero-bar{max-width:960px;margin:0 auto;
-                 display:flex;align-items:center;gap:0;
-                 background:#fff;border:2px solid #e2e8f0;border-radius:16px;
-                 box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden}
+    /* ── Force pleine largeur Elementor ── */
+    .elementor-section:has(.sc-hero),.elementor-section:has(.sc-body),
+    .elementor-section:has(.sc-wrap){padding:0!important;margin:0!important}
+    .elementor-section:has(.sc-hero) .elementor-container,
+    .elementor-section:has(.sc-body) .elementor-container,
+    .elementor-section:has(.sc-wrap) .elementor-container{max-width:100%!important;padding:0!important}
+    .elementor-section:has(.sc-hero) .elementor-column,
+    .elementor-section:has(.sc-body) .elementor-column,
+    .elementor-section:has(.sc-wrap) .elementor-column{width:100%!important;padding:0!important}
+    .elementor-section:has(.sc-hero) .elementor-widget-container,
+    .elementor-section:has(.sc-body) .elementor-widget-container,
+    .elementor-section:has(.sc-wrap) .elementor-widget-container{padding:0!important}
+
+    /* ── Hero ── */
+    .sc-hero{background:#f8fafc;border-bottom:2px solid #e8edf3;
+             width:100%;padding:56px 40px 48px;text-align:center;box-sizing:border-box}
+    .sc-hero-title{font-size:40px;font-weight:900;color:#1a2744;margin:0 0 10px;
+                   letter-spacing:-1px;line-height:1.15}
+    .sc-hero-sub{font-size:16px;color:#64748b;margin:0 0 36px;max-width:500px;
+                 display:block;margin-left:auto;margin-right:auto}
+
+    /* Barre de recherche */
+    .sc-hero-bar{max-width:900px;margin:0 auto;display:flex;align-items:stretch;
+                 background:#fff;border:1.5px solid #dde3ec;border-radius:18px;
+                 box-shadow:0 6px 32px rgba(26,39,68,.08);overflow:hidden;height:68px}
     .sc-hero-field{display:flex;align-items:center;flex:1;min-width:0;
-                   border-right:1px solid #e2e8f0;padding:0 16px}
-    .sc-hero-field:last-of-type{border-right:none}
-    .sc-hero-field-icon{font-size:16px;margin-right:8px;flex-shrink:0;color:#94a3b8}
-    .sc-hero-field-wrap{display:flex;flex-direction:column;flex:1;min-width:0}
-    .sc-hero-field-label{font-size:10px;font-weight:700;text-transform:uppercase;
-                         letter-spacing:.6px;color:#94a3b8;margin-bottom:1px}
-    .sc-hero-input{width:100%;border:none;outline:none;font-size:14px;color:#1f2937;
-                   background:transparent;padding:12px 0 8px}
-    .sc-hero-input::placeholder{color:#b0b8c4}
-    .sc-hero-btn{background:#e63946;border:none;border-radius:0 13px 13px 0;
-                 padding:0 28px;height:100%;min-height:60px;cursor:pointer;
-                 font-size:15px;font-weight:700;color:#fff;white-space:nowrap;
-                 display:flex;align-items:center;gap:8px;transition:background .2s;flex-shrink:0}
-    .sc-hero-btn:hover{background:#c82333}
-    .sc-hero-stats{display:flex;gap:32px;justify-content:center;margin-top:24px;flex-wrap:wrap}
-    .sc-hero-stat{color:#6b7280;font-size:13px;text-align:center}
-    .sc-hero-stat strong{color:#1a2744;font-size:22px;font-weight:800;display:block}
+                   border-right:1.5px solid #e8edf3;padding:0 20px;position:relative}
+    .sc-hero-field:hover{background:#fafbfc}
+    .sc-hero-field-icon{font-size:18px;margin-right:10px;flex-shrink:0}
+    .sc-hero-field-wrap{display:flex;flex-direction:column;flex:1;min-width:0;justify-content:center}
+    .sc-hero-field-label{font-size:10px;font-weight:800;text-transform:uppercase;
+                         letter-spacing:.8px;color:#e63946;margin-bottom:3px}
+    .sc-hero-input{width:100%;border:none;outline:none;font-size:14px;font-weight:500;
+                   color:#1f2937;background:transparent;padding:0;line-height:1.4}
+    .sc-hero-input::placeholder{color:#c4cdd8;font-weight:400}
+    .sc-hero-btn{background:linear-gradient(135deg,#e63946,#c82333);border:none;
+                 padding:0 32px;cursor:pointer;font-size:15px;font-weight:700;color:#fff;
+                 white-space:nowrap;display:flex;align-items:center;gap:8px;
+                 transition:opacity .2s;flex-shrink:0;letter-spacing:.2px}
+    .sc-hero-btn:hover{opacity:.9}
+
+    /* Stats */
+    .sc-hero-stats{display:flex;gap:0;justify-content:center;margin-top:28px;
+                   max-width:560px;margin-left:auto;margin-right:auto;
+                   background:#fff;border:1.5px solid #e8edf3;border-radius:14px;
+                   overflow:hidden}
+    .sc-hero-stat{flex:1;padding:14px 20px;text-align:center;border-right:1.5px solid #e8edf3}
+    .sc-hero-stat:last-child{border-right:none}
+    .sc-hero-stat strong{color:#1a2744;font-size:18px;font-weight:900;display:block;
+                         letter-spacing:-.3px}
+    .sc-hero-stat span{color:#94a3b8;font-size:11px;font-weight:500;text-transform:uppercase;
+                       letter-spacing:.4px}
 
     /* ── Body ── */
     .sc-body{width:100%;max-width:1400px;margin:0 auto;padding:32px 24px 60px;
@@ -830,15 +853,18 @@ add_shortcode('societies_search', function($atts) {
     .sc-more-btn:hover{background:#e63946}
 
     @media(max-width:860px){
-      .sc-hero-bar{flex-direction:column;border-radius:16px;overflow:visible;background:transparent;
-                   border:none;box-shadow:none;gap:10px}
-      .sc-hero-field{border:2px solid #e2e8f0;border-radius:12px;background:#fff;
-                     border-right:2px solid #e2e8f0!important}
-      .sc-hero-btn{border-radius:12px;width:100%;justify-content:center;min-height:50px}
+      .sc-hero{padding:36px 20px 32px}
+      .sc-hero-bar{flex-direction:column;height:auto;border-radius:16px;
+                   overflow:visible;background:transparent;border:none;
+                   box-shadow:none;gap:10px}
+      .sc-hero-field{border:1.5px solid #dde3ec;border-radius:12px;background:#fff;height:58px}
+      .sc-hero-btn{border-radius:12px;width:100%;justify-content:center;height:54px}
+      .sc-hero-stats{flex-direction:column;max-width:280px}
+      .sc-hero-stat{border-right:none;border-bottom:1.5px solid #e8edf3;padding:10px 16px}
+      .sc-hero-stat:last-child{border-bottom:none}
     }
     @media(max-width:640px){
-      .sc-hero{padding:40px 16px 36px;left:0;right:0;margin-left:0;margin-right:0;width:100%}
-      .sc-hero-title{font-size:26px}
+      .sc-hero-title{font-size:28px}
       .sc-grid{grid-template-columns:1fr}
     }
     </style>
@@ -881,9 +907,9 @@ add_shortcode('societies_search', function($atts) {
         <button class="sc-hero-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">🔍 Rechercher</button>
       </div>
       <div class="sc-hero-stats">
-        <div class="sc-hero-stat"><strong>4 600 000+</strong>entreprises référencées</div>
-        <div class="sc-hero-stat"><strong>⭐ 5.0</strong>note moyenne interne</div>
-        <div class="sc-hero-stat"><strong>Gratuit</strong>accès aux fiches</div>
+        <div class="sc-hero-stat"><strong>4 600 000+</strong><span>Entreprises</span></div>
+        <div class="sc-hero-stat"><strong>⭐ 5.0</strong><span>Note moyenne</span></div>
+        <div class="sc-hero-stat"><strong>100% Gratuit</strong><span>Accès aux fiches</span></div>
       </div>
     </div>
 
