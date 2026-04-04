@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.1.0
+ * Version:      2.1.1
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.1.0');
+define('SC_VERSION', '2.1.1');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -655,13 +655,13 @@ add_shortcode('societies_pricing', function($atts) {
     ob_start(); ?>
     <style>
     .scp-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-              padding:40px 20px 60px;max-width:1100px;margin:0 auto;text-align:center}
+              padding:40px 20px 60px;max-width:1300px;margin:0 auto;text-align:center}
     .scp-header{margin-bottom:48px}
     .scp-title{font-size:34px;font-weight:800;color:#1a2744;margin:0 0 12px}
     .scp-sub{font-size:16px;color:#6b7280;max-width:520px;margin:0 auto}
-    .scp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;text-align:left}
+    .scp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;text-align:left}
     .scp-card{background:#fff;border:2px solid #e8edf3;border-radius:20px;
-              padding:32px 28px;display:flex;flex-direction:column;gap:0;
+              padding:28px 22px;display:flex;flex-direction:column;gap:0;
               transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden}
     .scp-card:hover{transform:translateY(-6px);box-shadow:0 16px 48px rgba(0,0,0,.1)}
     .scp-card.featured{border-color:var(--sc-color,#10b981);box-shadow:0 8px 32px rgba(0,0,0,.08)}
@@ -687,7 +687,8 @@ add_shortcode('societies_pricing', function($atts) {
     .scp-features{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
     .scp-feature{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#374151;line-height:1.45}
     .scp-check{color:var(--sc-color,#10b981);font-size:16px;flex-shrink:0;margin-top:1px}
-    @media(max-width:640px){.scp-grid{grid-template-columns:1fr}.scp-title{font-size:26px}}
+    @media(max-width:1024px){.scp-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:600px){.scp-grid{grid-template-columns:1fr}.scp-title{font-size:26px}}
     </style>
 
     <div class="scp-wrap">
