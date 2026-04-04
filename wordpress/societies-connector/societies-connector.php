@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      1.9.7
+ * Version:      1.9.8
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '1.9.7');
+define('SC_VERSION', '1.9.8');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -938,11 +938,12 @@ function sc_search_ajax_handler() {
 
     $companies = $data['results'] ?? [];
 
-    // Résolution des permalinks via _sc_company_title meta
+    // Résolution des permalinks : meta _sc_company_title, sinon slug dérivé du titre
     $titles = array_column($companies, 'title');
     $url_map = [];
     if (!empty($titles)) {
         foreach ($titles as $t) {
+            // 1) via meta
             $pages = get_posts([
                 'post_type'   => 'page',
                 'post_status' => 'publish',
@@ -951,7 +952,20 @@ function sc_search_ajax_handler() {
                 'numberposts' => 1,
                 'fields'      => 'ids',
             ]);
-            if ($pages) $url_map[$t] = get_permalink($pages[0]);
+            if ($pages) { $url_map[$t] = get_permalink($pages[0]); continue; }
+            // 2) via slug dérivé du titre
+            $slug = sanitize_title($t);
+            $page = get_page_by_path($slug, OBJECT, 'page');
+            if ($page) { $url_map[$t] = get_permalink($page->ID); continue; }
+            // 3) via titre exact de la page
+            $by_title = get_posts([
+                'post_type'   => 'page',
+                'post_status' => 'publish',
+                'title'       => $t,
+                'numberposts' => 1,
+                'fields'      => 'ids',
+            ]);
+            if ($by_title) $url_map[$t] = get_permalink($by_title[0]);
         }
     }
 
