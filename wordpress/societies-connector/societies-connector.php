@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.1.4
+ * Version:      2.1.5
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.1.4');
+define('SC_VERSION', '2.1.5');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -900,6 +900,9 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-more-wrap{text-align:center;margin-top:32px}'
     . '.sc-more-btn{background:#1a2744;color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}'
     . '.sc-more-btn:hover{background:#e63946}'
+    . '.sc-advert{text-align:center;padding:14px 20px;margin-top:32px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}'
+    . '.sc-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}'
+    . '.sc-advert-link:hover{text-decoration:underline}'
     . '@media(max-width:640px){.sc-hero{padding:40px 16px 36px}.sc-hero-title{font-size:30px;letter-spacing:-1px}.sc-hero-bar{flex-direction:column!important;background:transparent;border:none;box-shadow:none;border-radius:0;gap:10px;overflow:visible;min-height:auto}.sc-hero-field{border:1.5px solid #e2e8f0;border-radius:14px;background:#fff;min-height:56px;box-shadow:0 1px 6px rgba(0,0,0,.06)}.sc-hero-btn{border-radius:12px;width:100%;aspect-ratio:auto;min-height:50px;margin:0}.sc-hero-stats{gap:8px;flex-wrap:wrap}.sc-hero-stat{padding:7px 12px}.sc-cats-grid{grid-template-columns:repeat(2,1fr)}.sc-grid{grid-template-columns:1fr}.sc-cats-section,.sc-results-wrap{padding-left:16px;padding-right:16px}}';
     echo '<style>' . $sc_css . '</style>';
     ?>
@@ -995,6 +998,13 @@ add_shortcode('societies_search', function($atts) {
       </div>
     </div>
     <?php endif; ?>
+
+    <!-- BANDEAU PUBLICITAIRE -->
+    <div class="sc-advert">
+      <a href="https://www.topsocietes.com" target="_blank" rel="noopener" class="sc-advert-link">
+        Créer gratuitement votre page entreprise TOPsocietes.com →
+      </a>
+    </div>
 
     </div><!-- .sc-wrap -->
 
