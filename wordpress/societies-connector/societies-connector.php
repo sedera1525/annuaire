@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.1.3
+ * Version:      2.1.4
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.1.3');
+define('SC_VERSION', '2.1.4');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1299,7 +1299,7 @@ add_shortcode('societies_fiche', function($atts) {
     $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
 
-    $claim_url = get_permalink(get_option('sc_client_page_id')) ?: home_url('/mon-entreprise/');
+    $claim_url = home_url('/revendiquer/');
     ob_start(); ?>
     <div class="sc2-wrap">
 
@@ -1551,7 +1551,7 @@ add_shortcode('societies_home', function() {
     $total_co   = number_format($status['rows'] ?? 0, 0, ',', ' ');
     $total_done = number_format($stats['done'] ?? 0, 0, ',', ' ');
     $logo_url   = rtrim(get_option('societies_api_url', ''), '/') . '/static/logo.jpg';
-    $claim_url  = get_permalink(get_option('sc_client_page_id')) ?: home_url('/mon-entreprise/');
+    $claim_url  = home_url('/revendiquer/');
 
     ob_start(); ?>
     <div class="sc-home">
