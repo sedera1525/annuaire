@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.1.5
+ * Version:      2.2.0
  * Author:       Societies
  * Text Domain:  societies
  */
@@ -1309,6 +1309,15 @@ add_shortcode('societies_fiche', function($atts) {
     $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
 
+    // Supprime les phrases contenant des notes/étoiles (ne doit apparaître qu'après abonnement)
+    if ($intro) {
+        $sentences = preg_split('/(?<=[.!?])\s+/u', $intro);
+        $filtered  = array_filter($sentences, function($s) {
+            return !preg_match('/étoile|\/5|\bavis\b|note.*sur|sur.*note|basée sur|moyenne de|satisfaction.*remarquable/iu', $s);
+        });
+        $intro = implode(' ', $filtered);
+    }
+
     $claim_url = home_url('/revendiquer/');
     ob_start(); ?>
     <div class="sc2-wrap">
@@ -1373,9 +1382,6 @@ add_shortcode('societies_fiche', function($atts) {
 
       <?php if (!empty($qa_open)): ?>
       <!-- CTA BULLE — visible avant la zone verrouillée (disparaît si abonné) -->
-      <div class="sc2-cta-bar">
-        <a href="<?= esc_url($claim_url) ?>" class="sc2-cta-bar-link">👉 Complétez votre fiche entreprise</a>
-      </div>
       <div class="sc2-cta-bubble">
         <div class="sc2-cta-bubble-title">Complétez gratuitement votre fiche entreprise pour :</div>
         <ul class="sc2-cta-bubble-list">
@@ -1499,10 +1505,7 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-nodata-link:hover{text-decoration:underline}
 
     /* CTA BULLE avant zone verrouillée */
-    .sc2-cta-bar{margin:24px 0 0;padding:12px 20px;background:#fff9f0;border:1.5px solid #fde68a;border-radius:10px}
-    .sc2-cta-bar-link{font-size:15px;font-weight:700;color:#1a2744;text-decoration:none}
-    .sc2-cta-bar-link:hover{color:#e63946;text-decoration:underline}
-    .sc2-cta-bubble{background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:12px;padding:20px 24px;margin:12px 0 24px}
+    .sc2-cta-bubble{background:#fff9f0;border:1.5px solid #fde68a;border-radius:12px;padding:20px 24px;margin:24px 0 24px}
     .sc2-cta-bubble-title{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:12px}
     .sc2-cta-bubble-list{margin:0 0 16px;padding:0 0 0 20px;list-style:none}
     .sc2-cta-bubble-list li{font-size:13px;color:#374151;padding:3px 0;padding-left:0;list-style:none}
@@ -1536,12 +1539,23 @@ add_shortcode('societies_fiche', function($atts) {
         echo '<script>
 (function(){
   function translateSidebar(){
-    document.querySelectorAll(".show-sidebar-button,.sidebar-toggle,[data-toggle=\"sidebar\"]").forEach(function(el){
-      if(el.textContent.trim()==="Show Sidebar") el.textContent="Afficher la barre lat\u00e9rale";
+    document.querySelectorAll("button,a,.show-sidebar-button,.btn-show-sidebar,.sidebar-toggle,[data-toggle]").forEach(function(el){
+      if(el.childElementCount===0&&el.textContent.trim()==="Show Sidebar"){
+        el.textContent="Afficher la barre lat\u00e9rale";
+      }
     });
+    // Cibler aussi les nœuds texte directs contenant "Show Sidebar"
+    var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);
+    var node;
+    while((node=walker.nextNode())){
+      if(node.nodeValue.trim()==="Show Sidebar") node.nodeValue="Afficher la barre lat\u00e9rale";
+    }
   }
   document.addEventListener("DOMContentLoaded",translateSidebar);
-  setTimeout(translateSidebar,800);
+  setTimeout(translateSidebar,500);
+  setTimeout(translateSidebar,1500);
+  var obs=new MutationObserver(function(){translateSidebar();});
+  obs.observe(document.body,{childList:true,subtree:true});
 })();
 </script>';
     }, 20);
@@ -3125,3 +3139,60 @@ function sc_enqueue_styles() {
 }
 
 add_action('wp_head', 'sc_enqueue_styles');
+
+// =============================================================================
+// FOOTER — Suppression Lorem Ipsum + pied de page personnalisé (retour-4)
+// =============================================================================
+
+// Vide les widgets texte contenant du Lorem Ipsum
+add_filter('widget_text_content', function($content) {
+    if (stripos($content, 'Lorem') !== false) return '';
+    return $content;
+}, 1);
+add_filter('widget_text', function($content) {
+    if (stripos($content, 'Lorem') !== false) return '';
+    return $content;
+}, 1);
+
+// Injecte le footer personnalisé (Contact + CGU/RGPD/CGV) avant la fermeture du body
+add_action('wp_footer', function() {
+    $cgu_url     = home_url('/cgu/');
+    $rgpd_url    = home_url('/rgpd/');
+    $cgv_url     = home_url('/cgv/');
+    $contact_url = home_url('/contact/');
+    echo '<div id="sc-site-footer" style="background:#2d2d2d;color:#fff;padding:40px 32px 24px;margin-top:0;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif">
+      <div style="max-width:1200px;margin:0 auto">
+        <div style="margin-bottom:28px">
+          <h3 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 16px">Contact</h3>
+          <a href="' . esc_url($contact_url) . '" style="color:#e2e8f0;font-size:14px;text-decoration:none;display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">&#128203;</span> Formulaire de contact
+          </a>
+        </div>
+        <div style="border-top:1px solid #38b2ac;padding-top:16px;font-size:13px;color:#a0aec0">
+          <a href="' . esc_url($cgu_url) . '" style="color:#a0aec0;text-decoration:none;margin-right:16px">CGU</a>
+          <a href="' . esc_url($rgpd_url) . '" style="color:#a0aec0;text-decoration:none;margin-right:16px">RGPD</a>
+          <a href="' . esc_url($cgv_url) . '" style="color:#a0aec0;text-decoration:none">CGV</a>
+        </div>
+      </div>
+    </div>
+    <style>
+      #sc-site-footer{display:none}
+      body.sc-show-footer #sc-site-footer{display:block}
+    </style>
+    <script>document.body.classList.add("sc-show-footer");</script>';
+}, 99);
+
+// Masque le footer Apus (Lorem Ipsum) via JS si présent
+add_action('wp_footer', function() {
+    echo '<script>
+(function(){
+  function cleanFooter(){
+    document.querySelectorAll("#apus-footer .textwidget,#apus-footer .widget_text,.footer-widget .textwidget").forEach(function(el){
+      if(el.textContent.indexOf("Lorem")>-1) el.closest(".widget,.elementor-widget")&&(el.closest(".widget,.elementor-widget").style.display="none");
+    });
+  }
+  document.addEventListener("DOMContentLoaded",cleanFooter);
+  setTimeout(cleanFooter,600);
+})();
+</script>';
+}, 98);
