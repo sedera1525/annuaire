@@ -29,6 +29,7 @@ if _SENTRY_DSN:
 from core.auth import (
     _CSRF_EXEMPT_PATHS, is_authenticated, touch_session, verify_csrf,
 )
+from core.license_guard import verify_license
 from core.config import ALLOWED_ORIGINS, COOKIE_NAME, CSRF_ENABLED, DB_PATH, LOG_DIR, STATIC_DIR
 from core.db import db_state, init_db
 from core.limiter import limiter
@@ -63,6 +64,7 @@ logger.addHandler(_ch)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    verify_license()
     init_fiches_db()
     if os.path.exists(DB_PATH):
         # Phase C — lit le flag SQLite pour éviter une reconnexion DuckDB inutile

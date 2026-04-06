@@ -11,11 +11,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from core.auth import require_admin
+from core.license_guard import get_fingerprint
 from models import LicenseVerifyRequest
 from services.fiches import _hash_key, get_setting, set_setting
 
 logger = logging.getLogger("societies")
 router = APIRouter(tags=["license"])
+
+
+@router.get("/license/fingerprint", dependencies=[Depends(require_admin)])
+def license_fingerprint():
+    """Retourne l'empreinte matérielle de ce serveur (pour générer une licence)."""
+    return {"fingerprint": get_fingerprint()}
 
 
 @router.get("/license/status")

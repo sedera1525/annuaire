@@ -20,3 +20,5 @@ docs/
 docker-compose.prod.yml
  .claude/settings.json
  mailpit-smtp.php
+scripts/generate_license.py
+license.key
