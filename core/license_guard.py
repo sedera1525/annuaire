@@ -31,30 +31,17 @@ _PUBLIC_KEY_B64 = "9GbKYowAOKoXiQPhRoakdnNQsAMT1jbLWs0FTRJk0h0="
 
 def _get_fingerprint() -> str:
     """
-    Fingerprint basé uniquement sur des éléments stables du serveur hôte.
-    - /etc/machine-id  : identifiant unique de la machine hôte (stable, même dans Docker)
-    - hostname         : nom du serveur
-    Ces deux éléments ne changent pas au redémarrage du container.
+    Fingerprint basé sur /etc/machine-id du serveur hôte uniquement.
+    Stable même après redémarrage du container Docker.
     """
-    parts = []
-
-    # machine-id du serveur hôte (monté dans Docker si configuré, sinon celui du container)
     for path in ["/etc/machine-id", "/var/lib/dbus/machine-id"]:
         try:
             mid = Path(path).read_text().strip()
             if mid:
-                parts.append(mid)
-                break
+                return hashlib.sha256(mid.encode()).hexdigest()[:32]
         except Exception:
             pass
-
-    if not parts:
-        parts.append("no-machine-id")
-
-    # Hostname (stable sur le serveur hôte)
-    parts.append(platform.node() or "no-host")
-
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:32]
+    return hashlib.sha256(b"no-machine-id").hexdigest()[:32]
 
 
 def get_fingerprint() -> str:
