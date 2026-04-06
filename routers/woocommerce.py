@@ -172,6 +172,24 @@ def update_pack(pack_id: int, data: PackRequest):
     return {"ok": True}
 
 
+@router.patch("/wc/packs/{pack_id}/wc-id", dependencies=[Depends(require_admin)])
+def set_pack_wc_id(pack_id: int, wc_product_id: int):
+    """Associe un produit WooCommerce existant à un pack."""
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        affected = conn.execute(
+            "UPDATE subscription_packs SET wc_product_id=?, updated_at=datetime('now') WHERE id=?",
+            [wc_product_id, pack_id],
+        ).rowcount
+        conn.commit()
+    finally:
+        conn.close()
+    if not affected:
+        raise HTTPException(status_code=404, detail="Pack introuvable")
+    logger.info(f"Pack id={pack_id} associé au produit WC #{wc_product_id}")
+    return {"ok": True, "pack_id": pack_id, "wc_product_id": wc_product_id}
+
+
 @router.delete("/wc/packs/{pack_id}", dependencies=[Depends(require_admin)])
 def delete_pack(pack_id: int):
     conn = sqlite3.connect(FICHES_DB)
