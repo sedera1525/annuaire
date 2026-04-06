@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.1.2
+ * Version:      2.1.3
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.1.2');
+define('SC_VERSION', '2.1.3');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1349,7 +1349,7 @@ add_shortcode('societies_fiche', function($atts) {
       <?php if (!empty($qa_answered)): ?>
       <!-- Q&A RÉPONDUES -->
       <div class="sc2-section">
-        <h2 class="sc2-section-title">Ce que pensent les clients</h2>
+        <h2 class="sc2-section-title">Analyse actuelle de l'entreprise</h2>
         <div class="sc2-qa-grid">
           <?php foreach ($qa_answered as $item): ?>
           <div class="sc2-qa-card">
