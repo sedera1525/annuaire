@@ -717,6 +717,18 @@
     </div>
     <div id="subsTable" style="font-size:13px;color:var(--muted)">Cliquez sur Rafraîchir pour charger les abonnés.</div>
   </div>
+
+  <!-- EMAILS COLLECTÉS -->
+  <div style="margin-top:40px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0;font-size:16px;color:var(--text)">📧 Emails collectés (popup visiteurs)</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="exportEmailsCsv()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:13px;cursor:pointer">⬇️ Exporter CSV</button>
+        <button onclick="loadCollectedEmails()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:13px;cursor:pointer">🔄 Rafraîchir</button>
+      </div>
+    </div>
+    <div id="emailsTable" style="font-size:13px;color:var(--muted)">Cliquez sur Rafraîchir pour charger les emails.</div>
+  </div>
 </div>
 
 <!-- Modal Pack -->
@@ -1771,7 +1783,7 @@ function showView(view) {
   document.getElementById('navFiches').classList.toggle('active',      view === 'fiches');
   document.getElementById('navAbonnements').classList.toggle('active', view === 'abonnements');
   if (view === 'fiches') loadFiches();
-  if (view === 'abonnements') loadPacks();
+  if (view === 'abonnements') { loadPacks(); loadCollectedEmails(); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2553,6 +2565,55 @@ async function loadSubscriptions() {
   } catch(e) {
     el.textContent = '❌ Erreur : ' + e.message;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EMAILS COLLECTÉS
+// ═══════════════════════════════════════════════════════════════════════
+async function loadCollectedEmails() {
+  const el = document.getElementById('emailsTable');
+  el.innerHTML = '🔄 Chargement...';
+  try {
+    const r = await fetch('/api/emails');
+    if (!r.ok) { el.textContent = '❌ Erreur ' + r.status; return; }
+    const d = await r.json();
+    const rows = d.emails || [];
+    if (!rows.length) { el.textContent = 'Aucun email collecté pour l\'instant.'; return; }
+    el.innerHTML = `
+      <div style="color:var(--muted);font-size:12px;margin-bottom:8px">${rows.length} email(s) collecté(s)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:8px 12px;color:var(--muted);font-weight:600">Email</th>
+            <th style="text-align:left;padding:8px 12px;color:var(--muted);font-weight:600">Page source</th>
+            <th style="text-align:left;padding:8px 12px;color:var(--muted);font-weight:600">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(e => `
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 12px;font-weight:500">${escHtml(e.email)}</td>
+            <td style="padding:8px 12px;color:var(--muted);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(e.source_url||'')}">${escHtml(e.source_page||e.source_url||'—')}</td>
+            <td style="padding:8px 12px;color:var(--muted)">${(e.collected_at||'').replace('T',' ').substring(0,16)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    window._collectedEmails = rows;
+  } catch(e) {
+    el.textContent = '❌ Erreur : ' + e.message;
+  }
+}
+
+function exportEmailsCsv() {
+  const rows = window._collectedEmails || [];
+  if (!rows.length) { alert('Aucun email à exporter. Rafraîchissez d\'abord la liste.'); return; }
+  const csv = ['Email,Page source,Date collecte']
+    .concat(rows.map(e => `"${e.email}","${e.source_page||e.source_url||''}","${e.collected_at||''}"`))
+    .join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'emails-collectes-' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
 }
 
 // --- Publication page recherche WP ---

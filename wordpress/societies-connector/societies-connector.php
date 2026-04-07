@@ -3216,3 +3216,65 @@ add_action('wp_footer', function() {
   </div>
 </div>';
 }, 99);
+
+// =============================================================================
+// SESSION PERSISTANTE 30 JOURS (point 12)
+// =============================================================================
+add_filter('auth_cookie_expiration', function($expiration, $user_id, $remember) {
+    return 30 * DAY_IN_SECONDS; // 30 jours quelle que soit l'option "se souvenir de moi"
+}, 10, 3);
+
+// =============================================================================
+// POPUP COLLECTE EMAIL VISITEURS (point 11)
+// =============================================================================
+add_action('wp_footer', function() {
+    if (is_user_logged_in()) return; // Pas de popup pour les connectés
+    $api_url = rtrim(get_option('societies_api_url', ''), '/');
+    if (!$api_url) return;
+    ?>
+<div id="sc-email-popup" style="display:none;position:fixed;bottom:24px;right:24px;z-index:99999;width:320px;background:#1a2744;border-radius:14px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.4);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <button onclick="scClosePopup()" style="position:absolute;top:10px;right=14px;background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1">✕</button>
+  <p style="color:#fff;font-size:15px;font-weight:700;margin:0 0 6px">📬 Restez informé</p>
+  <p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5">Recevez nos actualités et offres exclusives sur les entreprises françaises.</p>
+  <div style="display:flex;gap:8px">
+    <input id="sc-popup-email" type="email" placeholder="votre@email.fr" style="flex:1;padding:9px 12px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff;font-size:13px;outline:none">
+    <button onclick="scSubmitEmail()" style="background:#e63946;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">OK</button>
+  </div>
+  <p id="sc-popup-msg" style="font-size:12px;color:#10b981;margin:8px 0 0;min-height:16px"></p>
+</div>
+<script>
+(function(){
+  var POPUP_KEY='sc_email_popup_shown';
+  if(localStorage.getItem(POPUP_KEY)) return;
+  setTimeout(function(){
+    var el=document.getElementById('sc-email-popup');
+    if(el) el.style.display='block';
+  }, 8000);
+  window.scClosePopup=function(){
+    document.getElementById('sc-email-popup').style.display='none';
+    localStorage.setItem(POPUP_KEY,'1');
+  };
+  window.scSubmitEmail=function(){
+    var email=document.getElementById('sc-popup-email').value.trim();
+    var msg=document.getElementById('sc-popup-msg');
+    if(!email||!email.includes('@')){msg.style.color='#ef4444';msg.textContent='Email invalide.';return;}
+    msg.style.color='#94a3b8';msg.textContent='Envoi...';
+    fetch('<?= esc_js($api_url) ?>/api/emails/collect',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:email,source_url:location.href,source_page:document.title})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        msg.style.color='#10b981';
+        msg.textContent='✅ Merci ! Vous êtes bien inscrit.';
+        localStorage.setItem(POPUP_KEY,'1');
+        setTimeout(function(){document.getElementById('sc-email-popup').style.display='none';},2500);
+      } else {
+        msg.style.color='#ef4444';msg.textContent=d.error||'Erreur.';
+      }
+    }).catch(function(){msg.style.color='#ef4444';msg.textContent='Erreur réseau.';});
+  };
+})();
+</script>
+<?php
+}, 100);
