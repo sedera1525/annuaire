@@ -3141,7 +3141,7 @@ function sc_enqueue_styles() {
 add_action('wp_head', 'sc_enqueue_styles');
 
 // =============================================================================
-// FOOTER — Suppression Lorem Ipsum + pied de page personnalisé (retour-4)
+// FOOTER — Masquage colonnes thème + footer personnalisé en bas (retour-4)
 // =============================================================================
 
 // Vide les widgets texte contenant du Lorem Ipsum
@@ -3154,45 +3154,68 @@ add_filter('widget_text', function($content) {
     return $content;
 }, 1);
 
-// Injecte le footer personnalisé (Contact + CGU/RGPD/CGV) avant la fermeture du body
+// CSS global : masque les colonnes du footer thème (logo, Liens utiles, Contact fictif)
+// mais conserve la barre copyright (.footer-bottom / .copyright-bar)
+add_action('wp_head', function() {
+    echo '<style id="sc-footer-hide">
+#apus-footer .footer-widgets,
+#apus-footer .apus-footer-top,
+#apus-footer .footer-top,
+#apus-footer .footer-main,
+#apus-footer>.container>.row:first-child,
+.apus-footer-widgets,
+.footer-widget-area{display:none!important}
+</style>';
+}, 5);
+
+// JS : fallback — masque les colonnes footer thème et les widgets Lorem Ipsum
+add_action('wp_footer', function() {
+    echo '<script>
+(function(){
+  function fixFooter(){
+    // Masquer colonnes thème footer (pas le copyright)
+    var footer=document.querySelector("#apus-footer,footer.apus-footer");
+    if(footer){
+      Array.from(footer.children).forEach(function(c){
+        var cls=c.className||"";
+        var isCopy=/copyright|footer-bottom|bottom/i.test(cls)||/copyright/i.test(c.innerHTML);
+        if(!isCopy) c.style.display="none";
+      });
+    }
+    // Masquer widgets Lorem Ipsum
+    document.querySelectorAll(".textwidget,.widget_text").forEach(function(el){
+      if(el.textContent.indexOf("Lorem")>-1){
+        var w=el.closest(".widget,.elementor-widget,.footer-widget");
+        if(w) w.style.display="none";
+      }
+    });
+  }
+  document.addEventListener("DOMContentLoaded",fixFooter);
+  setTimeout(fixFooter,400);
+})();
+</script>';
+}, 98);
+
+// Footer personnalisé injecté APRÈS le footer thème (contact + CGU/RGPD/CGV)
 add_action('wp_footer', function() {
     $cgu_url     = home_url('/cgu/');
     $rgpd_url    = home_url('/rgpd/');
     $cgv_url     = home_url('/cgv/');
     $contact_url = home_url('/contact/');
-    echo '<div id="sc-site-footer" style="background:#2d2d2d;color:#fff;padding:40px 32px 24px;margin-top:0;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif">
-      <div style="max-width:1200px;margin:0 auto">
-        <div style="margin-bottom:28px">
-          <h3 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 16px">Contact</h3>
-          <a href="' . esc_url($contact_url) . '" style="color:#e2e8f0;font-size:14px;text-decoration:none;display:flex;align-items:center;gap:8px">
-            <span style="font-size:16px">&#128203;</span> Formulaire de contact
-          </a>
-        </div>
-        <div style="border-top:1px solid #38b2ac;padding-top:16px;font-size:13px;color:#a0aec0">
-          <a href="' . esc_url($cgu_url) . '" style="color:#a0aec0;text-decoration:none;margin-right:16px">CGU</a>
-          <a href="' . esc_url($rgpd_url) . '" style="color:#a0aec0;text-decoration:none;margin-right:16px">RGPD</a>
-          <a href="' . esc_url($cgv_url) . '" style="color:#a0aec0;text-decoration:none">CGV</a>
-        </div>
-      </div>
+    echo '
+<div id="sc-custom-footer" style="background:#2b2f3a;color:#cbd5e1;padding:32px 32px 20px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;font-size:14px">
+  <div style="max-width:1200px;margin:0 auto">
+    <div style="margin-bottom:20px">
+      <p style="color:#fff;font-size:15px;font-weight:700;margin:0 0 12px 0">Contact</p>
+      <a href="' . esc_url($contact_url) . '" style="color:#cbd5e1;text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+        &#128203; Formulaire de contact
+      </a>
     </div>
-    <style>
-      #sc-site-footer{display:none}
-      body.sc-show-footer #sc-site-footer{display:block}
-    </style>
-    <script>document.body.classList.add("sc-show-footer");</script>';
+    <div style="border-top:1px solid #38b2ac;padding-top:14px;font-size:12px;color:#718096;display:flex;gap:20px;flex-wrap:wrap">
+      <a href="' . esc_url($cgu_url) . '" style="color:#718096;text-decoration:none">CGU</a>
+      <a href="' . esc_url($rgpd_url) . '" style="color:#718096;text-decoration:none">RGPD</a>
+      <a href="' . esc_url($cgv_url) . '" style="color:#718096;text-decoration:none">CGV</a>
+    </div>
+  </div>
+</div>';
 }, 99);
-
-// Masque le footer Apus (Lorem Ipsum) via JS si présent
-add_action('wp_footer', function() {
-    echo '<script>
-(function(){
-  function cleanFooter(){
-    document.querySelectorAll("#apus-footer .textwidget,#apus-footer .widget_text,.footer-widget .textwidget").forEach(function(el){
-      if(el.textContent.indexOf("Lorem")>-1) el.closest(".widget,.elementor-widget")&&(el.closest(".widget,.elementor-widget").style.display="none");
-    });
-  }
-  document.addEventListener("DOMContentLoaded",cleanFooter);
-  setTimeout(cleanFooter,600);
-})();
-</script>';
-}, 98);
