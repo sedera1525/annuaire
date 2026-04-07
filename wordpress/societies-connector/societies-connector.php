@@ -3158,7 +3158,7 @@ add_filter('widget_text', function($content) {
 // Section a3b0e40 = colonnes → cachée ; section 4b67268 = copyright → conservée
 add_action('wp_head', function() {
     echo '<style id="sc-footer-hide">
-.elementor-element-a3b0e40{display:none!important}
+.elementor-element-a3b0e40,.elementor-element-4b67268{display:none!important}
 </style>';
 }, 5);
 
@@ -3209,6 +3209,9 @@ add_action('wp_footer', function() {
       <a href="' . esc_url($cgu_url) . '" style="color:#718096;text-decoration:none">CGU</a>
       <a href="' . esc_url($rgpd_url) . '" style="color:#718096;text-decoration:none">RGPD</a>
       <a href="' . esc_url($cgv_url) . '" style="color:#718096;text-decoration:none">CGV</a>
+    </div>
+    <div style="border-top:1px solid #2d3748;margin-top:16px;padding-top:14px;font-size:12px;color:#4a5568;text-align:center">
+      Copyright &copy; ' . date('Y') . ' TOPsocietes.com
     </div>
   </div>
 </div>';
