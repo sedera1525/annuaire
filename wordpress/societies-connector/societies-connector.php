@@ -3154,17 +3154,11 @@ add_filter('widget_text', function($content) {
     return $content;
 }, 1);
 
-// CSS global : masque les colonnes du footer thème (logo, Liens utiles, Contact fictif)
-// mais conserve la barre copyright (.footer-bottom / .copyright-bar)
+// CSS global : masque la section Elementor des colonnes footer (logo, Liens utiles, Contact fictif)
+// Section a3b0e40 = colonnes → cachée ; section 4b67268 = copyright → conservée
 add_action('wp_head', function() {
     echo '<style id="sc-footer-hide">
-#apus-footer .footer-widgets,
-#apus-footer .apus-footer-top,
-#apus-footer .footer-top,
-#apus-footer .footer-main,
-#apus-footer>.container>.row:first-child,
-.apus-footer-widgets,
-.footer-widget-area{display:none!important}
+.elementor-element-a3b0e40{display:none!important}
 </style>';
 }, 5);
 

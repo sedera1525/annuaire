@@ -19,11 +19,21 @@ jobs:
             cd /opt/societies
             git pull origin main
             docker compose -f docker-compose.prod.yml up -d --build
-            # Sync plugin WordPress (fichiers PHP hors Docker)
-            WP_PLUGIN_DIR="/var/www/html/wp-content/plugins/societies-connector"
-            if [ -d "$WP_PLUGIN_DIR" ]; then
-              rsync -a --delete /opt/societies/wordpress/societies-connector/ "$WP_PLUGIN_DIR/"
-              echo "✅ Plugin WordPress synchronisé"
+            # Auto-détection du chemin WordPress et sync du plugin
+            WP_PLUGIN_DIR=$(find /var/www -name "wp-content" -type d 2>/dev/null | head -1)
+            if [ -z "$WP_PLUGIN_DIR" ]; then
+              WP_PLUGIN_DIR=$(find /home -name "wp-content" -type d 2>/dev/null | head -1)
+            fi
+            if [ -n "$WP_PLUGIN_DIR" ]; then
+              DEST="$WP_PLUGIN_DIR/plugins/societies-connector"
+              mkdir -p "$DEST"
+              rsync -a --delete /opt/societies/wordpress/societies-connector/ "$DEST/"
+              echo "✅ Plugin WordPress synchronisé → $DEST"
+              # Activer le plugin si wp-cli est disponible
+              WP_ROOT="${WP_PLUGIN_DIR%/wp-content}"
+              if command -v wp &>/dev/null; then
+                wp plugin activate societies-connector --path="$WP_ROOT" --allow-root 2>/dev/null && echo "✅ Plugin activé" || true
+              fi
             else
-              echo "⚠️  Répertoire plugin WP introuvable : $WP_PLUGIN_DIR"
+              echo "⚠️  wp-content introuvable sur ce serveur"
             fi
