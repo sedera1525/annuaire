@@ -9,7 +9,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.1.5');
+define('SC_VERSION', '2.2.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
