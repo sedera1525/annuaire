@@ -2628,7 +2628,7 @@ async function fixIntros() {
       el.innerHTML = `⏳ Batch ${batch} — offset ${offset} — corrigées : <b>${totalFixed}</b> | erreurs : ${totalErrors}`;
       const r = await fetch('/api/generate/fix-intros', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: csrfHeaders(),
         body: JSON.stringify({offset, concurrency: 6})
       });
       if (!r.ok) { el.textContent = '❌ Erreur HTTP ' + r.status; break; }
