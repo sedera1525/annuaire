@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.3.0
+ * Version:      2.4.0
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.3.0');
+define('SC_VERSION', '2.4.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1357,16 +1357,13 @@ add_shortcode('societies_fiche', function($atts) {
 
       <!-- DISCLAIMER NOTE déplacé en bas de page -->
 
+      <?php if (!empty($qa_answered)): ?>
+      <!-- Q&A RÉPONDUES — intro affichée juste avant -->
       <?php if ($intro && $status === 'done'): ?>
-      <!-- PRÉSENTATION -->
       <div class="sc2-intro-card">
-        <div class="sc2-intro-label">Présentation</div>
         <p class="sc2-intro-text"><?= nl2br(esc_html($intro)) ?></p>
       </div>
       <?php endif; ?>
-
-      <?php if (!empty($qa_answered)): ?>
-      <!-- Q&A RÉPONDUES -->
       <div class="sc2-section">
         <h2 class="sc2-section-title">Analyse actuelle de l'entreprise</h2>
         <div class="sc2-qa-grid">
@@ -1464,7 +1461,6 @@ add_shortcode('societies_fiche', function($atts) {
     /* INTRO */
     .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:6px 12px;margin-bottom:12px}
     .sc2-intro-card{background:#1a2744;border-radius:12px;padding:24px 28px;margin-bottom:16px}
-    .sc2-intro-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px;color:#94a3b8}
     .sc2-intro-text{margin:0;color:#e2e8f0;line-height:1.8;font-size:15px}
 
     /* SECTIONS */

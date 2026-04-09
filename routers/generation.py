@@ -4,12 +4,14 @@ Societies — Endpoints de génération OpenAI (simple, stream, batch)
 import json
 import logging
 import re
+import sqlite3
 from datetime import datetime
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from core.config import OPENAI_MODEL, OPENAI_TIMEOUT
+from core.auth import require_admin
+from core.config import FICHES_DB, OPENAI_MODEL, OPENAI_TIMEOUT
 from core.db import fetch_company
 from core.limiter import limiter
 from core.utils import format_date_fr, sse
@@ -280,4 +282,93 @@ async def generate_batch(request: Request, data: BatchRequest):
         "errors":       error_count,
         "already_done": len(results) - done_count - error_count,
         "concurrency":  concurrency,
+    }
+
+
+# =============================================================================
+# RE-GÉNÉRATION DES INTROS EXISTANTES (correction incohérences prompt)
+# =============================================================================
+
+@router.post("/generate/fix-intros", dependencies=[Depends(require_admin)])
+async def fix_existing_intros(data: dict = Body(default={})):
+    """
+    Re-génère uniquement le champ intro_text des fiches déjà générées (status=done).
+    Utilise le prompt amélioré pour corriger les "Cependant...", "La majorité..." sans antécédent, etc.
+    Paramètres optionnels : limit (défaut 50), concurrency (défaut 5).
+    """
+    import asyncio
+    limit       = min(int(data.get("limit", 50)), 500)
+    concurrency = min(int(data.get("concurrency", 5)), 10)
+    api_key     = get_openai_key()
+
+    # Récupère les fiches done avec intro_text
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        rows = conn.execute(
+            "SELECT id, company_title FROM fiches "
+            "WHERE status='done' AND intro_text IS NOT NULL AND intro_text != '' "
+            "ORDER BY generated_at DESC LIMIT ?",
+            [limit],
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return {"message": "Aucune fiche à corriger.", "fixed": 0, "errors": 0}
+
+    semaphore = asyncio.Semaphore(concurrency)
+    fixed = 0
+    errors = 0
+
+    async def _fix_one(fiche_id: int, title: str) -> dict:
+        async with semaphore:
+            try:
+                company = fetch_company(title) or {}
+                prompt = build_prompt(
+                    title=title,
+                    category=company.get("category"),
+                    city=company.get("city"),
+                    zip_code=company.get("zip_code"),
+                    rating_value=company.get("rating_value"),
+                    rating_votes=company.get("rating_votes"),
+                )
+                # Prompt ciblé : on ne demande que l'intro
+                intro_prompt = prompt.replace(
+                    'génère :\n1. Un texte introductif',
+                    'génère UNIQUEMENT :\n1. Un texte introductif'
+                ) + "\n\nIMPORTANT : Réponds avec un JSON contenant UNIQUEMENT la clé \"intro\", \"bonus\" et \"qa_answered\" (qa_answered peut être une liste vide [])."
+
+                result = await call_openai(api_key, OPENAI_MODEL, OPENAI_TIMEOUT, intro_prompt)
+                raw = result.get("content", "")
+                # Extrait le JSON
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if not m:
+                    raise ValueError("JSON non trouvé")
+                parsed = json.loads(m.group())
+                new_intro = parsed.get("intro", "").strip()
+                if not new_intro:
+                    raise ValueError("intro vide")
+                conn2 = sqlite3.connect(FICHES_DB)
+                try:
+                    conn2.execute(
+                        "UPDATE fiches SET intro_text=?, generated_at=datetime('now') WHERE id=?",
+                        [new_intro, fiche_id],
+                    )
+                    conn2.commit()
+                finally:
+                    conn2.close()
+                return {"title": title, "status": "fixed"}
+            except Exception as e:
+                logger.error(f"fix-intros error for '{title}': {e}")
+                return {"title": title, "status": "error", "error": str(e)}
+
+    results = await asyncio.gather(*[_fix_one(r[0], r[1]) for r in rows])
+    fixed  = sum(1 for r in results if r["status"] == "fixed")
+    errors = sum(1 for r in results if r["status"] == "error")
+
+    return {
+        "total":  len(results),
+        "fixed":  fixed,
+        "errors": errors,
+        "details": results,
     }

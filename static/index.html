@@ -687,6 +687,7 @@
       <button onclick="openWcSettingsModal()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 14px;font-size:13px;cursor:pointer">⚙️ Clés API WooCommerce</button>
       <button onclick="syncPacksToWc()" id="btnSyncPacks" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">🔄 Synchroniser les packs → WooCommerce</button>
       <button onclick="publishSearchPage()" id="btnPublishSearch" style="background:#6c8aff;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">📄 Publier page recherche → WP</button>
+      <button onclick="fixIntros()" id="btnFixIntros" style="background:#f59e0b;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer" title="Corrige les incohérences de style dans les introductions (Cependant, La majorité sans antécédent...)">✏️ Corriger intros (50)</button>
     </div>
   </div>
 
@@ -2601,6 +2602,30 @@ async function loadCollectedEmails() {
     window._collectedEmails = rows;
   } catch(e) {
     el.textContent = '❌ Erreur : ' + e.message;
+  }
+}
+
+async function fixIntros() {
+  const btn = document.getElementById('btnFixIntros');
+  const el  = document.getElementById('wcSyncStatus');
+  const limit = prompt('Combien de fiches corriger ? (défaut 50, max 500)', '50');
+  if (limit === null) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Correction en cours...';
+  el.textContent = '⏳ Re-génération des intros en cours...';
+  try {
+    const r = await fetch('/api/generate/fix-intros', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({limit: parseInt(limit) || 50, concurrency: 5})
+    });
+    const d = await r.json();
+    el.textContent = `✅ Intros corrigées : ${d.fixed} / ${d.total} (${d.errors} erreurs)`;
+  } catch(e) {
+    el.textContent = '❌ Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✏️ Corriger intros (50)';
   }
 }
 
