@@ -292,33 +292,36 @@ async def generate_batch(request: Request, data: BatchRequest):
 @router.post("/generate/fix-intros", dependencies=[Depends(require_admin)])
 async def fix_existing_intros(data: dict = Body(default={})):
     """
-    Re-génère uniquement le champ intro_text des fiches déjà générées (status=done).
-    Utilise le prompt amélioré pour corriger les "Cependant...", "La majorité..." sans antécédent, etc.
-    Paramètres optionnels : limit (défaut 50), concurrency (défaut 5).
+    Re-génère intro_text de TOUTES les fiches status=done, par batches de 500.
+    Paramètre optionnel : concurrency (défaut 6), offset (reprendre depuis).
+    Retourne progression + total restant pour pouvoir être appelé en boucle.
     """
     import asyncio
-    limit       = min(int(data.get("limit", 50)), 500)
-    concurrency = min(int(data.get("concurrency", 5)), 10)
+    concurrency = min(int(data.get("concurrency", 6)), 15)
+    offset      = int(data.get("offset", 0))
+    batch_size  = 500
     api_key     = get_openai_key()
 
-    # Récupère les fiches done avec intro_text
+    # Compte le total
     conn = sqlite3.connect(FICHES_DB)
     try:
+        total_count = conn.execute(
+            "SELECT COUNT(*) FROM fiches WHERE status='done' AND intro_text IS NOT NULL AND intro_text != ''"
+        ).fetchone()[0]
         rows = conn.execute(
             "SELECT id, company_title FROM fiches "
             "WHERE status='done' AND intro_text IS NOT NULL AND intro_text != '' "
-            "ORDER BY generated_at DESC LIMIT ?",
-            [limit],
+            "ORDER BY id ASC LIMIT ? OFFSET ?",
+            [batch_size, offset],
         ).fetchall()
     finally:
         conn.close()
 
     if not rows:
-        return {"message": "Aucune fiche à corriger.", "fixed": 0, "errors": 0}
+        return {"message": "Toutes les fiches ont été traitées.", "fixed": 0, "errors": 0,
+                "total_done": total_count, "next_offset": None}
 
     semaphore = asyncio.Semaphore(concurrency)
-    fixed = 0
-    errors = 0
 
     async def _fix_one(fiche_id: int, title: str) -> dict:
         async with semaphore:
@@ -332,15 +335,8 @@ async def fix_existing_intros(data: dict = Body(default={})):
                     rating_value=company.get("rating_value"),
                     rating_votes=company.get("rating_votes"),
                 )
-                # Prompt ciblé : on ne demande que l'intro
-                intro_prompt = prompt.replace(
-                    'génère :\n1. Un texte introductif',
-                    'génère UNIQUEMENT :\n1. Un texte introductif'
-                ) + "\n\nIMPORTANT : Réponds avec un JSON contenant UNIQUEMENT la clé \"intro\", \"bonus\" et \"qa_answered\" (qa_answered peut être une liste vide [])."
-
-                result = await call_openai(api_key, OPENAI_MODEL, OPENAI_TIMEOUT, intro_prompt)
+                result = await call_openai(api_key, OPENAI_MODEL, OPENAI_TIMEOUT, prompt)
                 raw = result.get("content", "")
-                # Extrait le JSON
                 m = re.search(r'\{.*\}', raw, re.DOTALL)
                 if not m:
                     raise ValueError("JSON non trouvé")
@@ -351,24 +347,28 @@ async def fix_existing_intros(data: dict = Body(default={})):
                 conn2 = sqlite3.connect(FICHES_DB)
                 try:
                     conn2.execute(
-                        "UPDATE fiches SET intro_text=?, generated_at=datetime('now') WHERE id=?",
+                        "UPDATE fiches SET intro_text=? WHERE id=?",
                         [new_intro, fiche_id],
                     )
                     conn2.commit()
                 finally:
                     conn2.close()
-                return {"title": title, "status": "fixed"}
+                return {"status": "fixed"}
             except Exception as e:
-                logger.error(f"fix-intros error for '{title}': {e}")
-                return {"title": title, "status": "error", "error": str(e)}
+                logger.error(f"fix-intros '{title}': {e}")
+                return {"status": "error", "error": str(e)}
 
-    results = await asyncio.gather(*[_fix_one(r[0], r[1]) for r in rows])
-    fixed  = sum(1 for r in results if r["status"] == "fixed")
-    errors = sum(1 for r in results if r["status"] == "error")
+    results   = await asyncio.gather(*[_fix_one(r[0], r[1]) for r in rows])
+    fixed     = sum(1 for r in results if r["status"] == "fixed")
+    errors    = sum(1 for r in results if r["status"] == "error")
+    next_off  = offset + len(rows) if len(rows) == batch_size else None
 
     return {
-        "total":  len(results),
-        "fixed":  fixed,
-        "errors": errors,
-        "details": results,
+        "batch":       len(rows),
+        "fixed":       fixed,
+        "errors":      errors,
+        "offset":      offset,
+        "next_offset": next_off,       # None = terminé
+        "total_fiches": total_count,
+        "remaining":   max(0, total_count - offset - len(rows)),
     }
