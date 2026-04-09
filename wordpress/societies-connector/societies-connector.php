@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.4.1
+ * Version:      2.4.2
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.4.1');
+define('SC_VERSION', '2.4.2');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -835,7 +835,7 @@ add_shortcode('societies_search', function($atts) {
     }
     ob_start();
     // CSS sans ligne vide (double \n) pour éviter que wpautop/Elementor injecte </p><p> et casse le parsing CSS
-    $sc_css = '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.over-dark{display:none!important}'
+    $sc_css = '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,[class*="sidebar"]:not([class*="sc2"]),#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.over-dark{display:none!important}'
     . 'body{background:#fff!important;overflow-x:hidden}'
     . '#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
     . '.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#fff;box-sizing:border-box;overflow-x:hidden}'
@@ -1355,6 +1355,13 @@ add_shortcode('societies_fiche', function($atts) {
       </div>
       <?php endif; ?>
 
+      <!-- BONUS TEXT juste après le hero (①) -->
+      <?php if ($bonus_text && $status === 'done'): ?>
+      <div class="sc2-bonus-card">
+        <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
+      </div>
+      <?php endif; ?>
+
       <!-- DISCLAIMER NOTE déplacé en bas de page -->
 
       <?php if (!empty($qa_answered)): ?>
@@ -1406,13 +1413,6 @@ add_shortcode('societies_fiche', function($atts) {
           </div>
           <?php endforeach; ?>
         </div>
-      </div>
-      <?php endif; ?>
-
-      <?php if ($bonus_text && $status === 'done'): ?>
-      <!-- TEXTE BONUS IA -->
-      <div class="sc2-bonus-card">
-        <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
       </div>
       <?php endif; ?>
 

@@ -14,8 +14,8 @@ from .config import APP_PASSWORD, APP_USERNAME, COOKIE_NAME, FICHES_DB
 
 logger = logging.getLogger("societies")
 
-_SESSION_TIMEOUT = 900  # Déconnexion après 15 min d'inactivité
-_TOKEN_MAX_AGE   = 900  # Durée max du cookie (identique au timeout)
+_SESSION_TIMEOUT = 28800  # Déconnexion après 8h d'inactivité
+_TOKEN_MAX_AGE   = 28800  # Durée max du cookie (identique au timeout)
 CSRF_COOKIE_NAME    = "csrf_token"
 
 # Endpoints exemptés du contrôle CSRF (intégrations externes sans cookie)
@@ -139,7 +139,7 @@ def is_authenticated(request: Request) -> bool:
 
 
 def touch_session(request: Request, response: Response) -> None:
-    """Met à jour last_activity et renouvelle le cookie à chaque requête authentifiée."""
+    """Met à jour last_activity et renouvelle les cookies à chaque requête authentifiée."""
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return
@@ -156,3 +156,10 @@ def touch_session(request: Request, response: Response) -> None:
         COOKIE_NAME, token,
         httponly=True, samesite="lax", max_age=_TOKEN_MAX_AGE,
     )
+    # Renouvelle aussi le cookie CSRF pour éviter l'expiration sur opérations longues
+    csrf = request.cookies.get(CSRF_COOKIE_NAME, "")
+    if csrf:
+        response.set_cookie(
+            CSRF_COOKIE_NAME, csrf,
+            httponly=False, samesite="lax", max_age=_TOKEN_MAX_AGE,
+        )
