@@ -3225,15 +3225,16 @@ add_filter('auth_cookie_expiration', function($expiration, $user_id, $remember) 
 }, 10, 3);
 
 // =============================================================================
-// POPUP COLLECTE EMAIL VISITEURS (point 11)
+// POPUP COLLECTE EMAIL VISITEURS — DÉSACTIVÉ (réactiver en changeant false→true)
 // =============================================================================
+if (false) :
 add_action('wp_footer', function() {
-    if (is_user_logged_in()) return; // Pas de popup pour les connectés
+    if (is_user_logged_in()) return;
     $api_url = rtrim(get_option('societies_api_url', ''), '/');
     if (!$api_url) return;
     ?>
 <div id="sc-email-popup" style="display:none;position:fixed;bottom:24px;right:24px;z-index:99999;width:320px;background:#1a2744;border-radius:14px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.4);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-  <button onclick="scClosePopup()" style="position:absolute;top:10px;right=14px;background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1">✕</button>
+  <button onclick="scClosePopup()" style="position:absolute;top:10px;right:14px;background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1">✕</button>
   <p style="color:#fff;font-size:15px;font-weight:700;margin:0 0 6px">📬 Restez informé</p>
   <p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5">Recevez nos actualités et offres exclusives sur les entreprises françaises.</p>
   <div style="display:flex;gap:8px">
@@ -3278,3 +3279,58 @@ add_action('wp_footer', function() {
 </script>
 <?php
 }, 100);
+endif; // fin désactivation popup
+
+// =============================================================================
+// BANDEAU PUBLICITAIRE TOPSOCIETES.COM — affiché en bas de chaque page
+// =============================================================================
+add_action('wp_footer', function() {
+    echo '
+<div id="sc-promo-banner" style="
+    background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#1a2744 100%);
+    border-top:3px solid #e63946;
+    padding:18px 32px;
+    font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;
+    position:relative;
+    overflow:hidden;
+">
+  <!-- Décoration fond -->
+  <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;background:rgba(230,57,70,.08);border-radius:50%"></div>
+  <div style="position:absolute;bottom:-60px;left:10%;width:220px;height:220px;background:rgba(37,99,235,.06);border-radius:50%"></div>
+
+  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;position:relative;z-index:1">
+
+    <!-- Texte gauche -->
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="background:#e63946;border-radius:10px;padding:10px 14px;flex-shrink:0">
+        <span style="font-size:22px">🌍</span>
+      </div>
+      <div>
+        <p style="margin:0 0 3px;font-size:16px;font-weight:800;color:#fff;letter-spacing:.2px">
+          Créez votre société — <span style="color:#fbbf24">0 impôt société</span>
+        </p>
+        <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.4">
+          Europe · Asie · USA &nbsp;|&nbsp; <span style="color:#e2e8f0">+ Introduction bancaire incluse</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- CTA droite -->
+    <a href="https://www.topsocietes.com" target="_blank" rel="noopener sponsored"
+       style="
+           display:inline-flex;align-items:center;gap:10px;
+           background:#e63946;color:#fff;
+           font-size:14px;font-weight:700;
+           padding:12px 24px;border-radius:10px;
+           text-decoration:none;white-space:nowrap;flex-shrink:0;
+           box-shadow:0 4px 18px rgba(230,57,70,.35);
+           transition:background .2s
+       "
+       onmouseover="this.style.background=\'#c82333\'"
+       onmouseout="this.style.background=\'#e63946\'">
+      Découvrir TOPsocietes.com <span style="font-size:16px">→</span>
+    </a>
+
+  </div>
+</div>';
+}, 97);
