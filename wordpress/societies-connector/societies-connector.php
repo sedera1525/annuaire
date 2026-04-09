@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.4.2
+ * Version:      2.5.0
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.4.2');
+define('SC_VERSION', '2.5.0');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -853,8 +853,8 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-hero-field-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#e63946;margin-bottom:3px;line-height:1}'
     . '.sc-hero-input{width:100%;border:none;outline:none;font-size:14px;font-weight:500;color:#1f2937;background:transparent;padding:0;line-height:1.4}'
     . '.sc-hero-input::placeholder{color:#c4cdd8;font-weight:400}'
-    . '.sc-hero-btn{background:#e63946;border:none;margin:6px;border-radius:44px;width:52px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:background .2s;color:#fff;aspect-ratio:1}'
-    . '.sc-hero-btn:hover{background:#c82333}'
+    . '.sc-hero-btn{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);border:none;margin:6px;border-radius:44px;width:52px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .2s;color:#fff;aspect-ratio:1}'
+    . '.sc-hero-btn:hover{opacity:.88}'
     . '.sc-hero-stats{display:flex;flex-direction:row;gap:12px;justify-content:center;margin-top:28px;flex-wrap:nowrap}'
     . '.sc-hero-stat{display:flex;flex-direction:row;align-items:center;gap:8px;background:#fff;border:1.5px solid #edf1f7;border-radius:50px;padding:8px 16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}'
     . '.sc-hero-stat-icon{font-size:18px;flex-shrink:0}'
@@ -887,7 +887,7 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-card-tag-city{background:#eff6ff;color:#3b82f6}'
     . '.sc-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid #f1f5f9}'
     . '.sc-card-stars{color:#f59e0b;font-size:14px}'
-    . '.sc-card-score{font-size:15px;font-weight:800;color:#e63946}'
+    . '.sc-card-score{font-size:15px;font-weight:800;background:linear-gradient(135deg,#2563eb,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
     . '.sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}'
     . '.sc-card-arrow{color:#94a3b8;font-size:16px;transition:transform .15s}'
     . '.sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#e63946}'
@@ -898,8 +898,8 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#e63946;border-radius:50%;animation:sc-spin .7s linear infinite}'
     . '@keyframes sc-spin{to{transform:rotate(360deg)}}'
     . '.sc-more-wrap{text-align:center;margin-top:32px}'
-    . '.sc-more-btn{background:#1a2744;color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}'
-    . '.sc-more-btn:hover{background:#e63946}'
+    . '.sc-more-btn{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}'
+    . '.sc-more-btn:hover{opacity:.88}'
     . '.sc-advert{text-align:center;padding:14px 20px;margin-top:32px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}'
     . '.sc-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}'
     . '.sc-advert-link:hover{text-decoration:underline}'
@@ -1437,83 +1437,84 @@ add_shortcode('societies_fiche', function($atts) {
 
     </div>
     <style>
+    :root{--sc-grad:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);--sc-grad-cta:linear-gradient(135deg,#f97316 0%,#e63946 100%);--sc-dark:#1a2744;--sc-light:#f5f7fa;--sc-white:#ffffff}
     .sc2-wrap{max-width:860px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
 
-    /* HERO */
-    .sc2-hero{background:#1a2744;border-radius:16px;padding:32px 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:4px;flex-wrap:wrap}
+    /* HERO — fond sombre = structure */
+    .sc2-hero{background:linear-gradient(135deg,#1a2744 0%,#1e3a6e 100%);border-radius:16px;padding:32px 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:4px;flex-wrap:wrap}
     .sc2-hero-inner{flex:1}
     .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px;opacity:.9}
     .sc2-hero-name{margin:0 0 10px;font-size:28px;font-weight:800;color:#fff;line-height:1.2;text-transform:uppercase;letter-spacing:.5px}
     .sc2-hero-sub{display:flex;flex-wrap:wrap;gap:10px}
     .sc2-hero-sub span{background:rgba(255,255,255,.12);color:#cbd5e1;font-size:13px;padding:4px 12px;border-radius:20px}
-    .sc2-hero-rating{text-align:center;background:rgba(255,255,255,.08);border-radius:12px;padding:14px 22px;flex-shrink:0}
-    .sc2-hero-score{font-size:42px;font-weight:800;color:#e63946;line-height:1}
+    .sc2-hero-rating{text-align:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:16px 24px;flex-shrink:0}
+    .sc2-hero-score{font-size:44px;font-weight:900;line-height:1;background:var(--sc-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .sc2-hero-stars{color:#f59e0b;font-size:18px;letter-spacing:2px;margin:4px 0}
     .sc2-hero-votes{color:#94a3b8;font-size:12px}
     .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center}
 
     /* CONTACT BAR */
-    .sc2-contact-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 20px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px}
+    .sc2-contact-bar{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 20px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
     .sc2-contact-item{color:#475569;font-size:13px;display:inline-flex;align-items:center;gap:4px}
     .sc2-contact-link{color:#2563eb;text-decoration:none}
     .sc2-contact-link:hover{text-decoration:underline}
 
-    /* INTRO */
+    /* INTRO — fond clair = contenu */
     .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:6px 12px;margin-bottom:12px}
-    .sc2-intro-card{background:#1a2744;border-radius:12px;padding:24px 28px;margin-bottom:16px}
-    .sc2-intro-text{margin:0;color:#e2e8f0;line-height:1.8;font-size:15px}
+    .sc2-intro-card{background:#f5f7fa;border-left:4px solid transparent;border-image:var(--sc-grad) 1;border-radius:0 12px 12px 0;padding:24px 28px;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+    .sc2-intro-text{margin:0;color:#1f2937;line-height:1.85;font-size:15px}
 
     /* SECTIONS */
     .sc2-section{margin-bottom:24px}
-    .sc2-section-title{font-size:18px;font-weight:700;color:#111827;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid #e63946;display:inline-block}
+    .sc2-section-title{font-size:18px;font-weight:700;color:#111827;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid transparent;border-image:var(--sc-grad) 1;display:inline-block}
 
-    /* Q&A GRID */
+    /* Q&A GRID — fond blanc = contenu */
     .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
-    .sc2-qa-card{background:#fff;border:1px solid #e5e7eb;border-left:3px solid #e63946;border-radius:10px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow .2s}
-    .sc2-qa-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
-    .sc2-qa-q{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#e63946;margin-bottom:8px}
+    .sc2-qa-card{background:#fff;border:1px solid #e5e7eb;border-left:3px solid #2563eb;border-radius:10px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .2s}
+    .sc2-qa-card:hover{box-shadow:0 4px 16px rgba(37,99,235,.1)}
+    .sc2-qa-q{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--sc-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
     .sc2-qa-a{color:#374151;font-size:14px;line-height:1.7}
 
     /* FAQ LIST */
     .sc2-faq-list{display:flex;flex-direction:column;gap:0}
-    .sc2-faq-item{padding:16px 0;border-bottom:1px solid #f1f5f9}
+    .sc2-faq-item{padding:16px 0;border-bottom:1px solid #f1f5f9;background:#fff}
     .sc2-faq-item:last-child{border-bottom:none}
     .sc2-faq-q{display:flex;align-items:flex-start;gap:12px;font-size:15px;font-weight:600;color:#1f2937;margin-bottom:6px}
     .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.65;padding-left:4px}
-    .sc2-faq-icon{background:#1a2744;color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .sc2-faq-icon{background:var(--sc-grad);color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
     .sc2-faq-locked{font-size:18px;padding-left:4px;opacity:.5}
 
-    /* BONUS TEXT */
-    .sc2-bonus-card{background:#f0f4ff;border-left:4px solid #3b5bdb;border-radius:10px;padding:18px 22px;margin-top:16px}
-    .sc2-bonus-text{margin:0;color:#374151;font-size:14px;line-height:1.7}
+    /* BONUS TEXT — section gris clair */
+    .sc2-bonus-card{background:#f0f4ff;border:1px solid #dde3f7;border-radius:12px;padding:20px 24px;margin-top:16px;box-shadow:0 1px 6px rgba(59,91,219,.07)}
+    .sc2-bonus-text{margin:0;color:#1e2d5a;font-size:14px;line-height:1.75}
 
     /* BANDEAU PUBLICITAIRE */
     .sc2-advert{text-align:center;padding:14px 20px;margin-top:16px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}
     .sc2-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}
     .sc2-advert-link:hover{text-decoration:underline}
-    .sc2-faq-icon-r{background:#e63946}
+    .sc2-faq-icon-r{background:var(--sc-grad-cta)}
 
     /* NOTE DONNÉES INSUFFISANTES */
-    .sc2-hero-rating-nodata{text-align:center;background:rgba(255,255,255,.08);border-radius:12px;padding:14px 18px;flex-shrink:0;max-width:200px}
+    .sc2-hero-rating-nodata{text-align:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px 18px;flex-shrink:0;max-width:200px}
     .sc2-nodata-icon{font-size:28px;margin-bottom:4px}
     .sc2-nodata-label{font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:8px}
-    .sc2-nodata-link{display:block;font-size:11px;color:#e63946;text-decoration:none;line-height:1.4;font-weight:600}
+    .sc2-nodata-link{display:block;font-size:11px;color:#93c5fd;text-decoration:none;line-height:1.4;font-weight:600}
     .sc2-nodata-link:hover{text-decoration:underline}
 
     /* CTA BULLE avant zone verrouillée */
-    .sc2-cta-bubble{background:#fff9f0;border:1.5px solid #fde68a;border-radius:12px;padding:20px 24px;margin:24px 0 24px}
+    .sc2-cta-bubble{background:#fff;border:1.5px solid #e0e7ff;border-radius:12px;padding:20px 24px;margin:24px 0;box-shadow:0 2px 12px rgba(59,91,219,.08)}
     .sc2-cta-bubble-title{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:12px}
     .sc2-cta-bubble-list{margin:0 0 16px;padding:0 0 0 20px;list-style:none}
     .sc2-cta-bubble-list li{font-size:13px;color:#374151;padding:3px 0;padding-left:0;list-style:none}
-    .sc2-cta-bubble-btn{display:inline-block;background:#1a2744;color:#fff;font-size:13px;font-weight:700;padding:10px 18px;border-radius:8px;text-decoration:none}
-    .sc2-cta-bubble-btn:hover{background:#e63946;color:#fff}
+    .sc2-cta-bubble-btn{display:inline-block;background:var(--sc-grad);color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:8px;text-decoration:none;transition:opacity .18s}
+    .sc2-cta-bubble-btn:hover{opacity:.88;color:#fff}
 
     /* CLAIM CTA PRINCIPAL */
-    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#1a2744 0%,#2d3f6b 100%);border-radius:12px;padding:20px 24px;margin-top:24px;flex-wrap:wrap}
+    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#1a2744 0%,#1e3a6e 100%);border-radius:12px;padding:20px 24px;margin-top:24px;flex-wrap:wrap}
     .sc2-claim-cta-main-text strong{display:block;font-size:16px;font-weight:800;color:#fff;margin-bottom:4px}
     .sc2-claim-cta-main-text span{font-size:13px;color:#94a3b8}
-    .sc2-claim-btn{background:#e63946;color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;white-space:nowrap;flex-shrink:0}
-    .sc2-claim-btn:hover{background:#c82333;color:#fff}
+    .sc2-claim-btn{background:var(--sc-grad-cta);color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;white-space:nowrap;flex-shrink:0;transition:opacity .18s}
+    .sc2-claim-btn:hover{opacity:.88;color:#fff}
 
     /* FOOTER */
     .sc2-footer{margin-top:32px;padding-top:18px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;color:#9ca3af;font-size:12px}
