@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.2
+ * Version:      2.5.3
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.2');
+define('SC_VERSION', '2.5.3');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1891,7 +1891,6 @@ add_action('admin_init', function() {
 // MODE SOUS-DOMAINE — masquer header/footer thème + footer custom
 // =============================================================================
 add_action('wp_head', function() {
-    if (!get_option('societies_subdomain_mode')) return;
     ?>
 <style id="sc-subdomain-css">
 /* Cache le header et le footer du thème */
@@ -1917,7 +1916,6 @@ body { padding-top: 0 !important; margin-top: 0 !important; }
 });
 
 add_action('wp_body_open', function() {
-    if (!get_option('societies_subdomain_mode')) return;
     ?>
 <div class="sc-topbar">
   <a href="<?= esc_url(home_url('/')) ?>" class="sc-topbar-logo">TOPsocietes.com</a>
@@ -1927,7 +1925,6 @@ add_action('wp_body_open', function() {
 });
 
 add_action('wp_footer', function() {
-    if (!get_option('societies_subdomain_mode')) return;
     $links_raw = get_option('societies_footer_links', '');
     // Liens par défaut si non configurés
     if (empty(trim($links_raw))) {
@@ -3147,6 +3144,22 @@ function sc_enqueue_styles() {
 add_action('wp_head', 'sc_enqueue_styles');
 
 // =============================================================================
+// CSS GLOBAL — masquage header/sidebar/footer thème via wp_head (fiable)
+// =============================================================================
+add_action('wp_head', function() {
+    echo '<style id="sc-global-hide">
+.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,
+.header-main,.apus-top-bar,.top-bar-wrap,.col-md-4.pull-right,
+.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,
+.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,
+[class*="sidebar"]:not([class*="sc2"]):not([class*="sc-"]),#apus-footer,footer.apus-footer,
+.show-sidebar-button,.btn-show-sidebar,.btn-toggle-sidebar,.sidebar-toggle,.toggle-sidebar,
+[data-toggle="sidebar"],.off-canvas-wrap,.js-off-canvas-overlay{display:none!important}
+body{background:#fff!important}
+</style>';
+}, 99);
+
+// =============================================================================
 // FOOTER — Masquage colonnes thème + footer personnalisé en bas (retour-4)
 // =============================================================================
 
@@ -3196,32 +3209,7 @@ add_action('wp_footer', function() {
 </script>';
 }, 98);
 
-// Footer personnalisé injecté APRÈS le footer thème (contact + CGU/RGPD/CGV)
-add_action('wp_footer', function() {
-    $cgu_url     = home_url('/cgu/');
-    $rgpd_url    = home_url('/rgpd/');
-    $cgv_url     = home_url('/cgv/');
-    $contact_url = home_url('/contact/');
-    echo '
-<div id="sc-custom-footer" style="background:#2b2f3a;color:#cbd5e1;padding:32px 32px 20px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;font-size:14px">
-  <div style="max-width:1200px;margin:0 auto">
-    <div style="margin-bottom:20px">
-      <p style="color:#fff;font-size:15px;font-weight:700;margin:0 0 12px 0">Contact</p>
-      <a href="' . esc_url($contact_url) . '" style="color:#cbd5e1;text-decoration:none;display:inline-flex;align-items:center;gap:8px">
-        &#128203; Formulaire de contact
-      </a>
-    </div>
-    <div style="border-top:1px solid #38b2ac;padding-top:14px;font-size:12px;color:#718096;display:flex;gap:20px;flex-wrap:wrap">
-      <a href="' . esc_url($cgu_url) . '" style="color:#718096;text-decoration:none">CGU</a>
-      <a href="' . esc_url($rgpd_url) . '" style="color:#718096;text-decoration:none">RGPD</a>
-      <a href="' . esc_url($cgv_url) . '" style="color:#718096;text-decoration:none">CGV</a>
-    </div>
-    <div style="border-top:1px solid #2d3748;margin-top:16px;padding-top:14px;font-size:12px;color:#4a5568;text-align:center">
-      Copyright &copy; ' . date('Y') . ' TOPsocietes.com
-    </div>
-  </div>
-</div>';
-}, 99);
+// (ancien footer sombre #sc-custom-footer supprimé — remplacé par .sc-site-footer ci-dessus)
 
 // =============================================================================
 // SESSION PERSISTANTE 30 JOURS (point 12)
