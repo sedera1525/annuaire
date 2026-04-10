@@ -107,6 +107,18 @@ def validate_qa(parsed: dict) -> None:
             raise ValueError(f"qa_answered[{i}] a une réponse vide (question : {item.get('q', '?')!r})")
 
 
+def get_active_prompt() -> str:
+    """Retourne le prompt actif — depuis la DB settings si défini, sinon le défaut."""
+    try:
+        from services.fiches import get_setting
+        custom = get_setting("generation_prompt")
+        if custom and custom.strip():
+            return custom
+    except Exception:
+        pass
+    return GENERATION_PROMPT
+
+
 def build_prompt(
     title: str,
     category: Optional[str],
@@ -115,7 +127,7 @@ def build_prompt(
     rating_value,
     rating_votes: Optional[int],
 ) -> str:
-    return GENERATION_PROMPT.format(
+    return get_active_prompt().format(
         nom=title,
         categorie=category or "Non renseigné",
         ville=city or "Non renseignée",

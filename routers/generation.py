@@ -19,11 +19,14 @@ from models import BatchRequest, GenerateRequest
 from services.fiches import get_fiche, get_openai_key, save_fiche
 from core.utils import is_excluded_category
 from services.generator import (
+    GENERATION_PROMPT,
     OPEN_QUESTIONS_TEMPLATE,
     build_prompt,
     call_openai,
+    get_active_prompt,
     validate_qa,
 )
+from services.fiches import get_setting, set_setting
 
 logger   = logging.getLogger("societies")
 router   = APIRouter(tags=["generation"])
@@ -372,3 +375,40 @@ async def fix_existing_intros(data: dict = Body(default={})):
         "total_fiches": total_count,
         "remaining":   max(0, total_count - offset - len(rows)),
     }
+
+
+# =============================================================================
+# GESTION DU PROMPT DE GÉNÉRATION
+# =============================================================================
+
+@router.get("/generate/prompt", dependencies=[Depends(require_admin)])
+def get_prompt():
+    """Retourne le prompt actif (custom DB ou défaut)."""
+    custom = get_setting("generation_prompt")
+    return {
+        "prompt":     custom or GENERATION_PROMPT,
+        "is_custom":  bool(custom and custom.strip()),
+        "default":    GENERATION_PROMPT,
+    }
+
+
+@router.post("/generate/prompt", dependencies=[Depends(require_admin)])
+def save_prompt(body: dict = Body(...)):
+    """Sauvegarde un prompt personnalisé. Envoyer {"prompt": ""} pour remettre le défaut."""
+    prompt = body.get("prompt", "").strip()
+    if prompt:
+        # Validation basique : le prompt doit contenir les placeholders obligatoires
+        required = ["{nom}", "{categorie}", "{ville}", "{note}"]
+        missing  = [p for p in required if p not in prompt]
+        if missing:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=422,
+                detail=f"Placeholders manquants dans le prompt : {', '.join(missing)}"
+            )
+        set_setting("generation_prompt", prompt)
+        return {"status": "saved", "is_custom": True}
+    else:
+        # Prompt vide = remettre le défaut
+        set_setting("generation_prompt", "")
+        return {"status": "reset", "is_custom": False}

@@ -1,148 +1,113 @@
 <?php
 /**
- * MU-Plugin : Palette TOPsocietes — header, footer et global
+ * MU-Plugin : Palette TOPsocietes — header, footer et global (retour-6 + retour-7)
  *
- * Applique la palette recommandée (retour-6) directement sur le thème
- * sans passer par le plugin ou le backend :
- *   - Header/nav         → gradient #1a2744→#1e3a6e (structure sombre)
- *   - Boutons CTA        → gradient bleu→violet (logo)
- *   - Contenu/cartes     → fond blanc / gris clair
- *   - Footer             → fond sombre + liens clairs
+ * Palette tirée du logo :
+ *   Orange  #F97316  · Pink    #EC4899  · Violet #8B5CF6
+ *   Teal    #06B6D4  · Blue   #3B82F6  · Navy   #1e2d5a (texte seul)
  *
- * Chargé automatiquement comme mu-plugin (aucune activation requise).
+ * Principe : AUCUN fond sombre — tout le contenu sur fond blanc/clair.
+ * Le menu principal du thème (topsocietes.com) est masqué sur le sous-domaine.
  */
 
 add_action('wp_head', function (): void {
     echo '<style id="topsocietes-theme-colors">
 /* ================================================================
-   PALETTE TOPSOCIETES — retour-6
-   Gradient logo  : #2563eb → #7c3aed
-   Structure      : #1a2744 → #1e3a6e
-   Fond contenu   : #ffffff / #f5f7fa
-   Accent positif : #10b981
-   Accent alerte  : #e63946
+   VARIABLES PALETTE LOGO TOPSOCIETES
 ================================================================ */
+:root {
+    --ts-orange:  #F97316;
+    --ts-pink:    #EC4899;
+    --ts-violet:  #8B5CF6;
+    --ts-teal:    #06B6D4;
+    --ts-blue:    #3B82F6;
+    --ts-navy:    #1e2d5a;
+    --ts-grad:    linear-gradient(135deg, #F97316 0%, #EC4899 40%, #8B5CF6 70%, #06B6D4 100%);
+    --ts-grad-btn:linear-gradient(135deg, #F97316 0%, #EC4899 100%);
+    --ts-light:   #f8fafc;
+    --ts-white:   #ffffff;
+}
 
-/* ── HEADER / NAVIGATION ─────────────────────────────────────── */
+/* ── MASQUER le menu WordPress du thème (point 3 retour-7) ────── */
 #apus-header,
 .apus-header,
 .header-main,
 .apus-top-bar,
 .top-bar-wrap,
-header.site-header,
-.site-header,
+.header-mobile,
+#apus-header-mobile,
 nav.navbar,
 .navbar,
+.navbar-default,
 .main-nav,
-.primary-menu-container {
-    background: linear-gradient(135deg, #1a2744 0%, #1e3a6e 100%) !important;
-    border-bottom: none !important;
-    box-shadow: 0 2px 12px rgba(0,0,0,.18) !important;
+.primary-menu-container,
+#main-navigation,
+.site-navigation,
+.header-navigation {
+    display: none !important;
 }
 
-/* Logo dans le header */
-#apus-header .logo,
-.apus-header .logo,
-.site-logo,
-.navbar-brand {
-    filter: brightness(0) invert(1);
-}
-
-/* Liens de navigation */
-#apus-header .navbar-nav > li > a,
-.apus-header .navbar-nav > li > a,
-nav.navbar .nav-link,
-.header-main a,
-.main-nav a {
-    color: #e2e8f0 !important;
-    font-weight: 600;
-}
-
-#apus-header .navbar-nav > li > a:hover,
-.apus-header .navbar-nav > li > a:hover,
-nav.navbar .nav-link:hover,
-.header-main a:hover {
-    color: #93c5fd !important;
-}
-
-/* Bouton CTA dans le header */
-#apus-header .btn,
-.apus-header .btn,
-.header-main .btn,
-.navbar .btn-primary,
-.header-btn,
-.header-cta {
-    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%) !important;
-    border: none !important;
-    color: #fff !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    transition: opacity .2s !important;
-}
-#apus-header .btn:hover,
-.header-cta:hover {
-    opacity: .88 !important;
-    color: #fff !important;
-}
-
-/* ── TOP BAR (barre au-dessus du header) ────────────────────── */
-.apus-top-bar,
-.top-bar-wrap {
-    background: #111d35 !important;
-    color: #94a3b8 !important;
-}
-.apus-top-bar a,
-.top-bar-wrap a {
-    color: #93c5fd !important;
-}
-
-/* ── CONTENU GÉNÉRAL — fond clair ────────────────────────────── */
+/* ── FOND GLOBAL — blanc, pas sombre ─────────────────────────── */
 body,
 #page,
 #wrapper-container,
 .site-content,
 #content,
 .main-content-area,
-.entry-content {
+.entry-content,
+#main,
+.site-main {
     background: #ffffff !important;
 }
 
-/* Sections / blocs Elementor à fond sombre → fond clair */
-.elementor-section.has-background:not([class*="sc"]),
-.elementor-section[style*="background-color: #1a2744"],
-.elementor-section[style*="background-color:#1a2744"],
-.elementor-section[style*="background: #1a2744"],
-.elementor-section[style*="background:#1a2744"] {
-    background: #f5f7fa !important;
+/* ── HEADER PERSONNALISÉ via plugin (sc-topbar) ─────────────────
+   Le plugin injecte .sc-topbar via wp_body_open — on surcharge ici
+   pour s'assurer qu'il soit clair et coloré, pas sombre.           */
+.sc-topbar {
+    background: #ffffff !important;
+    border-bottom: 3px solid transparent !important;
+    border-image: var(--ts-grad) 1 !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06) !important;
+    padding: 12px 24px !important;
+}
+.sc-topbar a {
+    color: var(--ts-navy) !important;
+    font-weight: 600 !important;
+}
+.sc-topbar-logo {
+    background: var(--ts-grad) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+    font-size: 17px !important;
+    font-weight: 900 !important;
+}
+.sc-topbar a:not(.sc-topbar-logo):hover {
+    color: var(--ts-orange) !important;
 }
 
-/* Titres H1-H3 */
-h1, h2, h3 {
-    color: #1a2744;
-}
-
-/* ── BOUTONS GLOBAUX ─────────────────────────────────────────── */
+/* ── BOUTONS GLOBAUX — gradient orange→pink ────────────────────── */
 .btn-primary,
 .button.button-primary,
 input[type="submit"],
 button[type="submit"],
-a.btn-default,
 .elementor-button,
 .wc-proceed-to-checkout .button,
-.single_add_to_cart_button {
-    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%) !important;
+.single_add_to_cart_button,
+.woocommerce #respond input#submit,
+.woocommerce a.button,
+.woocommerce button.button {
+    background: var(--ts-grad-btn) !important;
     border: none !important;
     color: #fff !important;
     font-weight: 700 !important;
     border-radius: 8px !important;
     transition: opacity .2s !important;
-    box-shadow: 0 2px 10px rgba(37,99,235,.25) !important;
+    box-shadow: 0 3px 12px rgba(249,115,22,.3) !important;
 }
 .btn-primary:hover,
-.button.button-primary:hover,
 input[type="submit"]:hover,
-.elementor-button:hover,
-a.btn-default:hover {
+.elementor-button:hover {
     opacity: .88 !important;
     color: #fff !important;
 }
@@ -151,87 +116,49 @@ a.btn-default:hover {
 .btn-secondary,
 .button.button-secondary {
     background: #fff !important;
-    border: 1.5px solid #2563eb !important;
-    color: #2563eb !important;
+    border: 2px solid var(--ts-orange) !important;
+    color: var(--ts-orange) !important;
     font-weight: 600 !important;
     border-radius: 8px !important;
 }
-.btn-secondary:hover {
-    background: #eff6ff !important;
-    color: #1d4ed8 !important;
-}
 
-/* ── FOOTER ─────────────────────────────────────────────────── */
+/* ── FOOTER THÈME — masqué (le plugin injecte le sien) ────────── */
 #apus-footer,
-footer.apus-footer,
-footer.site-footer,
-.site-footer,
-#footer,
-.footer {
-    background: linear-gradient(135deg, #0f1c33 0%, #1a2744 100%) !important;
+footer.apus-footer {
+    display: none !important;
+}
+
+/* ── FOOTER PERSONNALISÉ via plugin (sc-site-footer) ───────────── */
+.sc-site-footer {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border-top: 3px solid transparent !important;
+    border-image: var(--ts-grad) 1 !important;
+}
+.sc-site-footer-links a {
+    color: #475569 !important;
+}
+.sc-site-footer-links a:hover {
+    color: var(--ts-orange) !important;
+}
+.sc-site-footer-copy {
     color: #94a3b8 !important;
-    border-top: 1px solid rgba(255,255,255,.07) !important;
 }
 
-/* Titres du footer */
-#apus-footer h1,
-#apus-footer h2,
-#apus-footer h3,
-#apus-footer h4,
-.site-footer h3,
-.site-footer h4,
-.footer-widget-title,
-.widget-title {
-    color: #e2e8f0 !important;
-    font-size: 13px !important;
-    text-transform: uppercase !important;
-    letter-spacing: 1px !important;
+/* ── TITRES ──────────────────────────────────────────────────────── */
+h1, h2, h3 {
+    color: var(--ts-navy);
 }
 
-/* Liens du footer */
-#apus-footer a,
-footer.site-footer a,
-.site-footer a,
-.footer a {
-    color: #93c5fd !important;
-    text-decoration: none !important;
-}
-#apus-footer a:hover,
-footer.site-footer a:hover,
-.site-footer a:hover {
-    color: #bfdbfe !important;
-    text-decoration: underline !important;
-}
-
-/* Copyright footer */
-.footer-copyright,
-.copyright,
-#apus-footer .copyright {
-    background: #0a1220 !important;
-    color: #64748b !important;
-    border-top: 1px solid rgba(255,255,255,.05) !important;
-    font-size: 12px !important;
-}
-
-/* ── CARTES / WIDGETS ────────────────────────────────────────── */
-.card,
-.widget,
-.elementor-widget-container > .elementor-widget-wrap,
-.woocommerce ul.products li.product {
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 1px 6px rgba(0,0,0,.06);
-}
-
-/* Liens globaux */
+/* ── LIENS ───────────────────────────────────────────────────────── */
 a {
-    color: #2563eb;
+    color: var(--ts-blue);
 }
 a:hover {
-    color: #1d4ed8;
+    color: var(--ts-orange);
 }
 
-/* Inputs */
+/* ── INPUTS ──────────────────────────────────────────────────────── */
 input[type="text"],
 input[type="email"],
 input[type="search"],
@@ -244,9 +171,9 @@ select {
 }
 input:focus,
 textarea:focus {
-    border-color: #2563eb !important;
+    border-color: var(--ts-orange) !important;
     outline: none !important;
-    box-shadow: 0 0 0 3px rgba(37,99,235,.12) !important;
+    box-shadow: 0 0 0 3px rgba(249,115,22,.12) !important;
 }
 </style>';
 }, 5);

@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.0
+ * Version:      2.5.1
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.0');
+define('SC_VERSION', '2.5.1');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -840,8 +840,8 @@ add_shortcode('societies_search', function($atts) {
     . '#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
     . '.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#fff;box-sizing:border-box;overflow-x:hidden}'
     . '.sc-hero{background:#fff;padding:64px 24px 48px;text-align:center;box-sizing:border-box}'
-    . '.sc-hero-title{font-size:46px;font-weight:900;color:#1a2744;margin:0 0 14px;letter-spacing:-2px;line-height:1.08}'
-    . '.sc-hero-title em{color:#e63946;font-style:normal}'
+    . '.sc-hero-title{font-size:46px;font-weight:900;color:#1e2d5a;margin:0 0 14px;letter-spacing:-2px;line-height:1.08}'
+    . '.sc-hero-title em{background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-style:normal}'
     . '.sc-hero-sub{font-size:16px;color:#6b7280;margin:0 0 40px;line-height:1.6;max-width:460px;display:block;margin-left:auto;margin-right:auto}'
     . '.sc-hero-sub strong{color:#1a2744;font-weight:700}'
     . '.sc-hero-bar{max-width:860px;margin:0 auto;display:flex;flex-direction:row;align-items:stretch;background:#fff;border:1.5px solid #e2e8f0;border-radius:50px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;min-height:64px}'
@@ -850,10 +850,10 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-hero-field:hover{background:#fafbfd}'
     . '.sc-hero-field-icon{font-size:16px;margin-right:10px;flex-shrink:0;opacity:.6}'
     . '.sc-hero-field-wrap{display:flex;flex-direction:column;flex:1;min-width:0;justify-content:center}'
-    . '.sc-hero-field-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#e63946;margin-bottom:3px;line-height:1}'
+    . '.sc-hero-field-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#F97316;margin-bottom:3px;line-height:1}'
     . '.sc-hero-input{width:100%;border:none;outline:none;font-size:14px;font-weight:500;color:#1f2937;background:transparent;padding:0;line-height:1.4}'
     . '.sc-hero-input::placeholder{color:#c4cdd8;font-weight:400}'
-    . '.sc-hero-btn{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);border:none;margin:6px;border-radius:44px;width:52px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .2s;color:#fff;aspect-ratio:1}'
+    . '.sc-hero-btn{background:linear-gradient(135deg,#F97316,#EC4899);border:none;margin:6px;border-radius:44px;width:52px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .2s;color:#fff;aspect-ratio:1}'
     . '.sc-hero-btn:hover{opacity:.88}'
     . '.sc-hero-stats{display:flex;flex-direction:row;gap:12px;justify-content:center;margin-top:28px;flex-wrap:nowrap}'
     . '.sc-hero-stat{display:flex;flex-direction:row;align-items:center;gap:8px;background:#fff;border:1.5px solid #edf1f7;border-radius:50px;padding:8px 16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}'
@@ -862,16 +862,16 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-hero-stat-text span{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;font-weight:600}'
     . '.sc-cats-section{padding:56px 40px 64px;max-width:1280px;margin:0 auto;box-sizing:border-box}'
     . '.sc-cats-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:32px;flex-wrap:wrap;gap:12px}'
-    . '.sc-cats-title{font-size:26px;font-weight:800;color:#1a2744;margin:0 0 4px;letter-spacing:-.5px}'
+    . '.sc-cats-title{font-size:26px;font-weight:800;color:#1e2d5a;margin:0 0 4px;letter-spacing:-.5px}'
     . '.sc-cats-sub{font-size:14px;color:#9ca3af;margin:0}'
-    . '.sc-cats-link{font-size:14px;font-weight:700;color:#e63946;text-decoration:none;white-space:nowrap}'
+    . '.sc-cats-link{font-size:14px;font-weight:700;color:#F97316;text-decoration:none;white-space:nowrap}'
     . '.sc-cats-link:hover{text-decoration:underline}'
     . '.sc-cats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}'
     . '.sc-cat-card{background:#fff;border:1.5px solid #f0f2f5;border-radius:18px;padding:28px 20px 22px;text-align:center;text-decoration:none;color:inherit;display:block;transition:box-shadow .18s,transform .18s,border-color .18s;box-shadow:0 1px 6px rgba(0,0,0,.04)}'
-    . '.sc-cat-card:hover{box-shadow:0 10px 36px rgba(230,57,70,.11);border-color:#e63946;transform:translateY(-4px);text-decoration:none}'
+    . '.sc-cat-card:hover{box-shadow:0 10px 36px rgba(249,115,22,.15);border-color:#F97316;transform:translateY(-4px);text-decoration:none}'
     . '.sc-cat-icon{font-size:42px;margin-bottom:14px;display:block;line-height:1}'
     . '.sc-cat-name{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:5px;line-height:1.3}'
-    . '.sc-cat-count{font-size:12px;color:#f59e0b;font-weight:600}'
+    . '.sc-cat-count{font-size:12px;font-weight:600;background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
     . '.sc-results-wrap{max-width:1280px;margin:0 auto;padding:0 40px 64px;box-sizing:border-box}'
     . '.sc-status{font-size:14px;color:#6b7280;font-weight:500;margin-bottom:20px}'
     . '.sc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}'
@@ -880,25 +880,25 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-card{background:#fff;border:1.5px solid #edf1f7;border-radius:14px;padding:20px 22px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:10px;transition:box-shadow .18s,transform .18s;box-shadow:0 1px 4px rgba(0,0,0,.05)}'
     . '.sc-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1);transform:translateY(-3px);text-decoration:none}'
     . '.sc-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}'
-    . '.sc-card-name{font-size:15px;font-weight:700;color:#1a2744;line-height:1.35}'
-    . '.sc-card-badge{background:#e63946;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}'
+    . '.sc-card-name{font-size:15px;font-weight:700;color:#1e2d5a;line-height:1.35}'
+    . '.sc-card-badge{background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}'
     . '.sc-card-tags{display:flex;flex-wrap:wrap;gap:5px}'
     . '.sc-card-tag{background:#f1f5f9;color:#64748b;font-size:11px;padding:3px 9px;border-radius:20px}'
     . '.sc-card-tag-city{background:#eff6ff;color:#3b82f6}'
     . '.sc-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid #f1f5f9}'
     . '.sc-card-stars{color:#f59e0b;font-size:14px}'
-    . '.sc-card-score{font-size:15px;font-weight:800;background:linear-gradient(135deg,#2563eb,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
+    . '.sc-card-score{font-size:15px;font-weight:800;background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
     . '.sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}'
     . '.sc-card-arrow{color:#94a3b8;font-size:16px;transition:transform .15s}'
-    . '.sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#e63946}'
+    . '.sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#F97316}'
     . '.sc-empty{text-align:center;padding:60px 20px;color:#94a3b8}'
     . '.sc-empty-icon{font-size:48px;margin-bottom:12px}'
     . '.sc-empty-title{font-size:18px;font-weight:600;color:#374151;margin-bottom:6px}'
     . '.sc-loader{display:flex;justify-content:center;padding:40px}'
-    . '.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#e63946;border-radius:50%;animation:sc-spin .7s linear infinite}'
+    . '.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#F97316;border-radius:50%;animation:sc-spin .7s linear infinite}'
     . '@keyframes sc-spin{to{transform:rotate(360deg)}}'
     . '.sc-more-wrap{text-align:center;margin-top:32px}'
-    . '.sc-more-btn{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}'
+    . '.sc-more-btn{background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;box-shadow:0 3px 12px rgba(249,115,22,.3)}'
     . '.sc-more-btn:hover{opacity:.88}'
     . '.sc-advert{text-align:center;padding:14px 20px;margin-top:32px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}'
     . '.sc-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}'
@@ -1437,21 +1437,22 @@ add_shortcode('societies_fiche', function($atts) {
 
     </div>
     <style>
-    :root{--sc-grad:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);--sc-grad-cta:linear-gradient(135deg,#f97316 0%,#e63946 100%);--sc-dark:#1a2744;--sc-light:#f5f7fa;--sc-white:#ffffff}
+    :root{--sc-grad:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%);--sc-grad-btn:linear-gradient(135deg,#F97316,#EC4899);--sc-grad-cta:linear-gradient(135deg,#F97316,#EC4899);--sc-navy:#1e2d5a;--sc-light:#f8fafc;--sc-white:#ffffff}
     .sc2-wrap{max-width:860px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
 
-    /* HERO — fond sombre = structure */
-    .sc2-hero{background:linear-gradient(135deg,#1a2744 0%,#1e3a6e 100%);border-radius:16px;padding:32px 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:4px;flex-wrap:wrap}
+    /* HERO — fond blanc + accent gradient (pas sombre) */
+    .sc2-hero{background:#fff;border-radius:16px;padding:32px 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:4px;flex-wrap:wrap;border:1.5px solid #f0f2f5;box-shadow:0 2px 16px rgba(0,0,0,.06);position:relative;overflow:hidden}
+    .sc2-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--sc-grad)}
     .sc2-hero-inner{flex:1}
-    .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px;opacity:.9}
-    .sc2-hero-name{margin:0 0 10px;font-size:28px;font-weight:800;color:#fff;line-height:1.2;text-transform:uppercase;letter-spacing:.5px}
+    .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px}
+    .sc2-hero-name{margin:0 0 10px;font-size:28px;font-weight:800;color:var(--sc-navy);line-height:1.2;text-transform:uppercase;letter-spacing:.5px}
     .sc2-hero-sub{display:flex;flex-wrap:wrap;gap:10px}
-    .sc2-hero-sub span{background:rgba(255,255,255,.12);color:#cbd5e1;font-size:13px;padding:4px 12px;border-radius:20px}
-    .sc2-hero-rating{text-align:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:16px 24px;flex-shrink:0}
-    .sc2-hero-score{font-size:44px;font-weight:900;line-height:1;background:var(--sc-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .sc2-hero-sub span{background:#f1f5f9;color:#475569;font-size:13px;padding:4px 12px;border-radius:20px}
+    .sc2-hero-rating{text-align:center;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:16px 24px;flex-shrink:0}
+    .sc2-hero-score{font-size:44px;font-weight:900;line-height:1;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .sc2-hero-stars{color:#f59e0b;font-size:18px;letter-spacing:2px;margin:4px 0}
     .sc2-hero-votes{color:#94a3b8;font-size:12px}
-    .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center}
+    .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center;color:#94a3b8}
 
     /* CONTACT BAR */
     .sc2-contact-bar{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 20px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
@@ -1466,14 +1467,14 @@ add_shortcode('societies_fiche', function($atts) {
 
     /* SECTIONS */
     .sc2-section{margin-bottom:24px}
-    .sc2-section-title{font-size:18px;font-weight:700;color:#111827;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid transparent;border-image:var(--sc-grad) 1;display:inline-block}
+    .sc2-section-title{font-size:18px;font-weight:700;color:var(--sc-navy);margin:0 0 16px;padding-bottom:10px;border-bottom:3px solid transparent;border-image:var(--sc-grad) 1;display:inline-block}
 
-    /* Q&A GRID — fond blanc = contenu */
-    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
-    .sc2-qa-card{background:#fff;border:1px solid #e5e7eb;border-left:3px solid #2563eb;border-radius:10px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .2s}
-    .sc2-qa-card:hover{box-shadow:0 4px 16px rgba(37,99,235,.1)}
-    .sc2-qa-q{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--sc-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
-    .sc2-qa-a{color:#374151;font-size:14px;line-height:1.7}
+    /* Q&A GRID — espacements généreux (retour-7) */
+    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;margin-bottom:8px}
+    .sc2-qa-card{background:#fff;border:1.5px solid #f0f2f5;border-top:3px solid transparent;border-image:var(--sc-grad) 1;border-radius:12px;padding:22px 24px;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:box-shadow .2s,transform .15s}
+    .sc2-qa-card:hover{box-shadow:0 6px 24px rgba(249,115,22,.12);transform:translateY(-2px)}
+    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
+    .sc2-qa-a{color:#374151;font-size:14px;line-height:1.75}
 
     /* FAQ LIST */
     .sc2-faq-list{display:flex;flex-direction:column;gap:0}
@@ -1481,7 +1482,7 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-faq-item:last-child{border-bottom:none}
     .sc2-faq-q{display:flex;align-items:flex-start;gap:12px;font-size:15px;font-weight:600;color:#1f2937;margin-bottom:6px}
     .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.65;padding-left:4px}
-    .sc2-faq-icon{background:var(--sc-grad);color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .sc2-faq-icon{background:var(--sc-grad-btn);color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
     .sc2-faq-locked{font-size:18px;padding-left:4px;opacity:.5}
 
     /* BONUS TEXT — section gris clair */
@@ -1495,10 +1496,10 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-faq-icon-r{background:var(--sc-grad-cta)}
 
     /* NOTE DONNÉES INSUFFISANTES */
-    .sc2-hero-rating-nodata{text-align:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px 18px;flex-shrink:0;max-width:200px}
+    .sc2-hero-rating-nodata{text-align:center;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 18px;flex-shrink:0;max-width:200px}
     .sc2-nodata-icon{font-size:28px;margin-bottom:4px}
     .sc2-nodata-label{font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:8px}
-    .sc2-nodata-link{display:block;font-size:11px;color:#93c5fd;text-decoration:none;line-height:1.4;font-weight:600}
+    .sc2-nodata-link{display:block;font-size:11px;color:#F97316;text-decoration:none;line-height:1.4;font-weight:600}
     .sc2-nodata-link:hover{text-decoration:underline}
 
     /* CTA BULLE avant zone verrouillée */
@@ -1506,13 +1507,13 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-cta-bubble-title{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:12px}
     .sc2-cta-bubble-list{margin:0 0 16px;padding:0 0 0 20px;list-style:none}
     .sc2-cta-bubble-list li{font-size:13px;color:#374151;padding:3px 0;padding-left:0;list-style:none}
-    .sc2-cta-bubble-btn{display:inline-block;background:var(--sc-grad);color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:8px;text-decoration:none;transition:opacity .18s}
+    .sc2-cta-bubble-btn{display:inline-block;background:var(--sc-grad-btn);color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:8px;text-decoration:none;transition:opacity .18s;box-shadow:0 3px 10px rgba(249,115,22,.28)}
     .sc2-cta-bubble-btn:hover{opacity:.88;color:#fff}
 
     /* CLAIM CTA PRINCIPAL */
-    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#1a2744 0%,#1e3a6e 100%);border-radius:12px;padding:20px 24px;margin-top:24px;flex-wrap:wrap}
-    .sc2-claim-cta-main-text strong{display:block;font-size:16px;font-weight:800;color:#fff;margin-bottom:4px}
-    .sc2-claim-cta-main-text span{font-size:13px;color:#94a3b8}
+    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#fff7ed 0%,#fdf2f8 100%);border:1.5px solid #fed7aa;border-radius:12px;padding:20px 24px;margin-top:24px;flex-wrap:wrap}
+    .sc2-claim-cta-main-text strong{display:block;font-size:16px;font-weight:800;color:var(--sc-navy);margin-bottom:4px}
+    .sc2-claim-cta-main-text span{font-size:13px;color:#6b7280}
     .sc2-claim-btn{background:var(--sc-grad-cta);color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;white-space:nowrap;flex-shrink:0;transition:opacity .18s}
     .sc2-claim-btn:hover{opacity:.88;color:#fff}
 
@@ -1893,16 +1894,17 @@ add_action('wp_head', function() {
 body.logged-in:not(.logged-in.administrator) #wpadminbar { display: none !important; }
 body { padding-top: 0 !important; margin-top: 0 !important; }
 /* Barre de navigation TOPsocietes */
-.sc-topbar { background:#1a2744; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; }
-.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; letter-spacing:.5px; }
-.sc-topbar-logo { font-size:16px; font-weight:800; color:#e63946 !important; }
+.sc-topbar { background:#fff; padding:12px 24px; display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid; border-image:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6,#06B6D4) 1; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+.sc-topbar a { color:#1e2d5a; text-decoration:none; font-size:13px; font-weight:600; }
+.sc-topbar a:hover { color:#F97316; }
+.sc-topbar-logo { font-size:17px; font-weight:900; background:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6) !important; -webkit-background-clip:text !important; -webkit-text-fill-color:transparent !important; background-clip:text !important; }
 /* Footer custom */
-.sc-site-footer { background:#1a2744; color:#94a3b8; padding:28px 24px; margin-top:24px; font-size:13px; }
+.sc-site-footer { background:#f1f5f9; color:#475569; padding:28px 24px; margin-top:24px; font-size:13px; border-top:3px solid; border-image:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6,#06B6D4) 1; }
 .sc-site-footer-inner { max-width:860px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
 .sc-site-footer-links { display:flex; flex-wrap:wrap; gap:20px; }
-.sc-site-footer-links a { color:#94a3b8; text-decoration:none; }
-.sc-site-footer-links a:hover { color:#fff; }
-.sc-site-footer-copy { color:#64748b; font-size:12px; }
+.sc-site-footer-links a { color:#475569; text-decoration:none; }
+.sc-site-footer-links a:hover { color:#F97316; }
+.sc-site-footer-copy { color:#94a3b8; font-size:12px; }
 </style>
     <?php
 });
@@ -3283,51 +3285,43 @@ endif; // fin désactivation popup
 // =============================================================================
 add_action('wp_footer', function() {
     echo '
-<div id="sc-promo-banner" style="
-    background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#1a2744 100%);
-    border-top:3px solid #e63946;
-    padding:18px 32px;
+<a href="https://www.topsocietes.com" target="_blank" rel="noopener sponsored" id="sc-promo-banner" style="
+    display:block;
+    background:linear-gradient(135deg,#fff7ed 0%,#fdf2f8 50%,#f0f9ff 100%);
+    border-top:3px solid transparent;
+    border-image:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6,#06B6D4) 1;
+    padding:16px 32px;
     font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;
-    position:relative;
-    overflow:hidden;
+    text-decoration:none;
+    transition:opacity .2s;
 ">
-  <!-- Décoration fond -->
-  <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;background:rgba(230,57,70,.08);border-radius:50%"></div>
-  <div style="position:absolute;bottom:-60px;left:10%;width:220px;height:220px;background:rgba(37,99,235,.06);border-radius:50%"></div>
+  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
 
-  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;position:relative;z-index:1">
-
-    <!-- Texte gauche -->
-    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-      <div style="background:#e63946;border-radius:10px;padding:10px 14px;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      <div style="background:linear-gradient(135deg,#F97316,#EC4899);border-radius:10px;padding:10px 14px;flex-shrink:0">
         <span style="font-size:22px">🌍</span>
       </div>
       <div>
-        <p style="margin:0 0 3px;font-size:16px;font-weight:800;color:#fff;letter-spacing:.2px">
-          Créez votre société — <span style="color:#fbbf24">0 impôt société</span>
+        <p style="margin:0 0 3px;font-size:16px;font-weight:800;color:#1e2d5a;letter-spacing:.2px">
+          Créez votre société — <span style="background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">0 impôt société</span>
         </p>
-        <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.4">
-          Europe · Asie · USA &nbsp;|&nbsp; <span style="color:#e2e8f0">+ Introduction bancaire incluse</span>
+        <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.4">
+          Europe · Asie · USA &nbsp;|&nbsp; <span style="color:#475569;font-weight:600">+ Introduction bancaire incluse</span>
         </p>
       </div>
     </div>
 
-    <!-- CTA droite -->
-    <a href="https://www.topsocietes.com" target="_blank" rel="noopener sponsored"
-       style="
-           display:inline-flex;align-items:center;gap:10px;
-           background:#e63946;color:#fff;
-           font-size:14px;font-weight:700;
-           padding:12px 24px;border-radius:10px;
-           text-decoration:none;white-space:nowrap;flex-shrink:0;
-           box-shadow:0 4px 18px rgba(230,57,70,.35);
-           transition:background .2s
-       "
-       onmouseover="this.style.background=\'#c82333\'"
-       onmouseout="this.style.background=\'#e63946\'">
+    <span style="
+        display:inline-flex;align-items:center;gap:8px;
+        background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;
+        font-size:14px;font-weight:700;
+        padding:11px 22px;border-radius:10px;
+        white-space:nowrap;flex-shrink:0;
+        box-shadow:0 4px 16px rgba(249,115,22,.3);
+    ">
       Découvrir TOPsocietes.com <span style="font-size:16px">→</span>
-    </a>
+    </span>
 
   </div>
-</div>';
+</a>';
 }, 97);
