@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.1
+ * Version:      2.5.2
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.1');
+define('SC_VERSION', '2.5.2');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -835,7 +835,7 @@ add_shortcode('societies_search', function($atts) {
     }
     ob_start();
     // CSS sans ligne vide (double \n) pour éviter que wpautop/Elementor injecte </p><p> et casse le parsing CSS
-    $sc_css = '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,[class*="sidebar"]:not([class*="sc2"]),#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.over-dark{display:none!important}'
+    $sc_css = '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,[class*="sidebar"]:not([class*="sc2"]):not([class*="sc-"]),#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.btn-toggle-sidebar,.sidebar-toggle,.toggle-sidebar,[data-toggle="sidebar"],.over-dark,.off-canvas-wrap,.js-off-canvas-overlay{display:none!important}'
     . 'body{background:#fff!important;overflow-x:hidden}'
     . '#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
     . '.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#fff;box-sizing:border-box;overflow-x:hidden}'
@@ -1532,27 +1532,34 @@ add_shortcode('societies_fiche', function($atts) {
     </style>
     <?php
     $html = ob_get_clean();
-    // Traduit "Show Sidebar" du thème Findus en français via wp_footer
+    // Supprime le bouton "Show Sidebar" / "Afficher la barre latérale" du thème Findus
     add_action('wp_footer', function() {
         echo '<script>
 (function(){
-  function translateSidebar(){
-    document.querySelectorAll("button,a,.show-sidebar-button,.btn-show-sidebar,.sidebar-toggle,[data-toggle]").forEach(function(el){
-      if(el.childElementCount===0&&el.textContent.trim()==="Show Sidebar"){
-        el.textContent="Afficher la barre lat\u00e9rale";
+  var _SIDEBAR_TEXTS=["Show Sidebar","Afficher la barre lat\u00e9rale","Hide Sidebar","Masquer la barre lat\u00e9rale"];
+  function removeSidebarToggle(){
+    // Supprimer les boutons/liens qui contiennent le texte
+    document.querySelectorAll("button,a,.show-sidebar-button,.btn-show-sidebar,.sidebar-toggle,[class*=\'sidebar-toggle\'],[class*=\'show-sidebar\']").forEach(function(el){
+      var t=el.textContent.trim();
+      if(_SIDEBAR_TEXTS.indexOf(t)!==-1||(el.innerHTML&&el.innerHTML.trim().replace(/<[^>]+>/g,"").trim()===t&&_SIDEBAR_TEXTS.indexOf(t)!==-1)){
+        el.style.display="none";
+        el.setAttribute("aria-hidden","true");
       }
     });
-    // Cibler aussi les nœuds texte directs contenant "Show Sidebar"
+    // Cibler aussi les nœuds texte directs
     var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);
-    var node;
+    var node,toHide=[];
     while((node=walker.nextNode())){
-      if(node.nodeValue.trim()==="Show Sidebar") node.nodeValue="Afficher la barre lat\u00e9rale";
+      if(_SIDEBAR_TEXTS.indexOf(node.nodeValue.trim())!==-1) toHide.push(node);
     }
+    toHide.forEach(function(n){
+      if(n.parentElement) n.parentElement.style.display="none";
+    });
   }
-  document.addEventListener("DOMContentLoaded",translateSidebar);
-  setTimeout(translateSidebar,500);
-  setTimeout(translateSidebar,1500);
-  var obs=new MutationObserver(function(){translateSidebar();});
+  document.addEventListener("DOMContentLoaded",removeSidebarToggle);
+  setTimeout(removeSidebarToggle,300);
+  setTimeout(removeSidebarToggle,1000);
+  var obs=new MutationObserver(function(){removeSidebarToggle();});
   obs.observe(document.body,{childList:true,subtree:true});
 })();
 </script>';
