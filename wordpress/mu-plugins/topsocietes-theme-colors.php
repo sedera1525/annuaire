@@ -182,32 +182,3 @@ textarea:focus {
 </style>';
 }, 5);
 
-/**
- * Injecte le header Elementor (post 1574 = "Main Header") sur toutes les pages.
- * Essaie toutes les méthodes dans l'ordre jusqu'à ce qu'une fonctionne.
- */
-add_action('wp_body_open', function (): void {
-    if (! class_exists('\Elementor\Plugin')) return;
-
-    $id = 1574;
-
-    // Méthode 1 : frontend render avec enqueue assets
-    try {
-        $frontend = \Elementor\Plugin::instance()->frontend;
-        $frontend->enqueue_styles();
-        $frontend->enqueue_scripts();
-        $content = $frontend->get_builder_content($id, true);
-        if ($content) { echo $content; return; }
-    } catch (\Throwable $e) {}
-
-    // Méthode 2 : shortcode standard
-    $content = do_shortcode('[elementor-template id="' . $id . '"]');
-    if (trim($content)) { echo $content; return; }
-
-    // Méthode 3 : the_content du post
-    $post = get_post($id);
-    if ($post) {
-        $content = apply_filters('the_content', $post->post_content);
-        if (trim($content)) { echo $content; }
-    }
-}, 1);
