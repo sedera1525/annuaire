@@ -1899,12 +1899,7 @@ add_action('wp_head', function() {
 /* Cache la barre admin pour les non-admins */
 body.logged-in:not(.logged-in.administrator) #wpadminbar { display: none !important; }
 body { padding-top: 0 !important; margin-top: 0 !important; }
-/* Barre de navigation TOPsocietes */
-.sc-topbar { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 3px 16px rgba(249,115,22,.3); }
-.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; text-shadow:0 1px 3px rgba(0,0,0,.2); }
-.sc-topbar a:hover { color:rgba(255,255,255,.8); }
-.sc-topbar-logo { display:inline-flex; align-items:center; }
-.sc-topbar-logo img { height:36px; width:auto; display:block; }
+/* .sc-topbar supprimé — header Elementor Royal Addons utilisé à la place */
 /* Footer custom */
 .sc-site-footer { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); color:#fff; padding:28px 24px; margin-top:24px; font-size:13px; box-shadow:0 -3px 16px rgba(249,115,22,.2); }
 .sc-site-footer-inner { max-width:860px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
@@ -1916,17 +1911,7 @@ body { padding-top: 0 !important; margin-top: 0 !important; }
     <?php
 });
 
-add_action('wp_body_open', function() {
-    $logo_url = rtrim(get_option('societies_api_url', ''), '/') . '/static/logo.jpg';
-    ?>
-<div class="sc-topbar">
-  <a href="<?= esc_url(home_url('/')) ?>" class="sc-topbar-logo">
-    <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com">
-  </a>
-  <a href="<?= esc_url(home_url('/')) ?>">← Accueil</a>
-</div>
-    <?php
-});
+// Topbar custom supprimée — le header Elementor (Royal Addons) est utilisé à la place
 
 add_action('wp_footer', function() {
     $links_raw = get_option('societies_footer_links', '');

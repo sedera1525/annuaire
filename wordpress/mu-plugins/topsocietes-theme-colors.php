@@ -60,32 +60,7 @@ body,
     background: #ffffff !important;
 }
 
-/* ── HEADER PERSONNALISÉ via plugin (sc-topbar) ─────────────────
-   Le plugin injecte .sc-topbar via wp_body_open — surcharge ici
-   pour garantir couleur claire, pas sombre.           */
-.sc-topbar {
-    background: linear-gradient(135deg, #F97316 0%, #EC4899 40%, #8B5CF6 70%, #06B6D4 100%) !important;
-    border: none !important;
-    box-shadow: 0 3px 16px rgba(249,115,22,.3) !important;
-    padding: 12px 24px !important;
-}
-.sc-topbar a {
-    color: #fff !important;
-    font-weight: 600 !important;
-    text-shadow: 0 1px 3px rgba(0,0,0,.2) !important;
-}
-.sc-topbar-logo {
-    display: inline-flex !important;
-    align-items: center !important;
-}
-.sc-topbar-logo img {
-    height: 36px !important;
-    width: auto !important;
-    display: block !important;
-}
-.sc-topbar a:not(.sc-topbar-logo):hover {
-    color: rgba(255,255,255,.8) !important;
-}
+/* .sc-topbar supprimé — header Elementor Royal Addons utilisé à la place */
 
 /* ── BOUTONS GLOBAUX — gradient orange→pink ────────────────────── */
 .btn-primary,
