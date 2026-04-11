@@ -1900,17 +1900,17 @@ add_action('wp_head', function() {
 body.logged-in:not(.logged-in.administrator) #wpadminbar { display: none !important; }
 body { padding-top: 0 !important; margin-top: 0 !important; }
 /* Barre de navigation TOPsocietes */
-.sc-topbar { background:linear-gradient(135deg,#1e2d5a 0%,#8B5CF6 60%,#06B6D4 100%); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 3px 16px rgba(30,45,90,.35); }
-.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
-.sc-topbar a:hover { color:#06B6D4; }
+.sc-topbar { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 3px 16px rgba(249,115,22,.3); }
+.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; text-shadow:0 1px 3px rgba(0,0,0,.2); }
+.sc-topbar a:hover { color:rgba(255,255,255,.8); }
 .sc-topbar-logo { font-size:17px; font-weight:900; color:#fff; -webkit-text-fill-color:#fff !important; background:none !important; }
 /* Footer custom */
-.sc-site-footer { background:linear-gradient(135deg,#1e2d5a 0%,#8B5CF6 60%,#06B6D4 100%); color:#e2e8f0; padding:28px 24px; margin-top:24px; font-size:13px; }
+.sc-site-footer { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); color:#fff; padding:28px 24px; margin-top:24px; font-size:13px; box-shadow:0 -3px 16px rgba(249,115,22,.2); }
 .sc-site-footer-inner { max-width:860px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
 .sc-site-footer-links { display:flex; flex-wrap:wrap; gap:20px; }
-.sc-site-footer-links a { color:#cbd5e1; text-decoration:none; }
-.sc-site-footer-links a:hover { color:#06B6D4; }
-.sc-site-footer-copy { color:#94a3b8; font-size:12px; }
+.sc-site-footer-links a { color:rgba(255,255,255,.85); text-decoration:none; }
+.sc-site-footer-links a:hover { color:#fff; text-decoration:underline; }
+.sc-site-footer-copy { color:rgba(255,255,255,.6); font-size:12px; }
 </style>
     <?php
 });

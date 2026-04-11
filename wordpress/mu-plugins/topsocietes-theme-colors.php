@@ -64,14 +64,15 @@ body,
    Le plugin injecte .sc-topbar via wp_body_open — surcharge ici
    pour garantir couleur claire, pas sombre.           */
 .sc-topbar {
-    background: linear-gradient(135deg, #1e2d5a 0%, #8B5CF6 60%, #06B6D4 100%) !important;
+    background: linear-gradient(135deg, #F97316 0%, #EC4899 40%, #8B5CF6 70%, #06B6D4 100%) !important;
     border: none !important;
-    box-shadow: 0 3px 16px rgba(30,45,90,.35) !important;
+    box-shadow: 0 3px 16px rgba(249,115,22,.3) !important;
     padding: 12px 24px !important;
 }
 .sc-topbar a {
     color: #fff !important;
     font-weight: 600 !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,.2) !important;
 }
 .sc-topbar-logo {
     color: #fff !important;
@@ -81,7 +82,7 @@ body,
     font-weight: 900 !important;
 }
 .sc-topbar a:not(.sc-topbar-logo):hover {
-    color: #06B6D4 !important;
+    color: rgba(255,255,255,.8) !important;
 }
 
 /* ── BOUTONS GLOBAUX — gradient orange→pink ────────────────────── */
@@ -128,18 +129,20 @@ footer.apus-footer {
 
 /* ── FOOTER PERSONNALISÉ via plugin (sc-site-footer) ───────────── */
 .sc-site-footer {
-    background: linear-gradient(135deg, #1e2d5a 0%, #8B5CF6 60%, #06B6D4 100%) !important;
-    color: #e2e8f0 !important;
+    background: linear-gradient(135deg, #F97316 0%, #EC4899 40%, #8B5CF6 70%, #06B6D4 100%) !important;
+    color: #fff !important;
     border-top: none !important;
+    box-shadow: 0 -3px 16px rgba(249,115,22,.2) !important;
 }
 .sc-site-footer-links a {
-    color: #cbd5e1 !important;
+    color: rgba(255,255,255,.85) !important;
 }
 .sc-site-footer-links a:hover {
-    color: var(--ts-teal) !important;
+    color: #fff !important;
+    text-decoration: underline !important;
 }
 .sc-site-footer-copy {
-    color: #94a3b8 !important;
+    color: rgba(255,255,255,.6) !important;
 }
 
 /* ── TITRES ──────────────────────────────────────────────────────── */
