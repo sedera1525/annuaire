@@ -183,14 +183,10 @@ textarea:focus {
 }, 5);
 
 /**
- * Injecte le header Elementor (post 1574 = "Main Header") sur toutes les pages
- * en rendant directement son contenu via l'API Elementor frontend.
- * Remplace la topbar sc-topbar par le vrai header Elementor.
+ * Injecte le header Elementor (post 1574 = "Main Header") sur toutes les pages.
+ * Utilise le shortcode [elementor-template] qui fonctionne même sans Elementor Pro.
  */
 add_action('wp_body_open', function (): void {
     if (! class_exists('\Elementor\Plugin')) return;
-    $content = \Elementor\Plugin::instance()->frontend->get_builder_content_for_display(1574, true);
-    if ($content) {
-        echo $content;
-    }
-}, 1); // priorité 1 = avant la sc-topbar du plugin principal
+    echo do_shortcode('[elementor-template id="1574"]');
+}, 1);
