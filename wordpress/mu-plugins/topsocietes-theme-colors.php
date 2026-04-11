@@ -184,9 +184,30 @@ textarea:focus {
 
 /**
  * Injecte le header Elementor (post 1574 = "Main Header") sur toutes les pages.
- * Utilise le shortcode [elementor-template] qui fonctionne même sans Elementor Pro.
+ * Essaie toutes les méthodes dans l'ordre jusqu'à ce qu'une fonctionne.
  */
 add_action('wp_body_open', function (): void {
     if (! class_exists('\Elementor\Plugin')) return;
-    echo do_shortcode('[elementor-template id="1574"]');
+
+    $id = 1574;
+
+    // Méthode 1 : frontend render avec enqueue assets
+    try {
+        $frontend = \Elementor\Plugin::instance()->frontend;
+        $frontend->enqueue_styles();
+        $frontend->enqueue_scripts();
+        $content = $frontend->get_builder_content($id, true);
+        if ($content) { echo $content; return; }
+    } catch (\Throwable $e) {}
+
+    // Méthode 2 : shortcode standard
+    $content = do_shortcode('[elementor-template id="' . $id . '"]');
+    if (trim($content)) { echo $content; return; }
+
+    // Méthode 3 : the_content du post
+    $post = get_post($id);
+    if ($post) {
+        $content = apply_filters('the_content', $post->post_content);
+        if (trim($content)) { echo $content; }
+    }
 }, 1);
