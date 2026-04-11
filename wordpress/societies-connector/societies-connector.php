@@ -1462,7 +1462,7 @@ add_shortcode('societies_fiche', function($atts) {
 
     /* INTRO — fond clair = contenu */
     .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:6px 12px;margin-bottom:12px}
-    .sc2-intro-card{background:#f5f7fa;border-left:4px solid transparent;border-image:var(--sc-grad) 1;border-radius:0 12px 12px 0;padding:24px 28px;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+    .sc2-intro-card{background:#f5f7fa;border-left:4px solid transparent;border-image:var(--sc-grad) 1;border-radius:0 12px 12px 0;padding:24px 28px;margin-bottom:28px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
     .sc2-intro-text{margin:0;color:#1f2937;line-height:1.85;font-size:15px}
 
     /* SECTIONS */
@@ -1471,7 +1471,7 @@ add_shortcode('societies_fiche', function($atts) {
 
     /* Q&A GRID — espacements généreux (retour-7) */
     .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;margin-bottom:8px}
-    .sc2-qa-card{background:#fff;border:1.5px solid #f0f2f5;border-top:3px solid transparent;border-image:var(--sc-grad) 1;border-radius:12px;padding:22px 24px;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:box-shadow .2s,transform .15s}
+    .sc2-qa-card{background:#fff;border:1.5px solid #f0f2f5;border-left:3px solid #F97316;border-radius:12px;padding:22px 24px;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:box-shadow .2s,transform .15s}
     .sc2-qa-card:hover{box-shadow:0 6px 24px rgba(249,115,22,.12);transform:translateY(-2px)}
     .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
     .sc2-qa-a{color:#374151;font-size:14px;line-height:1.75}
@@ -1900,16 +1900,16 @@ add_action('wp_head', function() {
 body.logged-in:not(.logged-in.administrator) #wpadminbar { display: none !important; }
 body { padding-top: 0 !important; margin-top: 0 !important; }
 /* Barre de navigation TOPsocietes */
-.sc-topbar { background:#fff; padding:12px 24px; display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid; border-image:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6,#06B6D4) 1; box-shadow:0 2px 8px rgba(0,0,0,.05); }
-.sc-topbar a { color:#1e2d5a; text-decoration:none; font-size:13px; font-weight:600; }
-.sc-topbar a:hover { color:#F97316; }
-.sc-topbar-logo { font-size:17px; font-weight:900; background:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6) !important; -webkit-background-clip:text !important; -webkit-text-fill-color:transparent !important; background-clip:text !important; }
+.sc-topbar { background:linear-gradient(135deg,#1e2d5a 0%,#8B5CF6 60%,#06B6D4 100%); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 3px 16px rgba(30,45,90,.35); }
+.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
+.sc-topbar a:hover { color:#06B6D4; }
+.sc-topbar-logo { font-size:17px; font-weight:900; color:#fff; -webkit-text-fill-color:#fff !important; background:none !important; }
 /* Footer custom */
-.sc-site-footer { background:#f1f5f9; color:#475569; padding:28px 24px; margin-top:24px; font-size:13px; border-top:3px solid; border-image:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6,#06B6D4) 1; }
+.sc-site-footer { background:linear-gradient(135deg,#1e2d5a 0%,#8B5CF6 60%,#06B6D4 100%); color:#e2e8f0; padding:28px 24px; margin-top:24px; font-size:13px; }
 .sc-site-footer-inner { max-width:860px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
 .sc-site-footer-links { display:flex; flex-wrap:wrap; gap:20px; }
-.sc-site-footer-links a { color:#475569; text-decoration:none; }
-.sc-site-footer-links a:hover { color:#F97316; }
+.sc-site-footer-links a { color:#cbd5e1; text-decoration:none; }
+.sc-site-footer-links a:hover { color:#06B6D4; }
 .sc-site-footer-copy { color:#94a3b8; font-size:12px; }
 </style>
     <?php

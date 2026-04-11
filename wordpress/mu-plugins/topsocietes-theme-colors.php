@@ -61,29 +61,27 @@ body,
 }
 
 /* ── HEADER PERSONNALISÉ via plugin (sc-topbar) ─────────────────
-   Le plugin injecte .sc-topbar via wp_body_open — on surcharge ici
-   pour s'assurer qu'il soit clair et coloré, pas sombre.           */
+   Le plugin injecte .sc-topbar via wp_body_open — surcharge ici
+   pour garantir couleur claire, pas sombre.           */
 .sc-topbar {
-    background: #ffffff !important;
-    border-bottom: 3px solid transparent !important;
-    border-image: var(--ts-grad) 1 !important;
-    box-shadow: 0 2px 10px rgba(0,0,0,.06) !important;
+    background: linear-gradient(135deg, #1e2d5a 0%, #8B5CF6 60%, #06B6D4 100%) !important;
+    border: none !important;
+    box-shadow: 0 3px 16px rgba(30,45,90,.35) !important;
     padding: 12px 24px !important;
 }
 .sc-topbar a {
-    color: var(--ts-navy) !important;
+    color: #fff !important;
     font-weight: 600 !important;
 }
 .sc-topbar-logo {
-    background: var(--ts-grad) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
+    color: #fff !important;
+    -webkit-text-fill-color: #fff !important;
+    background: none !important;
     font-size: 17px !important;
     font-weight: 900 !important;
 }
 .sc-topbar a:not(.sc-topbar-logo):hover {
-    color: var(--ts-orange) !important;
+    color: #06B6D4 !important;
 }
 
 /* ── BOUTONS GLOBAUX — gradient orange→pink ────────────────────── */
@@ -130,16 +128,15 @@ footer.apus-footer {
 
 /* ── FOOTER PERSONNALISÉ via plugin (sc-site-footer) ───────────── */
 .sc-site-footer {
-    background: #f1f5f9 !important;
-    color: #475569 !important;
-    border-top: 3px solid transparent !important;
-    border-image: var(--ts-grad) 1 !important;
+    background: linear-gradient(135deg, #1e2d5a 0%, #8B5CF6 60%, #06B6D4 100%) !important;
+    color: #e2e8f0 !important;
+    border-top: none !important;
 }
 .sc-site-footer-links a {
-    color: #475569 !important;
+    color: #cbd5e1 !important;
 }
 .sc-site-footer-links a:hover {
-    color: var(--ts-orange) !important;
+    color: var(--ts-teal) !important;
 }
 .sc-site-footer-copy {
     color: #94a3b8 !important;
