@@ -60,7 +60,11 @@ body,
     background: #ffffff !important;
 }
 
-/* ── HEADER PERSONNALISÉ via plugin (sc-topbar) ───────────────── */
+/* ── sc-topbar masquée si le vrai header Elementor est chargé ── */
+.elementor-location-header ~ .sc-topbar,
+.elementor-kit-1574 ~ .sc-topbar { display: none !important; }
+
+/* ── HEADER PERSONNALISÉ via plugin (sc-topbar) — fallback ────── */
 .sc-topbar {
     background: linear-gradient(135deg, #F97316 0%, #EC4899 40%, #8B5CF6 70%, #06B6D4 100%) !important;
     border: none !important;
@@ -179,36 +183,14 @@ textarea:focus {
 }, 5);
 
 /**
- * Force le header Royal Addons sur tout le site.
- * Cherche automatiquement le post de type "rael-header-footer" ou "royal_header"
- * et injecte la condition "entire_site" dans ses métadonnées.
+ * Injecte le header Elementor (post 1574 = "Main Header") sur toutes les pages
+ * en rendant directement son contenu via l'API Elementor frontend.
+ * Remplace la topbar sc-topbar par le vrai header Elementor.
  */
-add_action('init', function (): void {
-    if (get_option('_sc_rael_header_forced')) return; // ne tourne qu'une fois
-
-    // Types de post utilisés par Royal Addons Header Builder
-    $post_types = ['rael-header-footer', 'royal_header', 'elementor-hf', 'ae_global_templates'];
-    foreach ($post_types as $pt) {
-        $posts = get_posts([
-            'post_type'      => $pt,
-            'post_status'    => 'publish',
-            'posts_per_page' => 1,
-            'meta_query'     => [['key' => 'rael_target_rule', 'compare' => 'NOT EXISTS']],
-        ]);
-        if (empty($posts)) {
-            // Tente sans filtre meta
-            $posts = get_posts(['post_type' => $pt, 'post_status' => 'publish', 'posts_per_page' => 1]);
-        }
-        if (!empty($posts)) {
-            $id = $posts[0]->ID;
-            // Condition Royal Addons : entire_site
-            update_post_meta($id, 'rael_target_rule', 'entire_site');
-            update_post_meta($id, 'rael_target_location', ['entire_site']);
-            // Condition format alternatif
-            update_post_meta($id, '_rael_header_type', 'header');
-            update_post_meta($id, 'rael_header_layout', 'entire_site');
-            update_option('_sc_rael_header_forced', $id);
-            break;
-        }
+add_action('wp_body_open', function (): void {
+    if (! class_exists('\Elementor\Plugin')) return;
+    $content = \Elementor\Plugin::instance()->frontend->get_builder_content_for_display(1574, true);
+    if ($content) {
+        echo $content;
     }
-});
+}, 1); // priorité 1 = avant la sc-topbar du plugin principal
