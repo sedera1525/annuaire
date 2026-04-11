@@ -177,3 +177,38 @@ textarea:focus {
 }
 </style>';
 }, 5);
+
+/**
+ * Force le header Royal Addons sur tout le site.
+ * Cherche automatiquement le post de type "rael-header-footer" ou "royal_header"
+ * et injecte la condition "entire_site" dans ses métadonnées.
+ */
+add_action('init', function (): void {
+    if (get_option('_sc_rael_header_forced')) return; // ne tourne qu'une fois
+
+    // Types de post utilisés par Royal Addons Header Builder
+    $post_types = ['rael-header-footer', 'royal_header', 'elementor-hf', 'ae_global_templates'];
+    foreach ($post_types as $pt) {
+        $posts = get_posts([
+            'post_type'      => $pt,
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'meta_query'     => [['key' => 'rael_target_rule', 'compare' => 'NOT EXISTS']],
+        ]);
+        if (empty($posts)) {
+            // Tente sans filtre meta
+            $posts = get_posts(['post_type' => $pt, 'post_status' => 'publish', 'posts_per_page' => 1]);
+        }
+        if (!empty($posts)) {
+            $id = $posts[0]->ID;
+            // Condition Royal Addons : entire_site
+            update_post_meta($id, 'rael_target_rule', 'entire_site');
+            update_post_meta($id, 'rael_target_location', ['entire_site']);
+            // Condition format alternatif
+            update_post_meta($id, '_rael_header_type', 'header');
+            update_post_meta($id, 'rael_header_layout', 'entire_site');
+            update_option('_sc_rael_header_forced', $id);
+            break;
+        }
+    }
+});
