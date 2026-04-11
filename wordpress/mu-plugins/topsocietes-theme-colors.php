@@ -75,11 +75,13 @@ body,
     text-shadow: 0 1px 3px rgba(0,0,0,.2) !important;
 }
 .sc-topbar-logo {
-    color: #fff !important;
-    -webkit-text-fill-color: #fff !important;
-    background: none !important;
-    font-size: 17px !important;
-    font-weight: 900 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+.sc-topbar-logo img {
+    height: 36px !important;
+    width: auto !important;
+    display: block !important;
 }
 .sc-topbar a:not(.sc-topbar-logo):hover {
     color: rgba(255,255,255,.8) !important;
