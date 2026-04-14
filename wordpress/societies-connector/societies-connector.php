@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.4
+ * Version:      2.5.5
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.4');
+define('SC_VERSION', '2.5.5');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -324,6 +324,25 @@ function sc_user_has_subscription(int $user_id = 0): bool {
     return !empty($orders);
 }
 
+/**
+ * Retourne l'URL publique de la fiche WP pour une entreprise donnée.
+ * Cherche d'abord par meta _sc_company_title, puis par titre de page.
+ */
+function sc_get_fiche_url(string $company_title): string {
+    if (!$company_title) return home_url('/');
+    $pages = get_posts([
+        'post_type'      => 'page',
+        'post_status'    => 'publish',
+        'posts_per_page' => 1,
+        'meta_key'       => '_sc_company_title',
+        'meta_value'     => $company_title,
+    ]);
+    if ($pages) return get_permalink($pages[0]->ID);
+    $page = get_page_by_title($company_title, OBJECT, 'page');
+    if ($page) return get_permalink($page->ID);
+    return home_url('/');
+}
+
 // =============================================================================
 // NOTIFICATIONS EMAIL
 // =============================================================================
@@ -336,11 +355,16 @@ add_action('user_register', function(int $user_id) {
     $site_name = get_bloginfo('name') ?: 'TOPsocietes.com';
     $login_url = wp_login_url();
 
+    // Lien vers la page du tableau de bord propriétaire
+    global $wpdb;
+    $dashboard_id  = $wpdb->get_var("SELECT ID FROM {$wpdb->posts} WHERE post_content LIKE '%societies_owner_dashboard%' AND post_status='publish' LIMIT 1");
+    $dashboard_url = $dashboard_id ? get_permalink((int)$dashboard_id) : $login_url;
+
     $subject = $site_name . ' — Bienvenue sur votre espace entreprise';
     $message  = "Bonjour {$user->display_name},\n\n";
     $message .= "Votre compte a bien été créé sur {$site_name}.\n\n";
-    $message .= "Vous pouvez dès maintenant accéder à votre tableau de bord et revendiquer votre fiche entreprise :\n";
-    $message .= $login_url . "\n\n";
+    $message .= "Accédez à votre tableau de bord et revendiquez votre fiche entreprise :\n";
+    $message .= $dashboard_url . "\n\n";
     $message .= "Une fois connecté, recherchez votre entreprise et complétez votre profil pour améliorer votre visibilité.\n\n";
     $message .= "Cordialement,\nL'équipe {$site_name}";
 
@@ -532,7 +556,14 @@ add_shortcode('societies_owner_dashboard', function() {
         delete_user_meta($user_id, 'sc_mod_notice');
     ?>
         <div class="sc-dashboard">
-          <h2>📋 <?= esc_html($company_title) ?></h2>
+          <h2 style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            📋 <?= esc_html($company_title) ?>
+            <?php $fiche_url = sc_get_fiche_url($company_title); if ($fiche_url !== home_url('/')): ?>
+            <a href="<?= esc_url($fiche_url) ?>" target="_blank" rel="noopener"
+               style="font-size:13px;font-weight:600;color:#F97316;text-decoration:none;background:#fff7ed;border:1px solid #fed7aa;padding:4px 12px;border-radius:20px;white-space:nowrap">
+              Voir ma fiche →
+            </a>
+            <?php endif; ?></h2>
 
           <?php if ($mod_notice === 'intro_pending'): ?>
           <div class="sc-success">✅ Votre présentation a été soumise — elle sera publiée après validation.</div>
@@ -1398,9 +1429,10 @@ add_shortcode('societies_fiche', function($atts) {
         </div>
         <!-- NOTE : Données insuffisantes (note 5* uniquement si abonnement badge activé) -->
         <div class="sc2-hero-rating sc2-hero-rating-nodata">
-          <div class="sc2-nodata-icon">📊</div>
-          <div class="sc2-nodata-label">Données insuffisantes</div>
-          <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">👉 Aidez-nous à améliorer cette fiche</a>
+          <div class="sc2-nodata-icon">⭐</div>
+          <div class="sc2-nodata-label">Peu d'avis disponibles</div>
+          <div class="sc2-nodata-sub">Soyez le premier à partager votre expérience !</div>
+          <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">Donner un avis →</a>
         </div>
       </div>
 
@@ -1465,16 +1497,38 @@ add_shortcode('societies_fiche', function($atts) {
         <div class="sc2-faq-list">
           <?php foreach ($qa_open as $item): ?>
           <?php $q = $item['question'] ?? $item['q'] ?? ''; $a = $item['answer'] ?? $item['r'] ?? ''; if (!$q) continue; ?>
-          <div class="sc2-faq-item">
-            <div class="sc2-faq-q"><span class="sc2-faq-icon">Q</span><?= esc_html($q) ?></div>
+          <div class="sc2-faq-item<?= $a ? '' : ' sc2-faq-item--locked' ?>">
+            <button type="button" class="sc2-faq-toggle" aria-expanded="false">
+              <span class="sc2-faq-icon">Q</span>
+              <span class="sc2-faq-q-text"><?= esc_html($q) ?></span>
+              <span class="sc2-faq-chevron">＋</span>
+            </button>
             <?php if ($a): ?>
-            <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
+            <div class="sc2-faq-body" hidden>
+              <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
+            </div>
             <?php else: ?>
-            <div class="sc2-faq-locked">🔐</div>
+            <div class="sc2-faq-body" hidden>
+              <div class="sc2-faq-locked">🔐 Réponse disponible avec un abonnement</div>
+            </div>
             <?php endif; ?>
           </div>
           <?php endforeach; ?>
         </div>
+        <script>
+        document.querySelectorAll('.sc2-faq-toggle').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var item   = btn.closest('.sc2-faq-item');
+            var body   = item.querySelector('.sc2-faq-body');
+            var chev   = btn.querySelector('.sc2-faq-chevron');
+            var open   = btn.getAttribute('aria-expanded') === 'true';
+            btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+            body.hidden = open;
+            chev.textContent = open ? '＋' : '－';
+            item.classList.toggle('sc2-faq-item--open', !open);
+          });
+        });
+        </script>
       </div>
       <?php endif; ?>
 
@@ -1538,14 +1592,19 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
     .sc2-qa-a{color:#374151;font-size:14px;line-height:1.75}
 
-    /* FAQ LIST */
+    /* FAQ ACCORDION */
     .sc2-faq-list{display:flex;flex-direction:column;gap:0}
-    .sc2-faq-item{padding:16px 0;border-bottom:1px solid #f1f5f9;background:#fff}
+    .sc2-faq-item{border-bottom:1px solid #f1f5f9;background:#fff}
     .sc2-faq-item:last-child{border-bottom:none}
-    .sc2-faq-q{display:flex;align-items:flex-start;gap:12px;font-size:15px;font-weight:600;color:#1f2937;margin-bottom:6px}
-    .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.65;padding-left:4px}
+    .sc2-faq-toggle{display:flex;align-items:center;gap:12px;width:100%;background:none;border:none;padding:20px 4px;cursor:pointer;text-align:left;font-family:inherit;transition:background .15s}
+    .sc2-faq-toggle:hover{background:#fafbff}
+    .sc2-faq-q-text{flex:1;font-size:15px;font-weight:600;color:#1f2937}
+    .sc2-faq-chevron{font-size:18px;font-weight:400;color:#F97316;flex-shrink:0;transition:transform .2s}
+    .sc2-faq-item--open .sc2-faq-chevron{color:#8B5CF6}
+    .sc2-faq-body{padding:0 4px 20px 34px}
+    .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.7}
     .sc2-faq-icon{background:var(--sc-grad-btn);color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-    .sc2-faq-locked{font-size:18px;padding-left:4px;opacity:.5}
+    .sc2-faq-locked{font-size:13px;color:#9ca3af;padding:8px 0}
 
     /* BONUS TEXT — section gris clair */
     .sc2-bonus-card{background:#f0f4ff;border:1px solid #dde3f7;border-radius:12px;padding:20px 24px;margin-top:16px;box-shadow:0 1px 6px rgba(59,91,219,.07)}
@@ -1560,8 +1619,9 @@ add_shortcode('societies_fiche', function($atts) {
     /* NOTE DONNÉES INSUFFISANTES */
     .sc2-hero-rating-nodata{text-align:center;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 18px;flex-shrink:0;max-width:200px}
     .sc2-nodata-icon{font-size:28px;margin-bottom:4px}
-    .sc2-nodata-label{font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:8px}
-    .sc2-nodata-link{display:block;font-size:11px;color:#F97316;text-decoration:none;line-height:1.4;font-weight:600}
+    .sc2-nodata-label{font-size:13px;font-weight:700;color:#1f2937;margin-bottom:4px}
+    .sc2-nodata-sub{font-size:11px;color:#6b7280;margin-bottom:8px;line-height:1.4}
+    .sc2-nodata-link{display:inline-block;font-size:11px;background:var(--sc-grad-btn);color:#fff;text-decoration:none;font-weight:700;padding:6px 12px;border-radius:6px}
     .sc2-nodata-link:hover{text-decoration:underline}
 
     /* CTA BULLE avant zone verrouillée */
@@ -2897,15 +2957,34 @@ function sc_admin_fiches() {
 function sc_admin_moderation() {
     // ── Actions Approuver / Rejeter ──────────────────────────────────────────
     if (isset($_POST['sc_mod_approve']) && check_admin_referer('sc_mod_action')) {
-        $mod_id = intval($_POST['sc_mod_id'] ?? 0);
+        $mod_id        = intval($_POST['sc_mod_id'] ?? 0);
+        $mod_company   = sanitize_text_field($_POST['sc_mod_company']   ?? '');
+        $mod_field     = sanitize_text_field($_POST['sc_mod_field']     ?? '');
+        $mod_new_val   = sanitize_textarea_field($_POST['sc_mod_new_val']   ?? '');
+        $mod_cur_val   = sanitize_textarea_field($_POST['sc_mod_cur_val']   ?? '');
         $result = sc_api('/api/modifications/' . $mod_id . '/approve', 'PUT');
         if (!isset($result['error'])) {
-            // Email de validation à l'entreprise
-            $email   = $result['user_email'] ?? '';
-            $company = $result['company_title'] ?? '';
+            $email   = $result['user_email']    ?? $mod_company;
+            $company = $result['company_title'] ?? $mod_company;
+            if (!$email && isset($result['user_email'])) $email = $result['user_email'];
             if ($email) {
-                $subject = 'TOPsocietes.com — Votre modification a été validée';
-                $message = "Bonjour,\n\nVotre modification pour la fiche « {$company} » a été validée et est maintenant visible sur TOPsocietes.com.\n\nCordialement,\nL'équipe TOPsocietes.com";
+                $site_name  = get_bloginfo('name') ?: 'TOPsocietes.com';
+                $fiche_url  = sc_get_fiche_url($company);
+                $field_label = ($mod_field === 'intro_text') ? 'Présentation' : 'Réponses aux questions';
+                $subject = $site_name . ' — Votre modification a été validée';
+                $message  = "Bonjour,\n\n";
+                $message .= "Votre modification pour la fiche « {$company} » a été validée et est maintenant visible sur {$site_name}.\n\n";
+                $message .= "👉 Voir votre fiche : {$fiche_url}\n\n";
+                if ($mod_field) {
+                    $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+                    $message .= "Champ modifié : {$field_label}\n\n";
+                    if ($mod_cur_val) {
+                        $message .= "Avant :\n" . mb_substr($mod_cur_val, 0, 300) . (mb_strlen($mod_cur_val) > 300 ? '…' : '') . "\n\n";
+                    }
+                    $message .= "Après :\n" . mb_substr($mod_new_val, 0, 300) . (mb_strlen($mod_new_val) > 300 ? '…' : '') . "\n";
+                    $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+                }
+                $message .= "Cordialement,\nL'équipe {$site_name}";
                 wp_mail($email, $subject, $message);
             }
             echo '<div class="notice notice-success"><p>✅ Modification validée' . ($email ? " — email envoyé à <strong>" . esc_html($email) . "</strong>" : '') . '.</p></div>';
@@ -3026,7 +3105,11 @@ function sc_admin_moderation() {
             <td>
               <form method="post" style="display:inline">
                 <?php wp_nonce_field('sc_mod_action'); ?>
-                <input type="hidden" name="sc_mod_id" value="<?= intval($mod['id']) ?>">
+                <input type="hidden" name="sc_mod_id"      value="<?= intval($mod['id']) ?>">
+                <input type="hidden" name="sc_mod_company" value="<?= esc_attr($mod['company_title'] ?? '') ?>">
+                <input type="hidden" name="sc_mod_field"   value="<?= esc_attr($mod['field_name']    ?? '') ?>">
+                <input type="hidden" name="sc_mod_new_val" value="<?= esc_attr($mod['field_value']   ?? '') ?>">
+                <input type="hidden" name="sc_mod_cur_val" value="<?= esc_attr($current_raw) ?>">
                 <button name="sc_mod_approve" value="1" class="button button-primary button-small">✅ Valider</button>
               </form>
               <form method="post" style="display:inline;margin-left:4px"
