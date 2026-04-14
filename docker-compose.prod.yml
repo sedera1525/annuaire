@@ -2,11 +2,13 @@ services:
   societies:
     build: .
     ports:
-      - "127.0.0.1:8090:8090"   # exposé en local uniquement (Nginx devant)
+      - "0.0.0.0:8090:8090"
     volumes:
       - ./0.csv:/app/0.csv:ro
       - ./societies.duckdb:/app/societies.duckdb
       - ./fiches.db:/app/fiches.db
+      - /etc/machine-id:/etc/machine-id:ro
+      - ./license.key:/app/license.key:ro
     env_file:
       - .env
     restart: unless-stopped
