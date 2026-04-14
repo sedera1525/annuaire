@@ -37,6 +37,7 @@ from services.fiches import get_setting, init_fiches_db
 
 from routers import auth as auth_router
 from routers import auto, generation, license as license_router, seo
+from routers import emails as emails_router
 from routers import fiches as fiches_router
 from routers import import_csv as import_csv_router
 from routers import modifications as modifications_router
@@ -181,6 +182,7 @@ app.include_router(auto.router,                prefix="/api")
 app.include_router(license_router.router,    prefix="/api")
 app.include_router(import_csv_router.router, prefix="/api")
 app.include_router(seo.router,               prefix="/api")
+app.include_router(emails_router.router,     prefix="/api")
 
 # =============================================================================
 # STATIC + SPA FALLBACK

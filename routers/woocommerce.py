@@ -38,7 +38,8 @@ def public_packs():
             "features":    p["features"],
         }
         if p.get("wc_product_id") and wc_url:
-            item["buy_url"] = f"{wc_url}/?add-to-cart={p['wc_product_id']}"
+            # /checkout/?add-to-cart=ID redirige directement au paiement (bypass panier)
+            item["buy_url"] = f"{wc_url}/checkout/?add-to-cart={p['wc_product_id']}&quantity=1"
         result.append(item)
     return {"packs": result}
 
