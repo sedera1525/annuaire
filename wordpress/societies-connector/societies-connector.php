@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.7
+ * Version:      2.5.8
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.7');
+define('SC_VERSION', '2.5.8');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -2022,14 +2022,12 @@ add_action('wp_head', function() {
 #wpadminbar { display: none !important; }
 html { margin-top: 0 !important; }
 body { padding-top: 0 !important; margin-top: 0 !important; }
-/* Barre de navigation TOPsocietes */
-.sc-topbar { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); padding:10px 24px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 3px 16px rgba(249,115,22,.3); }
-.sc-topbar-logo-wrap { display:flex; align-items:center; text-decoration:none; flex-shrink:0; }
-.sc-topbar-logo-img { height:30px; width:auto; display:block; object-fit:contain; }
-.sc-topbar-nav { display:flex; align-items:center; }
-.sc-topbar-menu { display:flex; list-style:none; margin:0; padding:0; gap:24px; }
-.sc-topbar-menu a,.sc-topbar-menu .menu-item a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; text-shadow:0 1px 3px rgba(0,0,0,.2); }
-.sc-topbar-menu a:hover,.sc-topbar-menu .menu-item a:hover { color:rgba(255,255,255,.8); }
+/* Header Elementor : logo réduit */
+header .elementor-widget-image img, .elementor-element img.attachment-full { max-height:36px !important; width:auto !important; }
+/* Header Elementor : afficher le menu de navigation */
+header .elementor-nav-menu, header nav.elementor-nav-menu--main { display:flex !important; }
+/* Fallback sc-topbar */
+.sc-topbar { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); padding:10px 24px; display:flex; align-items:center; gap:16px; box-shadow:0 3px 16px rgba(249,115,22,.3); }
 .sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
 .sc-topbar a:hover { color:rgba(255,255,255,.8); }
 /* Titre de page / fil d'Ariane (fond bleu) */
@@ -2045,32 +2043,31 @@ body { padding-top: 0 !important; margin-top: 0 !important; }
     <?php
 });
 
-// Enregistrement de l'emplacement de menu pour la topbar
-add_action('after_setup_theme', function() {
-    register_nav_menus(['sc-topbar' => 'Barre de navigation TOPsocietes']);
+// Enqueue les assets Elementor pour que le header soit correctement stylé
+add_action('wp_enqueue_scripts', function() {
+    if (class_exists('\Elementor\Plugin')) {
+        \Elementor\Plugin::instance()->frontend->enqueue_styles();
+        \Elementor\Plugin::instance()->frontend->enqueue_scripts();
+    }
 });
 
-// Topbar TOPsocietes : logo image + menu de navigation
+// Render le header Elementor (post 1574 = Main Header)
+// Fallback sur sc-topbar si Elementor n'est pas disponible
 add_action('wp_body_open', function() {
-    $logo_url = rtrim(get_option('societies_api_url', ''), '/') . '/static/logo.jpg';
-    $menu_html = wp_nav_menu([
-        'theme_location' => 'sc-topbar',
-        'container'      => false,
-        'menu_class'     => 'sc-topbar-menu',
-        'fallback_cb'    => false,
-        'echo'           => false,
-    ]);
-    if (!$menu_html) {
-        $menu_html = '<ul class="sc-topbar-menu">'
-            . '<li><a href="' . esc_url(home_url('/')) . '">Accueil</a></li>'
-            . '</ul>';
+    if (class_exists('\Elementor\Plugin')) {
+        $content = \Elementor\Plugin::instance()->frontend->get_builder_content_for_display(1574, true);
+        if (trim($content)) {
+            echo $content;
+            return;
+        }
     }
+    // Fallback sc-topbar
+    $logo_url = rtrim(get_option('societies_api_url', ''), '/') . '/static/logo.jpg';
     ?>
 <div class="sc-topbar">
-  <a href="<?= esc_url(home_url('/')) ?>" class="sc-topbar-logo-wrap">
-    <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com" class="sc-topbar-logo-img">
+  <a href="<?= esc_url(home_url('/')) ?>">
+    <img src="<?= esc_url($logo_url) ?>" alt="TOPsocietes.com" style="height:30px;width:auto;display:block">
   </a>
-  <nav class="sc-topbar-nav"><?= $menu_html ?></nav>
 </div>
     <?php
 }, 1);
