@@ -2957,31 +2957,41 @@ function sc_admin_fiches() {
 function sc_admin_moderation() {
     // ── Actions Approuver / Rejeter ──────────────────────────────────────────
     if (isset($_POST['sc_mod_approve']) && check_admin_referer('sc_mod_action')) {
-        $mod_id        = intval($_POST['sc_mod_id'] ?? 0);
-        $mod_company   = sanitize_text_field($_POST['sc_mod_company']   ?? '');
-        $mod_field     = sanitize_text_field($_POST['sc_mod_field']     ?? '');
-        $mod_new_val   = sanitize_textarea_field($_POST['sc_mod_new_val']   ?? '');
-        $mod_cur_val   = sanitize_textarea_field($_POST['sc_mod_cur_val']   ?? '');
+        $mod_id      = intval($_POST['sc_mod_id'] ?? 0);
+        $mod_company = sanitize_text_field($_POST['sc_mod_company'] ?? '');
+        $mod_field   = sanitize_text_field($_POST['sc_mod_field']   ?? '');
+
+        // Lire la valeur actuelle depuis l'API AVANT d'approuver
+        $fiche_before = $mod_company ? sc_api('/api/fiche/' . rawurlencode($mod_company)) : [];
+        $cur_val = '';
+        if ($mod_field === 'intro_text') {
+            $cur_val = $fiche_before['intro_text'] ?? '';
+        }
+
+        // Approuver via l'API — les données viennent du backend
         $result = sc_api('/api/modifications/' . $mod_id . '/approve', 'PUT');
         if (!isset($result['error'])) {
-            $email   = $result['user_email']    ?? $mod_company;
-            $company = $result['company_title'] ?? $mod_company;
-            if (!$email && isset($result['user_email'])) $email = $result['user_email'];
+            $email      = $result['user_email']    ?? '';
+            $company    = $result['company_title'] ?? $mod_company;
+            $field_name = $result['field_name']    ?? $mod_field;
+            $new_val    = $result['field_value']   ?? '';
             if ($email) {
-                $site_name  = get_bloginfo('name') ?: 'TOPsocietes.com';
-                $fiche_url  = sc_get_fiche_url($company);
-                $field_label = ($mod_field === 'intro_text') ? 'Présentation' : 'Réponses aux questions';
+                $site_name   = get_bloginfo('name') ?: 'TOPsocietes.com';
+                $fiche_url   = sc_get_fiche_url($company);
+                $field_label = ($field_name === 'intro_text') ? 'Présentation' : 'Réponses aux questions';
                 $subject = $site_name . ' — Votre modification a été validée';
                 $message  = "Bonjour,\n\n";
                 $message .= "Votre modification pour la fiche « {$company} » a été validée et est maintenant visible sur {$site_name}.\n\n";
                 $message .= "👉 Voir votre fiche : {$fiche_url}\n\n";
-                if ($mod_field) {
+                if ($field_name) {
                     $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━\n";
                     $message .= "Champ modifié : {$field_label}\n\n";
-                    if ($mod_cur_val) {
-                        $message .= "Avant :\n" . mb_substr($mod_cur_val, 0, 300) . (mb_strlen($mod_cur_val) > 300 ? '…' : '') . "\n\n";
+                    if ($cur_val) {
+                        $message .= "Avant :\n" . mb_substr($cur_val, 0, 300) . (mb_strlen($cur_val) > 300 ? '…' : '') . "\n\n";
                     }
-                    $message .= "Après :\n" . mb_substr($mod_new_val, 0, 300) . (mb_strlen($mod_new_val) > 300 ? '…' : '') . "\n";
+                    if ($new_val) {
+                        $message .= "Après :\n" . mb_substr($new_val, 0, 300) . (mb_strlen($new_val) > 300 ? '…' : '') . "\n";
+                    }
                     $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
                 }
                 $message .= "Cordialement,\nL'équipe {$site_name}";
@@ -3060,7 +3070,16 @@ function sc_admin_moderation() {
           }
           ?>
           <tr>
-            <td><strong><?= esc_html($mod['company_title']) ?></strong></td>
+            <td>
+              <?php $mod_fiche_url = sc_get_fiche_url($mod['company_title']); ?>
+              <?php if ($mod_fiche_url !== home_url('/')): ?>
+              <a href="<?= esc_url($mod_fiche_url) ?>" target="_blank" rel="noopener" style="font-weight:600;color:#1e2d5a;text-decoration:none">
+                <?= esc_html($mod['company_title']) ?> ↗
+              </a>
+              <?php else: ?>
+              <strong><?= esc_html($mod['company_title']) ?></strong>
+              <?php endif; ?>
+            </td>
             <td><?= $field === 'intro_text' ? 'Présentation' : 'Réponses' ?></td>
             <td style="max-width:400px;font-size:12px;word-break:break-word">
               <?php if ($field === 'intro_text'): ?>
@@ -3108,8 +3127,6 @@ function sc_admin_moderation() {
                 <input type="hidden" name="sc_mod_id"      value="<?= intval($mod['id']) ?>">
                 <input type="hidden" name="sc_mod_company" value="<?= esc_attr($mod['company_title'] ?? '') ?>">
                 <input type="hidden" name="sc_mod_field"   value="<?= esc_attr($mod['field_name']    ?? '') ?>">
-                <input type="hidden" name="sc_mod_new_val" value="<?= esc_attr($mod['field_value']   ?? '') ?>">
-                <input type="hidden" name="sc_mod_cur_val" value="<?= esc_attr($current_raw) ?>">
                 <button name="sc_mod_approve" value="1" class="button button-primary button-small">✅ Valider</button>
               </form>
               <form method="post" style="display:inline;margin-left:4px"
