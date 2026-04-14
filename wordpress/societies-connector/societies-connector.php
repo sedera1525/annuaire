@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.1.5
+ * Version:      2.5.5
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.1.5');
+define('SC_VERSION', '2.5.5');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -324,6 +324,92 @@ function sc_user_has_subscription(int $user_id = 0): bool {
     return !empty($orders);
 }
 
+/**
+ * Retourne l'URL publique de la fiche WP pour une entreprise donnée.
+ * Cherche d'abord par meta _sc_company_title, puis par titre de page.
+ */
+function sc_get_fiche_url(string $company_title): string {
+    if (!$company_title) return home_url('/');
+    $pages = get_posts([
+        'post_type'      => 'page',
+        'post_status'    => 'publish',
+        'posts_per_page' => 1,
+        'meta_key'       => '_sc_company_title',
+        'meta_value'     => $company_title,
+    ]);
+    if ($pages) return get_permalink($pages[0]->ID);
+    $page = get_page_by_title($company_title, OBJECT, 'page');
+    if ($page) return get_permalink($page->ID);
+    return home_url('/');
+}
+
+// =============================================================================
+// NOTIFICATIONS EMAIL
+// =============================================================================
+
+// Email de bienvenue à l'inscription WordPress
+add_action('user_register', function(int $user_id) {
+    $user = get_userdata($user_id);
+    if (!$user) return;
+
+    $site_name = get_bloginfo('name') ?: 'TOPsocietes.com';
+    $login_url = wp_login_url();
+
+    // Lien vers la page du tableau de bord propriétaire
+    global $wpdb;
+    $dashboard_id  = $wpdb->get_var("SELECT ID FROM {$wpdb->posts} WHERE post_content LIKE '%societies_owner_dashboard%' AND post_status='publish' LIMIT 1");
+    $dashboard_url = $dashboard_id ? get_permalink((int)$dashboard_id) : $login_url;
+
+    $subject = $site_name . ' — Bienvenue sur votre espace entreprise';
+    $message  = "Bonjour {$user->display_name},\n\n";
+    $message .= "Votre compte a bien été créé sur {$site_name}.\n\n";
+    $message .= "Accédez à votre tableau de bord et revendiquez votre fiche entreprise :\n";
+    $message .= $dashboard_url . "\n\n";
+    $message .= "Une fois connecté, recherchez votre entreprise et complétez votre profil pour améliorer votre visibilité.\n\n";
+    $message .= "Cordialement,\nL'équipe {$site_name}";
+
+    wp_mail($user->user_email, $subject, $message);
+});
+
+// Email de bienvenue après un achat WooCommerce complété
+add_action('woocommerce_order_status_completed', function(int $order_id) {
+    $order = wc_get_order($order_id);
+    if (!$order) return;
+
+    // Vérifie que la commande contient bien un pack Societies
+    $has_sc_pack = false;
+    $pack_name   = '';
+    foreach ($order->get_items() as $item) {
+        $product = $item->get_product();
+        if (!$product) continue;
+        $sc_pack = $product->get_meta('_sc_pack');
+        if ($sc_pack) {
+            $has_sc_pack = true;
+            $pack_name   = $item->get_name();
+            break;
+        }
+    }
+    if (!$has_sc_pack) return;
+
+    $email     = $order->get_billing_email();
+    $firstname = $order->get_billing_first_name() ?: 'client';
+    $site_name = get_bloginfo('name') ?: 'TOPsocietes.com';
+    $login_url = wp_login_url();
+
+    $subject  = $site_name . ' — Votre abonnement est actif';
+    $message  = "Bonjour {$firstname},\n\n";
+    $message .= "Merci pour votre abonnement « {$pack_name} » !\n\n";
+    $message .= "Votre accès est maintenant actif. Connectez-vous à votre tableau de bord pour compléter votre fiche entreprise :\n";
+    $message .= $login_url . "\n\n";
+    $message .= "Depuis votre espace, vous pouvez :\n";
+    $message .= "- Modifier votre présentation\n";
+    $message .= "- Répondre aux questions sur votre activité\n";
+    $message .= "- Mettre en valeur vos services\n\n";
+    $message .= "Cordialement,\nL'équipe {$site_name}";
+
+    wp_mail($email, $subject, $message);
+});
+
 // =============================================================================
 // SHORTCODES
 // =============================================================================
@@ -470,7 +556,14 @@ add_shortcode('societies_owner_dashboard', function() {
         delete_user_meta($user_id, 'sc_mod_notice');
     ?>
         <div class="sc-dashboard">
-          <h2>📋 <?= esc_html($company_title) ?></h2>
+          <h2 style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            📋 <?= esc_html($company_title) ?>
+            <?php $fiche_url = sc_get_fiche_url($company_title); if ($fiche_url !== home_url('/')): ?>
+            <a href="<?= esc_url($fiche_url) ?>" target="_blank" rel="noopener"
+               style="font-size:13px;font-weight:600;color:#F97316;text-decoration:none;background:#fff7ed;border:1px solid #fed7aa;padding:4px 12px;border-radius:20px;white-space:nowrap">
+              Voir ma fiche →
+            </a>
+            <?php endif; ?></h2>
 
           <?php if ($mod_notice === 'intro_pending'): ?>
           <div class="sc-success">✅ Votre présentation a été soumise — elle sera publiée après validation.</div>
@@ -835,13 +928,13 @@ add_shortcode('societies_search', function($atts) {
     }
     ob_start();
     // CSS sans ligne vide (double \n) pour éviter que wpautop/Elementor injecte </p><p> et casse le parsing CSS
-    $sc_css = '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.over-dark{display:none!important}'
+    $sc_css = '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,[class*="sidebar"]:not([class*="sc2"]):not([class*="sc-"]),#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.btn-toggle-sidebar,.sidebar-toggle,.toggle-sidebar,[data-toggle="sidebar"],.over-dark,.off-canvas-wrap,.js-off-canvas-overlay{display:none!important}'
     . 'body{background:#fff!important;overflow-x:hidden}'
     . '#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
     . '.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#fff;box-sizing:border-box;overflow-x:hidden}'
     . '.sc-hero{background:#fff;padding:64px 24px 48px;text-align:center;box-sizing:border-box}'
-    . '.sc-hero-title{font-size:46px;font-weight:900;color:#1a2744;margin:0 0 14px;letter-spacing:-2px;line-height:1.08}'
-    . '.sc-hero-title em{color:#e63946;font-style:normal}'
+    . '.sc-hero-title{font-size:46px;font-weight:900;color:#1e2d5a;margin:0 0 14px;letter-spacing:-2px;line-height:1.08}'
+    . '.sc-hero-title em{background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-style:normal}'
     . '.sc-hero-sub{font-size:16px;color:#6b7280;margin:0 0 40px;line-height:1.6;max-width:460px;display:block;margin-left:auto;margin-right:auto}'
     . '.sc-hero-sub strong{color:#1a2744;font-weight:700}'
     . '.sc-hero-bar{max-width:860px;margin:0 auto;display:flex;flex-direction:row;align-items:stretch;background:#fff;border:1.5px solid #e2e8f0;border-radius:50px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;min-height:64px}'
@@ -850,11 +943,11 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-hero-field:hover{background:#fafbfd}'
     . '.sc-hero-field-icon{font-size:16px;margin-right:10px;flex-shrink:0;opacity:.6}'
     . '.sc-hero-field-wrap{display:flex;flex-direction:column;flex:1;min-width:0;justify-content:center}'
-    . '.sc-hero-field-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#e63946;margin-bottom:3px;line-height:1}'
+    . '.sc-hero-field-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#F97316;margin-bottom:3px;line-height:1}'
     . '.sc-hero-input{width:100%;border:none;outline:none;font-size:14px;font-weight:500;color:#1f2937;background:transparent;padding:0;line-height:1.4}'
     . '.sc-hero-input::placeholder{color:#c4cdd8;font-weight:400}'
-    . '.sc-hero-btn{background:#e63946;border:none;margin:6px;border-radius:44px;width:52px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:background .2s;color:#fff;aspect-ratio:1}'
-    . '.sc-hero-btn:hover{background:#c82333}'
+    . '.sc-hero-btn{background:linear-gradient(135deg,#F97316,#EC4899);border:none;margin:6px;border-radius:44px;width:52px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .2s;color:#fff;aspect-ratio:1}'
+    . '.sc-hero-btn:hover{opacity:.88}'
     . '.sc-hero-stats{display:flex;flex-direction:row;gap:12px;justify-content:center;margin-top:28px;flex-wrap:nowrap}'
     . '.sc-hero-stat{display:flex;flex-direction:row;align-items:center;gap:8px;background:#fff;border:1.5px solid #edf1f7;border-radius:50px;padding:8px 16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}'
     . '.sc-hero-stat-icon{font-size:18px;flex-shrink:0}'
@@ -862,16 +955,16 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-hero-stat-text span{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;font-weight:600}'
     . '.sc-cats-section{padding:56px 40px 64px;max-width:1280px;margin:0 auto;box-sizing:border-box}'
     . '.sc-cats-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:32px;flex-wrap:wrap;gap:12px}'
-    . '.sc-cats-title{font-size:26px;font-weight:800;color:#1a2744;margin:0 0 4px;letter-spacing:-.5px}'
+    . '.sc-cats-title{font-size:26px;font-weight:800;color:#1e2d5a;margin:0 0 4px;letter-spacing:-.5px}'
     . '.sc-cats-sub{font-size:14px;color:#9ca3af;margin:0}'
-    . '.sc-cats-link{font-size:14px;font-weight:700;color:#e63946;text-decoration:none;white-space:nowrap}'
+    . '.sc-cats-link{font-size:14px;font-weight:700;color:#F97316;text-decoration:none;white-space:nowrap}'
     . '.sc-cats-link:hover{text-decoration:underline}'
     . '.sc-cats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}'
     . '.sc-cat-card{background:#fff;border:1.5px solid #f0f2f5;border-radius:18px;padding:28px 20px 22px;text-align:center;text-decoration:none;color:inherit;display:block;transition:box-shadow .18s,transform .18s,border-color .18s;box-shadow:0 1px 6px rgba(0,0,0,.04)}'
-    . '.sc-cat-card:hover{box-shadow:0 10px 36px rgba(230,57,70,.11);border-color:#e63946;transform:translateY(-4px);text-decoration:none}'
+    . '.sc-cat-card:hover{box-shadow:0 10px 36px rgba(249,115,22,.15);border-color:#F97316;transform:translateY(-4px);text-decoration:none}'
     . '.sc-cat-icon{font-size:42px;margin-bottom:14px;display:block;line-height:1}'
     . '.sc-cat-name{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:5px;line-height:1.3}'
-    . '.sc-cat-count{font-size:12px;color:#f59e0b;font-weight:600}'
+    . '.sc-cat-count{font-size:12px;font-weight:600;background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
     . '.sc-results-wrap{max-width:1280px;margin:0 auto;padding:0 40px 64px;box-sizing:border-box}'
     . '.sc-status{font-size:14px;color:#6b7280;font-weight:500;margin-bottom:20px}'
     . '.sc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}'
@@ -880,26 +973,26 @@ add_shortcode('societies_search', function($atts) {
     . '.sc-card{background:#fff;border:1.5px solid #edf1f7;border-radius:14px;padding:20px 22px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:10px;transition:box-shadow .18s,transform .18s;box-shadow:0 1px 4px rgba(0,0,0,.05)}'
     . '.sc-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1);transform:translateY(-3px);text-decoration:none}'
     . '.sc-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}'
-    . '.sc-card-name{font-size:15px;font-weight:700;color:#1a2744;line-height:1.35}'
-    . '.sc-card-badge{background:#e63946;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}'
+    . '.sc-card-name{font-size:15px;font-weight:700;color:#1e2d5a;line-height:1.35}'
+    . '.sc-card-badge{background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}'
     . '.sc-card-tags{display:flex;flex-wrap:wrap;gap:5px}'
     . '.sc-card-tag{background:#f1f5f9;color:#64748b;font-size:11px;padding:3px 9px;border-radius:20px}'
     . '.sc-card-tag-city{background:#eff6ff;color:#3b82f6}'
     . '.sc-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid #f1f5f9}'
     . '.sc-card-stars{color:#f59e0b;font-size:14px}'
-    . '.sc-card-score{font-size:15px;font-weight:800;color:#e63946}'
+    . '.sc-card-score{font-size:15px;font-weight:800;background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
     . '.sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}'
     . '.sc-card-arrow{color:#94a3b8;font-size:16px;transition:transform .15s}'
-    . '.sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#e63946}'
+    . '.sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#F97316}'
     . '.sc-empty{text-align:center;padding:60px 20px;color:#94a3b8}'
     . '.sc-empty-icon{font-size:48px;margin-bottom:12px}'
     . '.sc-empty-title{font-size:18px;font-weight:600;color:#374151;margin-bottom:6px}'
     . '.sc-loader{display:flex;justify-content:center;padding:40px}'
-    . '.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#e63946;border-radius:50%;animation:sc-spin .7s linear infinite}'
+    . '.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#F97316;border-radius:50%;animation:sc-spin .7s linear infinite}'
     . '@keyframes sc-spin{to{transform:rotate(360deg)}}'
     . '.sc-more-wrap{text-align:center;margin-top:32px}'
-    . '.sc-more-btn{background:#1a2744;color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}'
-    . '.sc-more-btn:hover{background:#e63946}'
+    . '.sc-more-btn{background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;box-shadow:0 3px 12px rgba(249,115,22,.3)}'
+    . '.sc-more-btn:hover{opacity:.88}'
     . '.sc-advert{text-align:center;padding:14px 20px;margin-top:32px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}'
     . '.sc-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}'
     . '.sc-advert-link:hover{text-decoration:underline}'
@@ -1309,6 +1402,15 @@ add_shortcode('societies_fiche', function($atts) {
     $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
 
+    // Supprime les phrases contenant des notes/étoiles (ne doit apparaître qu'après abonnement)
+    if ($intro) {
+        $sentences = preg_split('/(?<=[.!?])\s+/u', $intro);
+        $filtered  = array_filter($sentences, function($s) {
+            return !preg_match('/étoile|\/5|\bavis\b|note.*sur|sur.*note|basée sur|moyenne de|satisfaction.*remarquable/iu', $s);
+        });
+        $intro = implode(' ', $filtered);
+    }
+
     $claim_url = home_url('/revendiquer/');
     ob_start(); ?>
     <div class="sc2-wrap">
@@ -1327,9 +1429,10 @@ add_shortcode('societies_fiche', function($atts) {
         </div>
         <!-- NOTE : Données insuffisantes (note 5* uniquement si abonnement badge activé) -->
         <div class="sc2-hero-rating sc2-hero-rating-nodata">
-          <div class="sc2-nodata-icon">📊</div>
-          <div class="sc2-nodata-label">Données insuffisantes</div>
-          <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">👉 Aidez-nous à améliorer cette fiche</a>
+          <div class="sc2-nodata-icon">⭐</div>
+          <div class="sc2-nodata-label">Peu d'avis disponibles</div>
+          <div class="sc2-nodata-sub">Soyez le premier à partager votre expérience !</div>
+          <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">Donner un avis →</a>
         </div>
       </div>
 
@@ -1346,18 +1449,22 @@ add_shortcode('societies_fiche', function($atts) {
       </div>
       <?php endif; ?>
 
-      <!-- DISCLAIMER NOTE déplacé en bas de page -->
-
-      <?php if ($intro && $status === 'done'): ?>
-      <!-- PRÉSENTATION -->
-      <div class="sc2-intro-card">
-        <div class="sc2-intro-label">Présentation</div>
-        <p class="sc2-intro-text"><?= nl2br(esc_html($intro)) ?></p>
+      <!-- BONUS TEXT juste après le hero (①) -->
+      <?php if ($bonus_text && $status === 'done'): ?>
+      <div class="sc2-bonus-card">
+        <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
       </div>
       <?php endif; ?>
 
+      <!-- DISCLAIMER NOTE déplacé en bas de page -->
+
       <?php if (!empty($qa_answered)): ?>
-      <!-- Q&A RÉPONDUES -->
+      <!-- Q&A RÉPONDUES — intro affichée juste avant -->
+      <?php if ($intro && $status === 'done'): ?>
+      <div class="sc2-intro-card">
+        <p class="sc2-intro-text"><?= nl2br(esc_html($intro)) ?></p>
+      </div>
+      <?php endif; ?>
       <div class="sc2-section">
         <h2 class="sc2-section-title">Analyse actuelle de l'entreprise</h2>
         <div class="sc2-qa-grid">
@@ -1373,9 +1480,6 @@ add_shortcode('societies_fiche', function($atts) {
 
       <?php if (!empty($qa_open)): ?>
       <!-- CTA BULLE — visible avant la zone verrouillée (disparaît si abonné) -->
-      <div class="sc2-cta-bar">
-        <a href="<?= esc_url($claim_url) ?>" class="sc2-cta-bar-link">👉 Complétez votre fiche entreprise</a>
-      </div>
       <div class="sc2-cta-bubble">
         <div class="sc2-cta-bubble-title">Complétez gratuitement votre fiche entreprise pour :</div>
         <ul class="sc2-cta-bubble-list">
@@ -1393,23 +1497,38 @@ add_shortcode('societies_fiche', function($atts) {
         <div class="sc2-faq-list">
           <?php foreach ($qa_open as $item): ?>
           <?php $q = $item['question'] ?? $item['q'] ?? ''; $a = $item['answer'] ?? $item['r'] ?? ''; if (!$q) continue; ?>
-          <div class="sc2-faq-item">
-            <div class="sc2-faq-q"><span class="sc2-faq-icon">Q</span><?= esc_html($q) ?></div>
+          <div class="sc2-faq-item<?= $a ? '' : ' sc2-faq-item--locked' ?>">
+            <button type="button" class="sc2-faq-toggle" aria-expanded="false">
+              <span class="sc2-faq-icon">Q</span>
+              <span class="sc2-faq-q-text"><?= esc_html($q) ?></span>
+              <span class="sc2-faq-chevron">＋</span>
+            </button>
             <?php if ($a): ?>
-            <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
+            <div class="sc2-faq-body" hidden>
+              <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
+            </div>
             <?php else: ?>
-            <div class="sc2-faq-locked">🔐</div>
+            <div class="sc2-faq-body" hidden>
+              <div class="sc2-faq-locked">🔐 Réponse disponible avec un abonnement</div>
+            </div>
             <?php endif; ?>
           </div>
           <?php endforeach; ?>
         </div>
-      </div>
-      <?php endif; ?>
-
-      <?php if ($bonus_text && $status === 'done'): ?>
-      <!-- TEXTE BONUS IA -->
-      <div class="sc2-bonus-card">
-        <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
+        <script>
+        document.querySelectorAll('.sc2-faq-toggle').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var item   = btn.closest('.sc2-faq-item');
+            var body   = item.querySelector('.sc2-faq-body');
+            var chev   = btn.querySelector('.sc2-faq-chevron');
+            var open   = btn.getAttribute('aria-expanded') === 'true';
+            btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+            body.hidden = open;
+            chev.textContent = open ? '＋' : '－';
+            item.classList.toggle('sc2-faq-item--open', !open);
+          });
+        });
+        </script>
       </div>
       <?php endif; ?>
 
@@ -1434,87 +1553,91 @@ add_shortcode('societies_fiche', function($atts) {
 
     </div>
     <style>
+    :root{--sc-grad:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%);--sc-grad-btn:linear-gradient(135deg,#F97316,#EC4899);--sc-grad-cta:linear-gradient(135deg,#F97316,#EC4899);--sc-navy:#1e2d5a;--sc-light:#f8fafc;--sc-white:#ffffff}
     .sc2-wrap{max-width:860px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
 
-    /* HERO */
-    .sc2-hero{background:#1a2744;border-radius:16px;padding:32px 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:4px;flex-wrap:wrap}
+    /* HERO — fond blanc + accent gradient (pas sombre) */
+    .sc2-hero{background:#fff;border-radius:16px;padding:32px 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:4px;flex-wrap:wrap;border:1.5px solid #f0f2f5;box-shadow:0 2px 16px rgba(0,0,0,.06);position:relative;overflow:hidden}
+    .sc2-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--sc-grad)}
     .sc2-hero-inner{flex:1}
-    .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px;opacity:.9}
-    .sc2-hero-name{margin:0 0 10px;font-size:28px;font-weight:800;color:#fff;line-height:1.2;text-transform:uppercase;letter-spacing:.5px}
+    .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px}
+    .sc2-hero-name{margin:0 0 10px;font-size:28px;font-weight:800;color:var(--sc-navy);line-height:1.2;text-transform:uppercase;letter-spacing:.5px}
     .sc2-hero-sub{display:flex;flex-wrap:wrap;gap:10px}
-    .sc2-hero-sub span{background:rgba(255,255,255,.12);color:#cbd5e1;font-size:13px;padding:4px 12px;border-radius:20px}
-    .sc2-hero-rating{text-align:center;background:rgba(255,255,255,.08);border-radius:12px;padding:14px 22px;flex-shrink:0}
-    .sc2-hero-score{font-size:42px;font-weight:800;color:#e63946;line-height:1}
+    .sc2-hero-sub span{background:#f1f5f9;color:#475569;font-size:13px;padding:4px 12px;border-radius:20px}
+    .sc2-hero-rating{text-align:center;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:16px 24px;flex-shrink:0}
+    .sc2-hero-score{font-size:44px;font-weight:900;line-height:1;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .sc2-hero-stars{color:#f59e0b;font-size:18px;letter-spacing:2px;margin:4px 0}
     .sc2-hero-votes{color:#94a3b8;font-size:12px}
-    .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center}
+    .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center;color:#94a3b8}
 
     /* CONTACT BAR */
-    .sc2-contact-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 20px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px}
+    .sc2-contact-bar{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 20px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
     .sc2-contact-item{color:#475569;font-size:13px;display:inline-flex;align-items:center;gap:4px}
     .sc2-contact-link{color:#2563eb;text-decoration:none}
     .sc2-contact-link:hover{text-decoration:underline}
 
-    /* INTRO */
+    /* INTRO — fond clair = contenu */
     .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:6px 12px;margin-bottom:12px}
-    .sc2-intro-card{background:#1a2744;border-radius:12px;padding:24px 28px;margin-bottom:16px}
-    .sc2-intro-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:10px;color:#94a3b8}
-    .sc2-intro-text{margin:0;color:#e2e8f0;line-height:1.8;font-size:15px}
+    .sc2-intro-card{background:#f5f7fa;border-left:4px solid transparent;border-image:var(--sc-grad) 1;border-radius:0 12px 12px 0;padding:24px 28px;margin-bottom:28px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+    .sc2-intro-text{margin:0;color:#1f2937;line-height:1.85;font-size:15px}
 
     /* SECTIONS */
     .sc2-section{margin-bottom:24px}
-    .sc2-section-title{font-size:18px;font-weight:700;color:#111827;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid #e63946;display:inline-block}
+    .sc2-section-title{font-size:18px;font-weight:700;color:var(--sc-navy);margin:0 0 16px;padding-bottom:10px;border-bottom:3px solid transparent;border-image:var(--sc-grad) 1;display:inline-block}
 
-    /* Q&A GRID */
-    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
-    .sc2-qa-card{background:#fff;border:1px solid #e5e7eb;border-left:3px solid #e63946;border-radius:10px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow .2s}
-    .sc2-qa-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
-    .sc2-qa-q{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#e63946;margin-bottom:8px}
-    .sc2-qa-a{color:#374151;font-size:14px;line-height:1.7}
+    /* Q&A GRID — espacements généreux (retour-7) */
+    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;margin-bottom:8px}
+    .sc2-qa-card{background:#fff;border:1.5px solid #f0f2f5;border-left:3px solid #F97316;border-radius:12px;padding:22px 24px;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:box-shadow .2s,transform .15s}
+    .sc2-qa-card:hover{box-shadow:0 6px 24px rgba(249,115,22,.12);transform:translateY(-2px)}
+    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
+    .sc2-qa-a{color:#374151;font-size:14px;line-height:1.75}
 
-    /* FAQ LIST */
+    /* FAQ ACCORDION */
     .sc2-faq-list{display:flex;flex-direction:column;gap:0}
-    .sc2-faq-item{padding:16px 0;border-bottom:1px solid #f1f5f9}
+    .sc2-faq-item{border-bottom:1px solid #f1f5f9;background:#fff}
     .sc2-faq-item:last-child{border-bottom:none}
-    .sc2-faq-q{display:flex;align-items:flex-start;gap:12px;font-size:15px;font-weight:600;color:#1f2937;margin-bottom:6px}
-    .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.65;padding-left:4px}
-    .sc2-faq-icon{background:#1a2744;color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-    .sc2-faq-locked{font-size:18px;padding-left:4px;opacity:.5}
+    .sc2-faq-toggle{display:flex;align-items:center;gap:12px;width:100%;background:none;border:none;padding:20px 4px;cursor:pointer;text-align:left;font-family:inherit;transition:background .15s}
+    .sc2-faq-toggle:hover{background:#fafbff}
+    .sc2-faq-q-text{flex:1;font-size:15px;font-weight:600;color:#1f2937}
+    .sc2-faq-chevron{font-size:18px;font-weight:400;color:#F97316;flex-shrink:0;transition:transform .2s}
+    .sc2-faq-item--open .sc2-faq-chevron{color:#8B5CF6}
+    .sc2-faq-body{padding:0 4px 20px 34px}
+    .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.7}
+    .sc2-faq-icon{background:var(--sc-grad-btn);color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .sc2-faq-locked{font-size:13px;color:#9ca3af;padding:8px 0}
 
-    /* BONUS TEXT */
-    .sc2-bonus-card{background:#f0f4ff;border-left:4px solid #3b5bdb;border-radius:10px;padding:18px 22px;margin-top:16px}
-    .sc2-bonus-text{margin:0;color:#374151;font-size:14px;line-height:1.7}
+    /* BONUS TEXT — section gris clair */
+    .sc2-bonus-card{background:#f0f4ff;border:1px solid #dde3f7;border-radius:12px;padding:20px 24px;margin-top:16px;box-shadow:0 1px 6px rgba(59,91,219,.07)}
+    .sc2-bonus-text{margin:0;color:#1e2d5a;font-size:14px;line-height:1.75}
 
     /* BANDEAU PUBLICITAIRE */
     .sc2-advert{text-align:center;padding:14px 20px;margin-top:16px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}
     .sc2-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}
     .sc2-advert-link:hover{text-decoration:underline}
-    .sc2-faq-icon-r{background:#e63946}
+    .sc2-faq-icon-r{background:var(--sc-grad-cta)}
 
     /* NOTE DONNÉES INSUFFISANTES */
-    .sc2-hero-rating-nodata{text-align:center;background:rgba(255,255,255,.08);border-radius:12px;padding:14px 18px;flex-shrink:0;max-width:200px}
+    .sc2-hero-rating-nodata{text-align:center;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 18px;flex-shrink:0;max-width:200px}
     .sc2-nodata-icon{font-size:28px;margin-bottom:4px}
-    .sc2-nodata-label{font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:8px}
-    .sc2-nodata-link{display:block;font-size:11px;color:#e63946;text-decoration:none;line-height:1.4;font-weight:600}
+    .sc2-nodata-label{font-size:13px;font-weight:700;color:#1f2937;margin-bottom:4px}
+    .sc2-nodata-sub{font-size:11px;color:#6b7280;margin-bottom:8px;line-height:1.4}
+    .sc2-nodata-link{display:inline-block;font-size:11px;background:var(--sc-grad-btn);color:#fff;text-decoration:none;font-weight:700;padding:6px 12px;border-radius:6px}
     .sc2-nodata-link:hover{text-decoration:underline}
 
     /* CTA BULLE avant zone verrouillée */
-    .sc2-cta-bar{margin:24px 0 0;padding:12px 20px;background:#fff9f0;border:1.5px solid #fde68a;border-radius:10px}
-    .sc2-cta-bar-link{font-size:15px;font-weight:700;color:#1a2744;text-decoration:none}
-    .sc2-cta-bar-link:hover{color:#e63946;text-decoration:underline}
-    .sc2-cta-bubble{background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:12px;padding:20px 24px;margin:12px 0 24px}
+    .sc2-cta-bubble{background:#fff;border:1.5px solid #e0e7ff;border-radius:12px;padding:20px 24px;margin:24px 0;box-shadow:0 2px 12px rgba(59,91,219,.08)}
     .sc2-cta-bubble-title{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:12px}
     .sc2-cta-bubble-list{margin:0 0 16px;padding:0 0 0 20px;list-style:none}
     .sc2-cta-bubble-list li{font-size:13px;color:#374151;padding:3px 0;padding-left:0;list-style:none}
-    .sc2-cta-bubble-btn{display:inline-block;background:#1a2744;color:#fff;font-size:13px;font-weight:700;padding:10px 18px;border-radius:8px;text-decoration:none}
-    .sc2-cta-bubble-btn:hover{background:#e63946;color:#fff}
+    .sc2-cta-bubble-btn{display:inline-block;background:var(--sc-grad-btn);color:#fff;font-size:13px;font-weight:700;padding:10px 20px;border-radius:8px;text-decoration:none;transition:opacity .18s;box-shadow:0 3px 10px rgba(249,115,22,.28)}
+    .sc2-cta-bubble-btn:hover{opacity:.88;color:#fff}
 
     /* CLAIM CTA PRINCIPAL */
-    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#1a2744 0%,#2d3f6b 100%);border-radius:12px;padding:20px 24px;margin-top:24px;flex-wrap:wrap}
-    .sc2-claim-cta-main-text strong{display:block;font-size:16px;font-weight:800;color:#fff;margin-bottom:4px}
-    .sc2-claim-cta-main-text span{font-size:13px;color:#94a3b8}
-    .sc2-claim-btn{background:#e63946;color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;white-space:nowrap;flex-shrink:0}
-    .sc2-claim-btn:hover{background:#c82333;color:#fff}
+    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#fff7ed 0%,#fdf2f8 100%);border:1.5px solid #fed7aa;border-radius:12px;padding:20px 24px;margin-top:24px;flex-wrap:wrap}
+    .sc2-claim-cta-main-text strong{display:block;font-size:16px;font-weight:800;color:var(--sc-navy);margin-bottom:4px}
+    .sc2-claim-cta-main-text span{font-size:13px;color:#6b7280}
+    .sc2-claim-btn{background:var(--sc-grad-cta);color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;white-space:nowrap;flex-shrink:0;transition:opacity .18s}
+    .sc2-claim-btn:hover{opacity:.88;color:#fff}
 
     /* FOOTER */
     .sc2-footer{margin-top:32px;padding-top:18px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;color:#9ca3af;font-size:12px}
@@ -1531,17 +1654,35 @@ add_shortcode('societies_fiche', function($atts) {
     </style>
     <?php
     $html = ob_get_clean();
-    // Traduit "Show Sidebar" du thème Findus en français via wp_footer
+    // Supprime le bouton "Show Sidebar" / "Afficher la barre latérale" du thème Findus
     add_action('wp_footer', function() {
         echo '<script>
 (function(){
-  function translateSidebar(){
-    document.querySelectorAll(".show-sidebar-button,.sidebar-toggle,[data-toggle=\"sidebar\"]").forEach(function(el){
-      if(el.textContent.trim()==="Show Sidebar") el.textContent="Afficher la barre lat\u00e9rale";
+  var _SIDEBAR_TEXTS=["Show Sidebar","Afficher la barre lat\u00e9rale","Hide Sidebar","Masquer la barre lat\u00e9rale"];
+  function removeSidebarToggle(){
+    // Supprimer les boutons/liens qui contiennent le texte
+    document.querySelectorAll("button,a,.show-sidebar-button,.btn-show-sidebar,.sidebar-toggle,[class*=\'sidebar-toggle\'],[class*=\'show-sidebar\']").forEach(function(el){
+      var t=el.textContent.trim();
+      if(_SIDEBAR_TEXTS.indexOf(t)!==-1||(el.innerHTML&&el.innerHTML.trim().replace(/<[^>]+>/g,"").trim()===t&&_SIDEBAR_TEXTS.indexOf(t)!==-1)){
+        el.style.display="none";
+        el.setAttribute("aria-hidden","true");
+      }
+    });
+    // Cibler aussi les nœuds texte directs
+    var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);
+    var node,toHide=[];
+    while((node=walker.nextNode())){
+      if(_SIDEBAR_TEXTS.indexOf(node.nodeValue.trim())!==-1) toHide.push(node);
+    }
+    toHide.forEach(function(n){
+      if(n.parentElement) n.parentElement.style.display="none";
     });
   }
-  document.addEventListener("DOMContentLoaded",translateSidebar);
-  setTimeout(translateSidebar,800);
+  document.addEventListener("DOMContentLoaded",removeSidebarToggle);
+  setTimeout(removeSidebarToggle,300);
+  setTimeout(removeSidebarToggle,1000);
+  var obs=new MutationObserver(function(){removeSidebarToggle();});
+  obs.observe(document.body,{childList:true,subtree:true});
 })();
 </script>';
     }, 20);
@@ -1872,7 +2013,6 @@ add_action('admin_init', function() {
 // MODE SOUS-DOMAINE — masquer header/footer thème + footer custom
 // =============================================================================
 add_action('wp_head', function() {
-    if (!get_option('societies_subdomain_mode')) return;
     ?>
 <style id="sc-subdomain-css">
 /* Cache le header et le footer du thème */
@@ -1882,32 +2022,49 @@ add_action('wp_head', function() {
 body.logged-in:not(.logged-in.administrator) #wpadminbar { display: none !important; }
 body { padding-top: 0 !important; margin-top: 0 !important; }
 /* Barre de navigation TOPsocietes */
-.sc-topbar { background:#1a2744; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; }
-.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; letter-spacing:.5px; }
-.sc-topbar-logo { font-size:16px; font-weight:800; color:#e63946 !important; }
+.sc-topbar { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 3px 16px rgba(249,115,22,.3); }
+.sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; text-shadow:0 1px 3px rgba(0,0,0,.2); }
+.sc-topbar a:hover { color:rgba(255,255,255,.8); }
+.sc-topbar-logo { font-size:17px; font-weight:900; color:#fff; -webkit-text-fill-color:#fff; }
 /* Footer custom */
-.sc-site-footer { background:#1a2744; color:#94a3b8; padding:28px 24px; margin-top:24px; font-size:13px; }
+.sc-site-footer { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); color:#fff; padding:28px 24px; margin-top:24px; font-size:13px; box-shadow:0 -3px 16px rgba(249,115,22,.2); }
 .sc-site-footer-inner { max-width:860px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
 .sc-site-footer-links { display:flex; flex-wrap:wrap; gap:20px; }
-.sc-site-footer-links a { color:#94a3b8; text-decoration:none; }
-.sc-site-footer-links a:hover { color:#fff; }
-.sc-site-footer-copy { color:#64748b; font-size:12px; }
+.sc-site-footer-links a { color:rgba(255,255,255,.85); text-decoration:none; }
+.sc-site-footer-links a:hover { color:#fff; text-decoration:underline; }
+.sc-site-footer-copy { color:rgba(255,255,255,.6); font-size:12px; }
 </style>
     <?php
 });
 
+// Enqueue les assets Elementor pour que le header soit correctement stylé
+add_action('wp_enqueue_scripts', function() {
+    if (class_exists('\Elementor\Plugin')) {
+        \Elementor\Plugin::instance()->frontend->enqueue_styles();
+        \Elementor\Plugin::instance()->frontend->enqueue_scripts();
+    }
+});
+
+// Render le header Elementor (post 1574 = Main Header, type elementor_library)
+// Fallback sur sc-topbar si Elementor n'est pas disponible
 add_action('wp_body_open', function() {
-    if (!get_option('societies_subdomain_mode')) return;
+    if (class_exists('\Elementor\Plugin')) {
+        $content = \Elementor\Plugin::instance()->frontend->get_builder_content_for_display(1574, true);
+        if (trim($content)) {
+            echo $content;
+            return;
+        }
+    }
+    // Fallback sc-topbar
     ?>
 <div class="sc-topbar">
   <a href="<?= esc_url(home_url('/')) ?>" class="sc-topbar-logo">TOPsocietes.com</a>
   <a href="<?= esc_url(home_url('/')) ?>">← Accueil</a>
 </div>
     <?php
-});
+}, 1);
 
 add_action('wp_footer', function() {
-    if (!get_option('societies_subdomain_mode')) return;
     $links_raw = get_option('societies_footer_links', '');
     // Liens par défaut si non configurés
     if (empty(trim($links_raw))) {
@@ -2800,15 +2957,34 @@ function sc_admin_fiches() {
 function sc_admin_moderation() {
     // ── Actions Approuver / Rejeter ──────────────────────────────────────────
     if (isset($_POST['sc_mod_approve']) && check_admin_referer('sc_mod_action')) {
-        $mod_id = intval($_POST['sc_mod_id'] ?? 0);
+        $mod_id        = intval($_POST['sc_mod_id'] ?? 0);
+        $mod_company   = sanitize_text_field($_POST['sc_mod_company']   ?? '');
+        $mod_field     = sanitize_text_field($_POST['sc_mod_field']     ?? '');
+        $mod_new_val   = sanitize_textarea_field($_POST['sc_mod_new_val']   ?? '');
+        $mod_cur_val   = sanitize_textarea_field($_POST['sc_mod_cur_val']   ?? '');
         $result = sc_api('/api/modifications/' . $mod_id . '/approve', 'PUT');
         if (!isset($result['error'])) {
-            // Email de validation à l'entreprise
-            $email   = $result['user_email'] ?? '';
-            $company = $result['company_title'] ?? '';
+            $email   = $result['user_email']    ?? $mod_company;
+            $company = $result['company_title'] ?? $mod_company;
+            if (!$email && isset($result['user_email'])) $email = $result['user_email'];
             if ($email) {
-                $subject = 'TOPsocietes.com — Votre modification a été validée';
-                $message = "Bonjour,\n\nVotre modification pour la fiche « {$company} » a été validée et est maintenant visible sur TOPsocietes.com.\n\nCordialement,\nL'équipe TOPsocietes.com";
+                $site_name  = get_bloginfo('name') ?: 'TOPsocietes.com';
+                $fiche_url  = sc_get_fiche_url($company);
+                $field_label = ($mod_field === 'intro_text') ? 'Présentation' : 'Réponses aux questions';
+                $subject = $site_name . ' — Votre modification a été validée';
+                $message  = "Bonjour,\n\n";
+                $message .= "Votre modification pour la fiche « {$company} » a été validée et est maintenant visible sur {$site_name}.\n\n";
+                $message .= "👉 Voir votre fiche : {$fiche_url}\n\n";
+                if ($mod_field) {
+                    $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+                    $message .= "Champ modifié : {$field_label}\n\n";
+                    if ($mod_cur_val) {
+                        $message .= "Avant :\n" . mb_substr($mod_cur_val, 0, 300) . (mb_strlen($mod_cur_val) > 300 ? '…' : '') . "\n\n";
+                    }
+                    $message .= "Après :\n" . mb_substr($mod_new_val, 0, 300) . (mb_strlen($mod_new_val) > 300 ? '…' : '') . "\n";
+                    $message .= "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+                }
+                $message .= "Cordialement,\nL'équipe {$site_name}";
                 wp_mail($email, $subject, $message);
             }
             echo '<div class="notice notice-success"><p>✅ Modification validée' . ($email ? " — email envoyé à <strong>" . esc_html($email) . "</strong>" : '') . '.</p></div>';
@@ -2929,7 +3105,11 @@ function sc_admin_moderation() {
             <td>
               <form method="post" style="display:inline">
                 <?php wp_nonce_field('sc_mod_action'); ?>
-                <input type="hidden" name="sc_mod_id" value="<?= intval($mod['id']) ?>">
+                <input type="hidden" name="sc_mod_id"      value="<?= intval($mod['id']) ?>">
+                <input type="hidden" name="sc_mod_company" value="<?= esc_attr($mod['company_title'] ?? '') ?>">
+                <input type="hidden" name="sc_mod_field"   value="<?= esc_attr($mod['field_name']    ?? '') ?>">
+                <input type="hidden" name="sc_mod_new_val" value="<?= esc_attr($mod['field_value']   ?? '') ?>">
+                <input type="hidden" name="sc_mod_cur_val" value="<?= esc_attr($current_raw) ?>">
                 <button name="sc_mod_approve" value="1" class="button button-primary button-small">✅ Valider</button>
               </form>
               <form method="post" style="display:inline;margin-left:4px"
@@ -3125,3 +3305,181 @@ function sc_enqueue_styles() {
 }
 
 add_action('wp_head', 'sc_enqueue_styles');
+
+// =============================================================================
+// CSS GLOBAL — masquage header/sidebar/footer thème via wp_head (fiable)
+// =============================================================================
+add_action('wp_head', function() {
+    echo '<style id="sc-global-hide">
+.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,
+.header-main,.apus-top-bar,.top-bar-wrap,.col-md-4.pull-right,
+.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,
+.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,
+[class*="sidebar"]:not([class*="sc2"]):not([class*="sc-"]),#apus-footer,footer.apus-footer,
+.show-sidebar-button,.btn-show-sidebar,.btn-toggle-sidebar,.sidebar-toggle,.toggle-sidebar,
+[data-toggle="sidebar"],.off-canvas-wrap,.js-off-canvas-overlay{display:none!important}
+body{background:#fff!important}
+</style>';
+}, 99);
+
+// =============================================================================
+// FOOTER — Masquage colonnes thème + footer personnalisé en bas (retour-4)
+// =============================================================================
+
+// Vide les widgets texte contenant du Lorem Ipsum
+add_filter('widget_text_content', function($content) {
+    if (stripos($content, 'Lorem') !== false) return '';
+    return $content;
+}, 1);
+add_filter('widget_text', function($content) {
+    if (stripos($content, 'Lorem') !== false) return '';
+    return $content;
+}, 1);
+
+// CSS global : masque la section Elementor des colonnes footer (logo, Liens utiles, Contact fictif)
+// Section a3b0e40 = colonnes → cachée ; section 4b67268 = copyright → conservée
+add_action('wp_head', function() {
+    echo '<style id="sc-footer-hide">
+.elementor-element-a3b0e40,.elementor-element-4b67268{display:none!important}
+</style>';
+}, 5);
+
+// JS : fallback — masque les colonnes footer thème et les widgets Lorem Ipsum
+add_action('wp_footer', function() {
+    echo '<script>
+(function(){
+  function fixFooter(){
+    // Masquer colonnes thème footer (pas le copyright)
+    var footer=document.querySelector("#apus-footer,footer.apus-footer");
+    if(footer){
+      Array.from(footer.children).forEach(function(c){
+        var cls=c.className||"";
+        var isCopy=/copyright|footer-bottom|bottom/i.test(cls)||/copyright/i.test(c.innerHTML);
+        if(!isCopy) c.style.display="none";
+      });
+    }
+    // Masquer widgets Lorem Ipsum
+    document.querySelectorAll(".textwidget,.widget_text").forEach(function(el){
+      if(el.textContent.indexOf("Lorem")>-1){
+        var w=el.closest(".widget,.elementor-widget,.footer-widget");
+        if(w) w.style.display="none";
+      }
+    });
+  }
+  document.addEventListener("DOMContentLoaded",fixFooter);
+  setTimeout(fixFooter,400);
+})();
+</script>';
+}, 98);
+
+// (ancien footer sombre #sc-custom-footer supprimé — remplacé par .sc-site-footer ci-dessus)
+
+// =============================================================================
+// SESSION PERSISTANTE 30 JOURS (point 12)
+// =============================================================================
+add_filter('auth_cookie_expiration', function($expiration, $user_id, $remember) {
+    return 30 * DAY_IN_SECONDS; // 30 jours quelle que soit l'option "se souvenir de moi"
+}, 10, 3);
+
+// =============================================================================
+// POPUP COLLECTE EMAIL VISITEURS — DÉSACTIVÉ (réactiver en changeant false→true)
+// =============================================================================
+if (false) :
+add_action('wp_footer', function() {
+    if (is_user_logged_in()) return;
+    $api_url = rtrim(get_option('societies_api_url', ''), '/');
+    if (!$api_url) return;
+    ?>
+<div id="sc-email-popup" style="display:none;position:fixed;bottom:24px;right:24px;z-index:99999;width:320px;background:#1a2744;border-radius:14px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.4);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <button onclick="scClosePopup()" style="position:absolute;top:10px;right:14px;background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1">✕</button>
+  <p style="color:#fff;font-size:15px;font-weight:700;margin:0 0 6px">📬 Restez informé</p>
+  <p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5">Recevez nos actualités et offres exclusives sur les entreprises françaises.</p>
+  <div style="display:flex;gap:8px">
+    <input id="sc-popup-email" type="email" placeholder="votre@email.fr" style="flex:1;padding:9px 12px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#fff;font-size:13px;outline:none">
+    <button onclick="scSubmitEmail()" style="background:#e63946;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">OK</button>
+  </div>
+  <p id="sc-popup-msg" style="font-size:12px;color:#10b981;margin:8px 0 0;min-height:16px"></p>
+</div>
+<script>
+(function(){
+  var POPUP_KEY='sc_email_popup_shown';
+  if(localStorage.getItem(POPUP_KEY)) return;
+  setTimeout(function(){
+    var el=document.getElementById('sc-email-popup');
+    if(el) el.style.display='block';
+  }, 8000);
+  window.scClosePopup=function(){
+    document.getElementById('sc-email-popup').style.display='none';
+    localStorage.setItem(POPUP_KEY,'1');
+  };
+  window.scSubmitEmail=function(){
+    var email=document.getElementById('sc-popup-email').value.trim();
+    var msg=document.getElementById('sc-popup-msg');
+    if(!email||!email.includes('@')){msg.style.color='#ef4444';msg.textContent='Email invalide.';return;}
+    msg.style.color='#94a3b8';msg.textContent='Envoi...';
+    fetch('<?= esc_js($api_url) ?>/api/emails/collect',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:email,source_url:location.href,source_page:document.title})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        msg.style.color='#10b981';
+        msg.textContent='✅ Merci ! Vous êtes bien inscrit.';
+        localStorage.setItem(POPUP_KEY,'1');
+        setTimeout(function(){document.getElementById('sc-email-popup').style.display='none';},2500);
+      } else {
+        msg.style.color='#ef4444';msg.textContent=d.error||'Erreur.';
+      }
+    }).catch(function(){msg.style.color='#ef4444';msg.textContent='Erreur réseau.';});
+  };
+})();
+</script>
+<?php
+}, 100);
+endif; // fin désactivation popup
+
+// =============================================================================
+// BANDEAU PUBLICITAIRE TOPSOCIETES.COM — affiché en bas de chaque page
+// =============================================================================
+add_action('wp_footer', function() {
+    echo '
+<a href="https://www.topsocietes.com" target="_blank" rel="noopener sponsored" id="sc-promo-banner" style="
+    display:block;
+    background:linear-gradient(135deg,#fff7ed 0%,#fdf2f8 50%,#f0f9ff 100%);
+    border-top:3px solid transparent;
+    border-image:linear-gradient(135deg,#F97316,#EC4899,#8B5CF6,#06B6D4) 1;
+    padding:16px 32px;
+    font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;
+    text-decoration:none;
+    transition:opacity .2s;
+">
+  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
+
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      <div style="background:linear-gradient(135deg,#F97316,#EC4899);border-radius:10px;padding:10px 14px;flex-shrink:0">
+        <span style="font-size:22px">🌍</span>
+      </div>
+      <div>
+        <p style="margin:0 0 3px;font-size:16px;font-weight:800;color:#1e2d5a;letter-spacing:.2px">
+          Créez votre société — <span style="background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">0 impôt société</span>
+        </p>
+        <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.4">
+          Europe · Asie · USA &nbsp;|&nbsp; <span style="color:#475569;font-weight:600">+ Introduction bancaire incluse</span>
+        </p>
+      </div>
+    </div>
+
+    <span style="
+        display:inline-flex;align-items:center;gap:8px;
+        background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;
+        font-size:14px;font-weight:700;
+        padding:11px 22px;border-radius:10px;
+        white-space:nowrap;flex-shrink:0;
+        box-shadow:0 4px 16px rgba(249,115,22,.3);
+    ">
+      Découvrir TOPsocietes.com <span style="font-size:16px">→</span>
+    </span>
+
+  </div>
+</a>';
+}, 97);
