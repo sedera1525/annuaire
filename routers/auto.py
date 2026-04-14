@@ -1,5 +1,10 @@
 """
 Societies — Auto-génération en arrière-plan (avec suivi par tête)
+
+Architecture pipeline :
+  - 1 tâche "reader" alimente une asyncio.Queue depuis la DB (pages de batch_size)
+  - N tâches "worker" (= concurrency) consomment la queue en continu
+  → Les têtes ne sont jamais inactives tant qu'il y a des entreprises à traiter
 """
 import asyncio
 import json
@@ -20,6 +25,7 @@ from services.generator import build_prompt, call_openai, validate_qa, OPEN_QUES
 logger = logging.getLogger("societies")
 router = APIRouter(tags=["auto-generate"])
 
+_SENTINEL = object()  # poison pill pour arrêter les workers
 
 auto_state: dict = {
     "running":        False,
@@ -52,123 +58,153 @@ async def _auto_generate_loop():
         for i in range(concurrency)
     ]
 
-    slot_queue: asyncio.Queue = asyncio.Queue()
-    for i in range(concurrency):
-        await slot_queue.put(i)
+    # Queue partagée entre le reader et les workers
+    work_queue: asyncio.Queue = asyncio.Queue(maxsize=concurrency * 4)
 
-    async def _one(company: dict) -> str:
-        title = company["title"].strip()
-        slot  = await slot_queue.get()
+    # ── READER : alimente la queue depuis la DB ────────────────────────────
+    async def _reader():
+        offset = auto_state["offset"]
         try:
-            auto_state["heads"][slot]["status"] = "working"
-            auto_state["heads"][slot]["title"]  = title
+            while auto_state["running"]:
+                try:
+                    conn  = get_conn()
+                    total = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
+                    rows  = conn.execute(
+                        "SELECT title, category, city, zip_code, rating_value "
+                        "FROM companies LIMIT ? OFFSET ?",
+                        [batch_size, offset],
+                    ).fetchall()
+                    conn.close()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.warning(f"auto_generate batch fetch error: {e}")
+                    await asyncio.sleep(5)
+                    continue
 
-            while not _head_pause_events[slot].is_set():
-                auto_state["heads"][slot]["status"] = "paused"
-                await asyncio.sleep(0.3)
-            auto_state["heads"][slot]["status"] = "working"
+                auto_state["total"] = total
+                if not rows:
+                    break  # fin du catalogue
 
-            prompt = build_prompt(
-                title,
-                company.get("category"),
-                company.get("city"),
-                company.get("zip_code"),
-                company.get("rating_value"),
-                company.get("rating_votes"),
-            )
-            result = await call_openai(get_openai_key(), OPENAI_MODEL, OPENAI_TIMEOUT, prompt)
-            parsed = json.loads(result["text"])
-            if not isinstance(parsed, dict):
-                raise ValueError("Format inattendu")
-            validate_qa(parsed)
-            open_qs = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
-            save_fiche(title, "done",
-                       qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
-                       qa_open=json.dumps(open_qs, ensure_ascii=False),
-                       intro_text=parsed.get("intro", ""),
-                       bonus_text=parsed.get("bonus", ""),
-                       model=result["model"],
-                       completion_tokens=result["completion_tokens"])
-            auto_state["heads"][slot]["done"] += 1
-            auto_state["done"] += 1
-            auto_state["processed"] += 1
-            return "done"
+                titles       = [r[0] for r in rows]
+                placeholders = ",".join("?" * len(titles))
+                fc = sqlite3.connect(FICHES_DB)
+                try:
+                    already = {row[0] for row in fc.execute(
+                        f"SELECT company_title FROM fiches "
+                        f"WHERE company_title IN ({placeholders}) "
+                        f"AND status IN ('done','generating') AND deleted_at IS NULL",
+                        titles,
+                    ).fetchall()}
+                finally:
+                    fc.close()
+
+                for r in rows:
+                    if not auto_state["running"]:
+                        return
+                    title    = r[0]
+                    category = r[1]
+                    if title in already or is_excluded_category(category):
+                        continue
+                    company = {
+                        "title":        title,
+                        "category":     category,
+                        "city":         r[2],
+                        "zip_code":     r[3],
+                        "rating_value": r[4],
+                        "rating_votes": None,
+                    }
+                    save_fiche(title, "generating")
+                    # put() bloque (await) si la queue est pleine → back-pressure naturel
+                    await work_queue.put(company)
+
+                offset += batch_size
+                auto_state["offset"]        = offset
+                auto_state["last_activity"] = datetime.now().isoformat()
+                if _auto_job_id:
+                    try:
+                        update_auto_job(_auto_job_id, offset,
+                                        auto_state["done"], auto_state["errors"])
+                    except Exception:
+                        pass
+
         except asyncio.CancelledError:
             raise
-        except Exception as e:
-            logger.error(f"auto_generate error for '{title}': {e}")
-            save_fiche(title, "error", error=str(e))
-            auto_state["heads"][slot]["errors"] += 1
-            auto_state["errors"] += 1
-            auto_state["processed"] += 1
-            return "error"
         finally:
-            auto_state["heads"][slot]["status"] = "idle"
-            auto_state["heads"][slot]["title"]  = ""
-            await slot_queue.put(slot)
+            # Envoie un poison pill par worker pour les débloquer
+            for _ in range(concurrency):
+                await work_queue.put(_SENTINEL)
 
-    offset = auto_state["offset"]
-    try:
-        while auto_state["running"]:
+    # ── WORKER : consomme la queue en continu ──────────────────────────────
+    async def _worker(slot: int):
+        while True:
+            company = await work_queue.get()
+            if company is _SENTINEL:
+                work_queue.task_done()
+                break
+
+            title = company["title"].strip()
             try:
-                conn  = get_conn()
-                total = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
-                rows  = conn.execute(
-                    "SELECT title, category, city, zip_code, rating_value "
-                    "FROM companies LIMIT ? OFFSET ?",
-                    [batch_size, offset],
-                ).fetchall()
-                conn.close()
+                auto_state["heads"][slot]["status"] = "working"
+                auto_state["heads"][slot]["title"]  = title
+
+                # Gestion pause
+                while not _head_pause_events[slot].is_set():
+                    auto_state["heads"][slot]["status"] = "paused"
+                    await asyncio.sleep(0.3)
+                auto_state["heads"][slot]["status"] = "working"
+
+                prompt = build_prompt(
+                    title,
+                    company.get("category"),
+                    company.get("city"),
+                    company.get("zip_code"),
+                    company.get("rating_value"),
+                    company.get("rating_votes"),
+                )
+                result = await call_openai(get_openai_key(), OPENAI_MODEL, OPENAI_TIMEOUT, prompt)
+                parsed = json.loads(result["text"])
+                if not isinstance(parsed, dict):
+                    raise ValueError("Format inattendu")
+                validate_qa(parsed)
+                open_qs = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
+                save_fiche(title, "done",
+                           qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
+                           qa_open=json.dumps(open_qs, ensure_ascii=False),
+                           intro_text=parsed.get("intro", ""),
+                           bonus_text=parsed.get("bonus", ""),
+                           model=result["model"],
+                           completion_tokens=result["completion_tokens"])
+                auto_state["heads"][slot]["done"] += 1
+                auto_state["done"]      += 1
+                auto_state["processed"] += 1
+
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.warning(f"auto_generate batch fetch error: {e}")
-                await asyncio.sleep(5)
-                continue
-
-            auto_state["total"] = total
-            if not rows:
-                break
-
-            titles       = [r[0] for r in rows]
-            placeholders = ",".join("?" * len(titles))
-            fc = sqlite3.connect(FICHES_DB)
-            try:
-                already = {row[0] for row in fc.execute(
-                    f"SELECT company_title FROM fiches "
-                    f"WHERE company_title IN ({placeholders}) "
-                    f"AND status IN ('done','generating') AND deleted_at IS NULL",
-                    titles,
-                ).fetchall()}
+                logger.error(f"auto_generate error for '{title}': {e}")
+                save_fiche(title, "error", error=str(e))
+                auto_state["heads"][slot]["errors"] += 1
+                auto_state["errors"]    += 1
+                auto_state["processed"] += 1
             finally:
-                fc.close()
+                auto_state["heads"][slot]["status"] = "idle"
+                auto_state["heads"][slot]["title"]  = ""
+                work_queue.task_done()
 
-            to_generate = [
-                {"title": r[0], "category": r[1], "city": r[2],
-                 "zip_code": r[3], "rating_value": r[4], "rating_votes": None}
-                for r in rows
-                if r[0] not in already and not is_excluded_category(r[1])
-            ]
+    # ── LANCEMENT ──────────────────────────────────────────────────────────
+    try:
+        reader_task  = asyncio.create_task(_reader())
+        worker_tasks = [asyncio.create_task(_worker(i)) for i in range(concurrency)]
 
-            if to_generate:
-                for c in to_generate:
-                    save_fiche(c["title"], "generating")
-                await asyncio.gather(*[_one(c) for c in to_generate])
-
-            offset += batch_size
-            auto_state["offset"]        = offset
-            auto_state["last_activity"] = datetime.now().isoformat()
-            # Persistance — survit aux crashs / redémarrages
-            if _auto_job_id:
-                try:
-                    update_auto_job(_auto_job_id, offset,
-                                    auto_state["done"], auto_state["errors"])
-                except Exception:
-                    pass
-            await asyncio.sleep(0.5)
+        # Attend que tout soit fini
+        await asyncio.gather(reader_task, *worker_tasks)
 
     except asyncio.CancelledError:
-        pass
+        reader_task.cancel()
+        for t in worker_tasks:
+            t.cancel()
+        await asyncio.gather(reader_task, *worker_tasks, return_exceptions=True)
     finally:
         auto_state["running"] = False
         for h in auto_state.get("heads", []):
@@ -193,18 +229,17 @@ async def auto_generate_start(data: AutoStartRequest):
                 "processed":   auto_state["processed"],
                 "done":        auto_state["done"]}
     auto_state.update({
-        "running":      True,
-        "concurrency":  data.concurrency,
-        "batch_size":   data.batch_size,
-        "processed":    0,
-        "done":         0,
-        "errors":       0,
-        "offset":       data.resume_offset,
-        "heads":        [],
-        "started_at":   datetime.now().isoformat(),
+        "running":       True,
+        "concurrency":   data.concurrency,
+        "batch_size":    data.batch_size,
+        "processed":     0,
+        "done":          0,
+        "errors":        0,
+        "offset":        data.resume_offset,
+        "heads":         [],
+        "started_at":    datetime.now().isoformat(),
         "last_activity": None,
     })
-    # Persistance — enregistre le job en SQLite avant de démarrer
     try:
         _auto_job_id = save_auto_job(data.concurrency, data.batch_size, data.resume_offset)
     except Exception:

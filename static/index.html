@@ -192,6 +192,16 @@
   .view-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
   .view-btn:hover:not(.active) { color: var(--text); border-color: var(--muted); }
 
+  /* ONGLETS CONFIG */
+  .cfg-tab {
+    background: none; border: none; border-bottom: 3px solid transparent;
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    padding: 8px 16px 10px; cursor: pointer; transition: color .15s, border-color .15s;
+    margin-bottom: -2px;
+  }
+  .cfg-tab:hover { color: var(--text); }
+  .cfg-tab-active { color: var(--accent) !important; border-bottom-color: var(--accent) !important; }
+
   /* CARDS */
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
 
@@ -677,34 +687,41 @@
   </div>
 </div>
 
-<!-- VUE ABONNEMENTS -->
+<!-- VUE CONFIG -->
 <div id="view-abonnements" style="display:none;padding:24px;max-width:1100px;margin:0 auto">
 
-  <!-- HEADER -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
-    <h2 style="margin:0;font-size:20px;color:var(--text)">🛒 Abonnements</h2>
-    <div style="display:flex;gap:8px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <h2 style="margin:0;font-size:20px;color:var(--text)">⚙️ Configuration</h2>
+  </div>
+
+  <!-- ONGLETS -->
+  <div id="cfgTabs" style="display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:24px;flex-wrap:wrap">
+    <button onclick="showCfgTab('wc')"     id="cfgTab-wc"     class="cfg-tab cfg-tab-active">📦 WooCommerce</button>
+    <button onclick="showCfgTab('subs')"   id="cfgTab-subs"   class="cfg-tab">👥 Abonnés</button>
+    <button onclick="showCfgTab('fiches')" id="cfgTab-fiches" class="cfg-tab">✏️ Fiches IA</button>
+    <button onclick="showCfgTab('prompt')" id="cfgTab-prompt" class="cfg-tab">🤖 Prompt IA</button>
+    <button onclick="showCfgTab('emails')" id="cfgTab-emails" class="cfg-tab">📧 Emails</button>
+  </div>
+
+  <!-- ── ONGLET : WooCommerce ─────────────────────────────────── -->
+  <div id="cfgPane-wc">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       <button onclick="openWcSettingsModal()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 14px;font-size:13px;cursor:pointer">⚙️ Clés API WooCommerce</button>
       <button onclick="syncPacksToWc()" id="btnSyncPacks" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">🔄 Synchroniser les packs → WooCommerce</button>
       <button onclick="publishSearchPage()" id="btnPublishSearch" style="background:#6c8aff;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">📄 Publier page recherche → WP</button>
     </div>
-  </div>
-
-  <div id="wcSyncStatus" style="font-size:13px;color:var(--muted);margin-bottom:16px;min-height:20px"></div>
-
-  <!-- PACKS -->
-  <div style="margin-bottom:32px">
+    <div id="wcSyncStatus" style="font-size:13px;color:var(--muted);margin-bottom:20px;min-height:18px"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <h3 style="margin:0;font-size:16px;color:var(--text)">📦 Packs configurés</h3>
+      <h3 style="margin:0;font-size:15px;color:var(--text)">📦 Packs configurés</h3>
       <button onclick="openPackModal()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">+ Nouveau pack</button>
     </div>
     <div id="packsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px"></div>
   </div>
 
-  <!-- ABONNÉS -->
-  <div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <h3 style="margin:0;font-size:16px;color:var(--text)">👥 Abonnés actifs</h3>
+  <!-- ── ONGLET : Abonnés ─────────────────────────────────────── -->
+  <div id="cfgPane-subs" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0;font-size:15px;color:var(--text)">👥 Abonnés</h3>
       <div style="display:flex;gap:8px;align-items:center">
         <select id="subStatusFilter" onchange="loadSubscriptions()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 10px;color:var(--text);font-size:13px">
           <option value="active">Actifs</option>
@@ -717,6 +734,47 @@
     </div>
     <div id="subsTable" style="font-size:13px;color:var(--muted)">Cliquez sur Rafraîchir pour charger les abonnés.</div>
   </div>
+
+  <!-- ── ONGLET : Fiches IA ───────────────────────────────────── -->
+  <div id="cfgPane-fiches" style="display:none">
+    <h3 style="margin:0 0 16px;font-size:15px;color:var(--text)">✏️ Correction des introductions générées</h3>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 16px">Parcourt toutes les fiches générées (64 000+) par batches de 500 et régénère les introductions selon le prompt actif.</p>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button onclick="fixIntros()" id="btnFixIntros" style="background:#f59e0b;color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer">✏️ Corriger toutes les intros</button>
+      <button onclick="stopFixIntros()" id="btnStopFixIntros" style="display:none;background:#ef4444;color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer">⏹ Arrêter</button>
+    </div>
+    <div id="fixIntrosStatus" style="font-size:13px;color:var(--muted);min-height:18px"></div>
+  </div>
+
+  <!-- ── ONGLET : Prompt IA ───────────────────────────────────── -->
+  <div id="cfgPane-prompt" style="display:none">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h3 style="margin:0 0 6px;font-size:15px;color:var(--text)">🤖 Prompt de génération IA</h3>
+        <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.6">Instructions envoyées à OpenAI pour chaque fiche.<br>Placeholders obligatoires : <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">{nom}</code> <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">{categorie}</code> <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">{ville}</code> <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">{note}</code></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button onclick="loadPrompt()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:13px;cursor:pointer">🔄 Charger</button>
+        <button onclick="resetPrompt()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:13px;cursor:pointer">↩️ Défaut</button>
+        <button onclick="savePrompt()" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">💾 Sauvegarder</button>
+      </div>
+    </div>
+    <div id="promptStatus" style="font-size:12px;margin-bottom:10px;min-height:18px"></div>
+    <textarea id="promptEditor" rows="24" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:monospace;font-size:12px;line-height:1.6;resize:vertical" placeholder="Cliquez sur Charger pour afficher le prompt actuel…"></textarea>
+  </div>
+
+  <!-- ── ONGLET : Emails ──────────────────────────────────────── -->
+  <div id="cfgPane-emails" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0;font-size:15px;color:var(--text)">📧 Emails collectés (popup visiteurs)</h3>
+      <div style="display:flex;gap:8px">
+        <button onclick="exportEmailsCsv()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:13px;cursor:pointer">⬇️ Exporter CSV</button>
+        <button onclick="loadCollectedEmails()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:13px;cursor:pointer">🔄 Rafraîchir</button>
+      </div>
+    </div>
+    <div id="emailsTable" style="font-size:13px;color:var(--muted)">Cliquez sur Rafraîchir pour charger les emails.</div>
+  </div>
+
 </div>
 
 <!-- Modal Pack -->
@@ -1771,7 +1829,7 @@ function showView(view) {
   document.getElementById('navFiches').classList.toggle('active',      view === 'fiches');
   document.getElementById('navAbonnements').classList.toggle('active', view === 'abonnements');
   if (view === 'fiches') loadFiches();
-  if (view === 'abonnements') loadPacks();
+  if (view === 'abonnements') { loadPacks(); loadCollectedEmails(); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2553,6 +2611,171 @@ async function loadSubscriptions() {
   } catch(e) {
     el.textContent = '❌ Erreur : ' + e.message;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EMAILS COLLECTÉS
+// ═══════════════════════════════════════════════════════════════════════
+async function loadCollectedEmails() {
+  const el = document.getElementById('emailsTable');
+  el.innerHTML = '🔄 Chargement...';
+  try {
+    const r = await fetch('/api/emails');
+    if (!r.ok) { el.textContent = '❌ Erreur ' + r.status; return; }
+    const d = await r.json();
+    const rows = d.emails || [];
+    if (!rows.length) { el.textContent = 'Aucun email collecté pour l\'instant.'; return; }
+    el.innerHTML = `
+      <div style="color:var(--muted);font-size:12px;margin-bottom:8px">${rows.length} email(s) collecté(s)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:8px 12px;color:var(--muted);font-weight:600">Email</th>
+            <th style="text-align:left;padding:8px 12px;color:var(--muted);font-weight:600">Page source</th>
+            <th style="text-align:left;padding:8px 12px;color:var(--muted);font-weight:600">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(e => `
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 12px;font-weight:500">${escHtml(e.email)}</td>
+            <td style="padding:8px 12px;color:var(--muted);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(e.source_url||'')}">${escHtml(e.source_page||e.source_url||'—')}</td>
+            <td style="padding:8px 12px;color:var(--muted)">${(e.collected_at||'').replace('T',' ').substring(0,16)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    window._collectedEmails = rows;
+  } catch(e) {
+    el.textContent = '❌ Erreur : ' + e.message;
+  }
+}
+
+let _fixIntrosRunning = false;
+
+function stopFixIntros() {
+  _fixIntrosRunning = false;
+}
+
+async function fixIntros() {
+  if (_fixIntrosRunning) return;
+  if (!confirm('Corriger les intros de TOUTES les fiches générées (64 000+) ?\nCela va tourner en boucle par batches de 500. Vous pouvez arrêter à tout moment.')) return;
+  _fixIntrosRunning = true;
+  const btn     = document.getElementById('btnFixIntros');
+  const btnStop = document.getElementById('btnStopFixIntros');
+  const el      = document.getElementById('fixIntrosStatus') || document.getElementById('wcSyncStatus');
+  btn.disabled = true;
+  btnStop.style.display = '';
+  let offset = 0, totalFixed = 0, totalErrors = 0, batch = 0;
+  try {
+    while (_fixIntrosRunning) {
+      batch++;
+      el.innerHTML = `⏳ Batch ${batch} — offset ${offset} — corrigées : <b>${totalFixed}</b> | erreurs : ${totalErrors}`;
+      const r = await fetch('/api/generate/fix-intros', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({offset, concurrency: 6})
+      });
+      if (!r.ok) { el.textContent = '❌ Erreur HTTP ' + r.status; break; }
+      const d = await r.json();
+      totalFixed  += d.fixed  || 0;
+      totalErrors += d.errors || 0;
+      el.innerHTML = `🔄 Batch ${batch} terminé — offset ${offset} — corrigées : <b>${totalFixed}</b> | erreurs : ${totalErrors} | restantes : ${d.remaining ?? '?'}`;
+      if (d.next_offset === null || d.next_offset === undefined) {
+        el.innerHTML = `✅ Terminé ! <b>${totalFixed}</b> intros corrigées sur ${d.total_fiches} fiches (${totalErrors} erreurs)`;
+        break;
+      }
+      offset = d.next_offset;
+      await new Promise(res => setTimeout(res, 300)); // petit délai entre batches
+    }
+    if (!_fixIntrosRunning) el.innerHTML += ' <span style="color:#f59e0b">(arrêté manuellement)</span>';
+  } catch(e) {
+    el.textContent = '❌ Erreur : ' + e.message;
+  } finally {
+    _fixIntrosRunning = false;
+    btn.disabled = false;
+    btnStop.style.display = 'none';
+  }
+}
+
+// ── ONGLETS CONFIG ────────────────────────────────────────────────────────
+const _CFG_TABS = ['wc', 'subs', 'fiches', 'prompt', 'emails'];
+function showCfgTab(tab) {
+  _CFG_TABS.forEach(t => {
+    const pane = document.getElementById('cfgPane-' + t);
+    const btn  = document.getElementById('cfgTab-' + t);
+    if (pane) pane.style.display = t === tab ? '' : 'none';
+    if (btn)  btn.classList.toggle('cfg-tab-active', t === tab);
+  });
+  // Chargement automatique au premier affichage
+  if (tab === 'prompt') loadPrompt();
+  if (tab === 'subs')   loadSubscriptions();
+  if (tab === 'emails') loadCollectedEmails();
+}
+
+// ── GESTION DU PROMPT ─────────────────────────────────────────────────────
+async function loadPrompt() {
+  const el = document.getElementById('promptEditor');
+  const st = document.getElementById('promptStatus');
+  st.textContent = '⏳ Chargement…';
+  try {
+    const r = await fetch('/api/generate/prompt', { headers: csrfHeaders() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    el.value = d.prompt;
+    st.innerHTML = d.is_custom
+      ? '<span style="color:#f59e0b">⚠️ Prompt personnalisé actif</span>'
+      : '<span style="color:#10b981">✅ Prompt par défaut</span>';
+  } catch(e) {
+    st.textContent = '❌ ' + e.message;
+  }
+}
+
+async function savePrompt() {
+  const prompt = document.getElementById('promptEditor').value.trim();
+  const st = document.getElementById('promptStatus');
+  if (!prompt) { st.textContent = '❌ Prompt vide'; return; }
+  st.textContent = '⏳ Sauvegarde…';
+  try {
+    const r = await fetch('/api/generate/prompt', {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({ prompt })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erreur');
+    st.innerHTML = '<span style="color:#10b981">✅ Prompt sauvegardé — actif dès la prochaine génération</span>';
+  } catch(e) {
+    st.textContent = '❌ ' + e.message;
+  }
+}
+
+async function resetPrompt() {
+  if (!confirm('Remettre le prompt par défaut ?')) return;
+  const st = document.getElementById('promptStatus');
+  st.textContent = '⏳ Réinitialisation…';
+  try {
+    const r = await fetch('/api/generate/prompt', {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({ prompt: '' })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await loadPrompt();
+  } catch(e) {
+    st.textContent = '❌ ' + e.message;
+  }
+}
+
+function exportEmailsCsv() {
+  const rows = window._collectedEmails || [];
+  if (!rows.length) { alert('Aucun email à exporter. Rafraîchissez d\'abord la liste.'); return; }
+  const csv = ['Email,Page source,Date collecte']
+    .concat(rows.map(e => `"${e.email}","${e.source_page||e.source_url||''}","${e.collected_at||''}"`))
+    .join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'emails-collectes-' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
 }
 
 // --- Publication page recherche WP ---

@@ -98,20 +98,11 @@ def plugin_info(request: Request):
 
 
 @router.get("/plugin/download")
-def download_plugin(license: str = "", request: Request = None):
+def download_plugin():
     """
-    Télécharge le ZIP du plugin.
-    Accepte soit une session admin, soit une clé de licence valide (?license=XXXX).
+    Télécharge le ZIP du plugin — public (WordPress auto-update l'appelle sans credentials).
+    Le ZIP ne contient que du code PHP déjà présent sur le serveur WP, pas de données sensibles.
     """
-    # Auth via clé de licence
-    if license:
-        stored_hash = get_setting("license_hash")
-        if not stored_hash or not secrets.compare_digest(_hash_key(license.strip()), stored_hash):
-            raise HTTPException(status_code=403, detail="Clé de licence invalide")
-    elif request:
-        from core.auth import is_authenticated, is_admin
-        if not is_authenticated(request) or not is_admin(request):
-            raise HTTPException(status_code=401, detail="Non authentifié")
     buf = _build_zip()
     return StreamingResponse(
         buf,

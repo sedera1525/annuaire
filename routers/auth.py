@@ -47,9 +47,9 @@ async def login(
         csrf  = make_csrf_token()
         logger.info(f"Connexion réussie : {username}")
         resp  = RedirectResponse("/", status_code=302)
-        resp.set_cookie(COOKIE_NAME,       token, httponly=True,  samesite="lax", max_age=900)
+        resp.set_cookie(COOKIE_NAME,       token, httponly=True,  samesite="lax", max_age=28800)
         # Cookie CSRF lisible par le JS du SPA (httponly=False)
-        resp.set_cookie(CSRF_COOKIE_NAME,  csrf,  httponly=False, samesite="lax", max_age=900)
+        resp.set_cookie(CSRF_COOKIE_NAME,  csrf,  httponly=False, samesite="lax", max_age=28800)
         return resp
     logger.warning(f"Tentative de connexion échouée : {username}")
     return HTMLResponse(

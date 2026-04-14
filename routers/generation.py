@@ -4,12 +4,14 @@ Societies — Endpoints de génération OpenAI (simple, stream, batch)
 import json
 import logging
 import re
+import sqlite3
 from datetime import datetime
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from core.config import OPENAI_MODEL, OPENAI_TIMEOUT
+from core.auth import require_admin
+from core.config import FICHES_DB, OPENAI_MODEL, OPENAI_TIMEOUT
 from core.db import fetch_company
 from core.limiter import limiter
 from core.utils import format_date_fr, sse
@@ -17,11 +19,14 @@ from models import BatchRequest, GenerateRequest
 from services.fiches import get_fiche, get_openai_key, save_fiche
 from core.utils import is_excluded_category
 from services.generator import (
+    GENERATION_PROMPT,
     OPEN_QUESTIONS_TEMPLATE,
     build_prompt,
     call_openai,
+    get_active_prompt,
     validate_qa,
 )
+from services.fiches import get_setting, set_setting
 
 logger   = logging.getLogger("societies")
 router   = APIRouter(tags=["generation"])
@@ -281,3 +286,129 @@ async def generate_batch(request: Request, data: BatchRequest):
         "already_done": len(results) - done_count - error_count,
         "concurrency":  concurrency,
     }
+
+
+# =============================================================================
+# RE-GÉNÉRATION DES INTROS EXISTANTES (correction incohérences prompt)
+# =============================================================================
+
+@router.post("/generate/fix-intros", dependencies=[Depends(require_admin)])
+async def fix_existing_intros(data: dict = Body(default={})):
+    """
+    Re-génère intro_text de TOUTES les fiches status=done, par batches de 500.
+    Paramètre optionnel : concurrency (défaut 6), offset (reprendre depuis).
+    Retourne progression + total restant pour pouvoir être appelé en boucle.
+    """
+    import asyncio
+    concurrency = min(int(data.get("concurrency", 6)), 15)
+    offset      = int(data.get("offset", 0))
+    batch_size  = 500
+    api_key     = get_openai_key()
+
+    # Compte le total
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        total_count = conn.execute(
+            "SELECT COUNT(*) FROM fiches WHERE status='done' AND intro_text IS NOT NULL AND intro_text != ''"
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT id, company_title FROM fiches "
+            "WHERE status='done' AND intro_text IS NOT NULL AND intro_text != '' "
+            "ORDER BY id ASC LIMIT ? OFFSET ?",
+            [batch_size, offset],
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return {"message": "Toutes les fiches ont été traitées.", "fixed": 0, "errors": 0,
+                "total_done": total_count, "next_offset": None}
+
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _fix_one(fiche_id: int, title: str) -> dict:
+        async with semaphore:
+            try:
+                company = fetch_company(title) or {}
+                prompt = build_prompt(
+                    title=title,
+                    category=company.get("category"),
+                    city=company.get("city"),
+                    zip_code=company.get("zip_code"),
+                    rating_value=company.get("rating_value"),
+                    rating_votes=company.get("rating_votes"),
+                )
+                result = await call_openai(api_key, OPENAI_MODEL, OPENAI_TIMEOUT, prompt)
+                raw = result.get("content", "")
+                m = re.search(r'\{.*\}', raw, re.DOTALL)
+                if not m:
+                    raise ValueError("JSON non trouvé")
+                parsed = json.loads(m.group())
+                new_intro = parsed.get("intro", "").strip()
+                if not new_intro:
+                    raise ValueError("intro vide")
+                conn2 = sqlite3.connect(FICHES_DB)
+                try:
+                    conn2.execute(
+                        "UPDATE fiches SET intro_text=? WHERE id=?",
+                        [new_intro, fiche_id],
+                    )
+                    conn2.commit()
+                finally:
+                    conn2.close()
+                return {"status": "fixed"}
+            except Exception as e:
+                logger.error(f"fix-intros '{title}': {e}")
+                return {"status": "error", "error": str(e)}
+
+    results   = await asyncio.gather(*[_fix_one(r[0], r[1]) for r in rows])
+    fixed     = sum(1 for r in results if r["status"] == "fixed")
+    errors    = sum(1 for r in results if r["status"] == "error")
+    next_off  = offset + len(rows) if len(rows) == batch_size else None
+
+    return {
+        "batch":       len(rows),
+        "fixed":       fixed,
+        "errors":      errors,
+        "offset":      offset,
+        "next_offset": next_off,       # None = terminé
+        "total_fiches": total_count,
+        "remaining":   max(0, total_count - offset - len(rows)),
+    }
+
+
+# =============================================================================
+# GESTION DU PROMPT DE GÉNÉRATION
+# =============================================================================
+
+@router.get("/generate/prompt", dependencies=[Depends(require_admin)])
+def get_prompt():
+    """Retourne le prompt actif (custom DB ou défaut)."""
+    custom = get_setting("generation_prompt")
+    return {
+        "prompt":     custom or GENERATION_PROMPT,
+        "is_custom":  bool(custom and custom.strip()),
+        "default":    GENERATION_PROMPT,
+    }
+
+
+@router.post("/generate/prompt", dependencies=[Depends(require_admin)])
+def save_prompt(body: dict = Body(...)):
+    """Sauvegarde un prompt personnalisé. Envoyer {"prompt": ""} pour remettre le défaut."""
+    prompt = body.get("prompt", "").strip()
+    if prompt:
+        # Validation basique : le prompt doit contenir les placeholders obligatoires
+        required = ["{nom}", "{categorie}", "{ville}", "{note}"]
+        missing  = [p for p in required if p not in prompt]
+        if missing:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=422,
+                detail=f"Placeholders manquants dans le prompt : {', '.join(missing)}"
+            )
+        set_setting("generation_prompt", prompt)
+        return {"status": "saved", "is_custom": True}
+    else:
+        # Prompt vide = remettre le défaut
+        set_setting("generation_prompt", "")
+        return {"status": "reset", "is_custom": False}

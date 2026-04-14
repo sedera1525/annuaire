@@ -106,6 +106,17 @@ _MIGRATIONS: list[tuple[int, str]] = [
         UPDATE subscription_packs SET description='Inspirez confiance et démarquez-vous clairement',features='["Tout le Pack Visibilité","Entreprise conseillée par TOPsocietes.com","Dépannage urgent","Devis gratuit","Artisan ponctuel et soigneux","Certifié RGE","Types de projets","Marques (jusqu''à 10)","Compteur de visites","Note 5 étoiles offerte 30 jours"]' WHERE slug='pack-premium';
         INSERT OR IGNORE INTO subscription_packs (name,slug,price_ht,color,description,features) VALUES ('Pack Master','pack-master',89.0,'#7c3aed','Le maximum pour votre e-réputation','["Tout le Pack Premium","Note 5 étoiles en permanence","Note basée sur nos critères internes d''e-réputation"]');
     """),
+    (10, """
+        CREATE TABLE IF NOT EXISTS collected_emails (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            email        TEXT NOT NULL,
+            source_url   TEXT,
+            source_page  TEXT,
+            collected_at TEXT DEFAULT (datetime('now')),
+            ip           TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_collected_emails_email ON collected_emails(email);
+    """),
 ]
 
 
@@ -368,6 +379,39 @@ def approve_modification(mod_id: int) -> dict:
         )
         conn.commit()
         return {"ok": True, "user_email": mod["user_email"], "company_title": mod["company_title"]}
+    finally:
+        conn.close()
+
+
+def collect_email(email: str, source_url: str = "", source_page: str = "", ip: str = "") -> dict:
+    """Enregistre un email collecté via le popup. Ignore les doublons."""
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO collected_emails (email, source_url, source_page, ip) VALUES (?,?,?,?)",
+            [email.strip().lower(), source_url, source_page, ip],
+        )
+        conn.commit()
+        inserted = conn.total_changes > 0
+    finally:
+        conn.close()
+    return {"ok": True, "new": inserted}
+
+
+def list_collected_emails(limit: int = 500) -> list[dict]:
+    """Retourne la liste des emails collectés, les plus récents en premier."""
+    conn = sqlite3.connect(FICHES_DB)
+    try:
+        rows = conn.execute(
+            "SELECT id, email, source_page, source_url, collected_at, ip "
+            "FROM collected_emails ORDER BY collected_at DESC LIMIT ?",
+            [limit],
+        ).fetchall()
+        return [
+            {"id": r[0], "email": r[1], "source_page": r[2],
+             "source_url": r[3], "collected_at": r[4], "ip": r[5]}
+            for r in rows
+        ]
     finally:
         conn.close()
 

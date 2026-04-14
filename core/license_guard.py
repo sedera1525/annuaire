@@ -30,28 +30,18 @@ _PUBLIC_KEY_B64 = "9GbKYowAOKoXiQPhRoakdnNQsAMT1jbLWs0FTRJk0h0="
 
 
 def _get_fingerprint() -> str:
-    parts = []
-    try:
-        parts.append(hex(uuid.getnode()))
-    except Exception:
-        parts.append("no-mac")
-    parts.append(platform.node() or "no-host")
-    try:
-        cpuinfo = Path("/proc/cpuinfo").read_text(errors="ignore")
-        for line in cpuinfo.splitlines():
-            if "serial" in line.lower():
-                parts.append(line.strip())
-                break
-    except Exception:
-        pass
-    parts.append(platform.processor() or platform.machine() or "unknown")
-    try:
-        mid = Path("/etc/machine-id").read_text().strip()
-        if mid:
-            parts.append(mid)
-    except Exception:
-        pass
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:32]
+    """
+    Fingerprint basé sur /etc/machine-id du serveur hôte uniquement.
+    Stable même après redémarrage du container Docker.
+    """
+    for path in ["/etc/machine-id", "/var/lib/dbus/machine-id"]:
+        try:
+            mid = Path(path).read_text().strip()
+            if mid:
+                return hashlib.sha256(mid.encode()).hexdigest()[:32]
+        except Exception:
+            pass
+    return hashlib.sha256(b"no-machine-id").hexdigest()[:32]
 
 
 def get_fingerprint() -> str:

@@ -19,3 +19,20 @@ jobs:
             cd /opt/societies
             git pull origin main
             docker compose -f docker-compose.prod.yml up -d --build
+            # Sync plugin WordPress — détection chemin wp-content
+            echo "🔍 Recherche wp-content..."
+            find / -name "wp-content" -type d 2>/dev/null | grep -v "proc\|sys\|opt/societies" | head -5
+            WP_PLUGIN_DIR=$(find / -name "wp-content" -type d 2>/dev/null | grep -v "proc\|sys\|opt/societies" | head -1)
+            if [ -n "$WP_PLUGIN_DIR" ]; then
+              DEST="$WP_PLUGIN_DIR/plugins/societies-connector"
+              mkdir -p "$DEST"
+              rsync -a --delete /opt/societies/wordpress/societies-connector/ "$DEST/"
+              echo "✅ Plugin synchronisé → $DEST"
+              WP_ROOT="${WP_PLUGIN_DIR%/wp-content}"
+              if command -v wp &>/dev/null; then
+                wp plugin activate societies-connector --path="$WP_ROOT" --allow-root 2>/dev/null && echo "✅ Plugin activé" || true
+                wp cache flush --path="$WP_ROOT" --allow-root 2>/dev/null && echo "✅ Cache WP vidé" || true
+              fi
+            else
+              echo "⚠️  wp-content introuvable — sync manuel requis"
+            fi

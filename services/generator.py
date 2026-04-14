@@ -70,6 +70,12 @@ Règles strictes :
 - EXACTEMENT 2 phrases par réponse (ni plus, ni moins).
 - EXACTEMENT 3 phrases pour l'intro.
 
+Règles de cohérence et de style pour l'intro (OBLIGATOIRES) :
+- Ne commence JAMAIS par un mot de concession ou de transition comme "Cependant", "Toutefois", "Néanmoins", "Malgré", "En revanche", "Pourtant". L'intro doit commencer par un constat positif ou factuel direct.
+- Quand tu emploies "la majorité", "la plupart", "beaucoup" ou tout quantificateur, précise TOUJOURS de qui il s'agit : "la majorité des clients", "la plupart des avis", "beaucoup de visiteurs". Ne laisse JAMAIS le quantificateur sans antécédent.
+- N'utilise pas le mot "présentation" ni aucun titre ou label auto-descriptif dans le texte.
+- Les 3 phrases doivent former un tout cohérent : constat général → nuance ou détail → conclusion ou perspective. Ne coupe pas le raisonnement au milieu.
+
 Entreprise : {nom}
 Secteur d'activité : {categorie}
 Ville : {ville} ({code_postal})
@@ -77,7 +83,7 @@ Note clients : {note}
 
 Réponds UNIQUEMENT avec ce JSON valide, sans texte avant ou après :
 {{
-  "intro": "Phrase 1 sur la réputation générale. Phrase 2 nuancée. Phrase 3 de conclusion.",
+  "intro": "Phrase 1 constat factuel (sans 'Cependant'). Phrase 2 avec quantificateur explicite (ex: 'la majorité des clients'). Phrase 3 de conclusion.",
   "bonus": "Phrase 1 sur les avantages du produit/service à {ville}. Phrase 2. Phrase 3.",
   "qa_answered": [
     {{"q": "Que pensent réellement les clients de l'entreprise {nom} ?", "r": "Phrase 1. Phrase 2."}},
@@ -101,6 +107,18 @@ def validate_qa(parsed: dict) -> None:
             raise ValueError(f"qa_answered[{i}] a une réponse vide (question : {item.get('q', '?')!r})")
 
 
+def get_active_prompt() -> str:
+    """Retourne le prompt actif — depuis la DB settings si défini, sinon le défaut."""
+    try:
+        from services.fiches import get_setting
+        custom = get_setting("generation_prompt")
+        if custom and custom.strip():
+            return custom
+    except Exception:
+        pass
+    return GENERATION_PROMPT
+
+
 def build_prompt(
     title: str,
     category: Optional[str],
@@ -109,7 +127,7 @@ def build_prompt(
     rating_value,
     rating_votes: Optional[int],
 ) -> str:
-    return GENERATION_PROMPT.format(
+    return get_active_prompt().format(
         nom=title,
         categorie=category or "Non renseigné",
         ville=city or "Non renseignée",
