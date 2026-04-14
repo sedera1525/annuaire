@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.3
+ * Version:      2.5.4
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.3');
+define('SC_VERSION', '2.5.4');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -323,6 +323,68 @@ function sc_user_has_subscription(int $user_id = 0): bool {
     ]);
     return !empty($orders);
 }
+
+// =============================================================================
+// NOTIFICATIONS EMAIL
+// =============================================================================
+
+// Email de bienvenue à l'inscription WordPress
+add_action('user_register', function(int $user_id) {
+    $user = get_userdata($user_id);
+    if (!$user) return;
+
+    $site_name = get_bloginfo('name') ?: 'TOPsocietes.com';
+    $login_url = wp_login_url();
+
+    $subject = $site_name . ' — Bienvenue sur votre espace entreprise';
+    $message  = "Bonjour {$user->display_name},\n\n";
+    $message .= "Votre compte a bien été créé sur {$site_name}.\n\n";
+    $message .= "Vous pouvez dès maintenant accéder à votre tableau de bord et revendiquer votre fiche entreprise :\n";
+    $message .= $login_url . "\n\n";
+    $message .= "Une fois connecté, recherchez votre entreprise et complétez votre profil pour améliorer votre visibilité.\n\n";
+    $message .= "Cordialement,\nL'équipe {$site_name}";
+
+    wp_mail($user->user_email, $subject, $message);
+});
+
+// Email de bienvenue après un achat WooCommerce complété
+add_action('woocommerce_order_status_completed', function(int $order_id) {
+    $order = wc_get_order($order_id);
+    if (!$order) return;
+
+    // Vérifie que la commande contient bien un pack Societies
+    $has_sc_pack = false;
+    $pack_name   = '';
+    foreach ($order->get_items() as $item) {
+        $product = $item->get_product();
+        if (!$product) continue;
+        $sc_pack = $product->get_meta('_sc_pack');
+        if ($sc_pack) {
+            $has_sc_pack = true;
+            $pack_name   = $item->get_name();
+            break;
+        }
+    }
+    if (!$has_sc_pack) return;
+
+    $email     = $order->get_billing_email();
+    $firstname = $order->get_billing_first_name() ?: 'client';
+    $site_name = get_bloginfo('name') ?: 'TOPsocietes.com';
+    $login_url = wp_login_url();
+
+    $subject  = $site_name . ' — Votre abonnement est actif';
+    $message  = "Bonjour {$firstname},\n\n";
+    $message .= "Merci pour votre abonnement « {$pack_name} » !\n\n";
+    $message .= "Votre accès est maintenant actif. Connectez-vous à votre tableau de bord pour compléter votre fiche entreprise :\n";
+    $message .= $login_url . "\n\n";
+    $message .= "Depuis votre espace, vous pouvez :\n";
+    $message .= "- Modifier votre présentation\n";
+    $message .= "- Répondre aux questions sur votre activité\n";
+    $message .= "- Mettre en valeur vos services\n\n";
+    $message .= "Cordialement,\nL'équipe {$site_name}";
+
+    wp_mail($email, $subject, $message);
+});
 
 // =============================================================================
 // SHORTCODES
@@ -1915,14 +1977,32 @@ body { padding-top: 0 !important; margin-top: 0 !important; }
     <?php
 });
 
+// Enqueue les assets Elementor pour que le header soit correctement stylé
+add_action('wp_enqueue_scripts', function() {
+    if (class_exists('\Elementor\Plugin')) {
+        \Elementor\Plugin::instance()->frontend->enqueue_styles();
+        \Elementor\Plugin::instance()->frontend->enqueue_scripts();
+    }
+});
+
+// Render le header Elementor (post 1574 = Main Header, type elementor_library)
+// Fallback sur sc-topbar si Elementor n'est pas disponible
 add_action('wp_body_open', function() {
+    if (class_exists('\Elementor\Plugin')) {
+        $content = \Elementor\Plugin::instance()->frontend->get_builder_content_for_display(1574, true);
+        if (trim($content)) {
+            echo $content;
+            return;
+        }
+    }
+    // Fallback sc-topbar
     ?>
 <div class="sc-topbar">
   <a href="<?= esc_url(home_url('/')) ?>" class="sc-topbar-logo">TOPsocietes.com</a>
   <a href="<?= esc_url(home_url('/')) ?>">← Accueil</a>
 </div>
     <?php
-});
+}, 1);
 
 add_action('wp_footer', function() {
     $links_raw = get_option('societies_footer_links', '');
