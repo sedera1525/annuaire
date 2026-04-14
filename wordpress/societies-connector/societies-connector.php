@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.5
+ * Version:      2.5.6
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.5');
+define('SC_VERSION', '2.5.6');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -3121,7 +3121,13 @@ function sc_admin_moderation() {
             <td style="font-size:12px"><?= esc_html($mod['user_email'] ?? '—') ?></td>
             <td style="font-size:12px"><?= esc_html(substr($mod['submitted_at'] ?? '', 0, 16)) ?></td>
             <?php if ($filter === 'pending'): ?>
-            <td>
+            <td style="white-space:nowrap">
+              <?php if ($mod_fiche_url !== home_url('/')): ?>
+              <a href="<?= esc_url($mod_fiche_url) ?>" target="_blank" rel="noopener"
+                 class="button button-small" style="margin-bottom:6px;display:inline-block">
+                👁 Voir la fiche
+              </a><br>
+              <?php endif; ?>
               <form method="post" style="display:inline">
                 <?php wp_nonce_field('sc_mod_action'); ?>
                 <input type="hidden" name="sc_mod_id"      value="<?= intval($mod['id']) ?>">
