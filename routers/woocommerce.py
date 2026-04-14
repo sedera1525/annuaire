@@ -286,15 +286,17 @@ def sync_packs():
 # =============================================================================
 
 @router.get("/wc/subscriptions", dependencies=[Depends(require_admin)])
-def list_subscriptions(page: int = 1, per_page: int = 25, status: str = "active"):
+def list_subscriptions(page: int = 1, per_page: int = 25, status: str = "completed"):
     """Récupère les abonnements depuis WooCommerce."""
     base, wc_params = _wc_auth()
+    # WooCommerce ne connaît pas "active" — on utilise "completed" par défaut
+    wc_status = status if status != "active" else "completed"
     try:
         params = {
             **wc_params,
             "per_page": per_page,
             "page":     page,
-            "status":   status,
+            "status":   wc_status,
         }
         # Tente d'abord l'endpoint YITH subscriptions s'il existe
         r = httpx.get(f"{base}/yith/subscriptions", params=params, timeout=15)
@@ -302,7 +304,7 @@ def list_subscriptions(page: int = 1, per_page: int = 25, status: str = "active"
             data = r.json()
             return {"source": "yith", "results": data, "page": page}
 
-        # Fallback : orders WooCommerce classiques
+        # Fallback : orders WooCommerce classiques avec meta_key _sc_pack
         r2 = httpx.get(f"{base}/orders", params={**params, "meta_key": "_sc_pack"}, timeout=15)
         r2.raise_for_status()
         orders = r2.json()
