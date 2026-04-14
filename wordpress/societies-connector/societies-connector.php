@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.8
+ * Version:      2.5.9
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.8');
+define('SC_VERSION', '2.5.9');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -2018,20 +2018,20 @@ add_action('wp_head', function() {
 /* Cache le header et le footer du thème */
 .wp-site-blocks > header.wp-block-template-part,
 .wp-site-blocks > footer.wp-block-template-part { display: none !important; }
-/* Cache la barre admin WP (espace blanc en haut) */
+/* Cache la barre admin WP + suppression espace blanc */
 #wpadminbar { display: none !important; }
-html { margin-top: 0 !important; }
+html { margin-top: 0 !important; padding-top: 0 !important; }
 body { padding-top: 0 !important; margin-top: 0 !important; }
+.elementor-location-header { margin-top: 0 !important; padding-top: 0 !important; }
 /* Header Elementor : logo réduit */
-header .elementor-widget-image img, .elementor-element img.attachment-full { max-height:36px !important; width:auto !important; }
-/* Header Elementor : afficher le menu de navigation */
-header .elementor-nav-menu, header nav.elementor-nav-menu--main { display:flex !important; }
+.elementor-location-header .elementor-widget-image img { max-height:36px !important; width:auto !important; }
 /* Fallback sc-topbar */
 .sc-topbar { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); padding:10px 24px; display:flex; align-items:center; gap:16px; box-shadow:0 3px 16px rgba(249,115,22,.3); }
 .sc-topbar a { color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
 .sc-topbar a:hover { color:rgba(255,255,255,.8); }
-/* Titre de page / fil d'Ariane (fond bleu) */
-.page-heading,.page-header-wrap,#page-header,.page-header,.apus-page-heading { background:rgb(43,79,202) !important; }
+/* Titre de page / fil d'Ariane — fond bleu (Apus theme selectors) */
+.apus-page-heading, .page-heading, .page-header-wrap, #page-header, .page-header,
+[class*="apus-page-heading"], [class*="page-heading"], .apus-module.apus-breadcrumbs { background:rgb(43,79,202) !important; }
 /* Footer custom */
 .sc-site-footer { background:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%); color:#fff; padding:28px 24px; margin-top:24px; font-size:13px; box-shadow:0 -3px 16px rgba(249,115,22,.2); }
 .sc-site-footer-inner { max-width:860px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
