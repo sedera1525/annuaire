@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.15
+ * Version:      2.5.16
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.15');
+define('SC_VERSION', '2.5.16');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -283,6 +283,14 @@ function sc_api(string $endpoint, string $method = 'GET', array $body = []): arr
     if (!sc_is_licensed()) return ['error' => 'Plugin non activé. Entrez votre clé de licence.'];
     $base = rtrim(get_option('societies_api_url', 'http://societies:8090'), '/');
 
+    // WordPress bloque par défaut les hostnames internes (Docker, etc.)
+    // On autorise le host configuré pour éviter "L'URL fournie n'est pas valide"
+    $api_host = parse_url($base, PHP_URL_HOST);
+    $allow_host = function(bool $external, string $host) use ($api_host): bool {
+        return ($host === $api_host) ? true : $external;
+    };
+    add_filter('http_request_host_is_external', $allow_host, 10, 2);
+
     // Authenticate if needed
     $session = get_transient('sc_session_cookie');
     $csrf    = get_transient('sc_csrf_token');
@@ -305,8 +313,10 @@ function sc_api(string $endpoint, string $method = 'GET', array $body = []): arr
     }
 
     $r = wp_remote_request($base . $endpoint, $args);
+    remove_filter('http_request_host_is_external', $allow_host, 10);
 
     if (is_wp_error($r)) {
+        error_log('[SC API] Erreur WP HTTP: ' . $r->get_error_message() . ' | url=' . $base . $endpoint);
         return ['error' => $r->get_error_message()];
     }
 
@@ -315,7 +325,9 @@ function sc_api(string $endpoint, string $method = 'GET', array $body = []): arr
         [$session, $csrf] = sc_authenticate(true);
         $args['headers']['Cookie']       = "societies_session={$session}; csrf_token={$csrf}";
         $args['headers']['X-CSRF-Token'] = $csrf;
+        add_filter('http_request_host_is_external', $allow_host, 10, 2);
         $r = wp_remote_request($base . $endpoint, $args);
+        remove_filter('http_request_host_is_external', $allow_host, 10);
     }
 
     return json_decode(wp_remote_retrieve_body($r), true) ?: [];
