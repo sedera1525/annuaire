@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.11
+ * Version:      2.5.12
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.11');
+define('SC_VERSION', '2.5.12');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1316,8 +1316,8 @@ function sc_search_ajax_handler() {
     }
 
     $qs  = 'q=' . rawurlencode($q) . '&page=' . $page . '&per_page=' . $per_page;
-    if ($city)   $qs .= '&city='   . rawurlencode($city);
-    if ($sector) $qs .= '&sector=' . rawurlencode($sector);
+    if ($city)   $qs .= '&city='     . rawurlencode($city);
+    if ($sector) $qs .= '&category=' . rawurlencode($sector); // l'API attend "category", pas "sector"
     $data = sc_api('/api/search?' . $qs);
     if (isset($data['error'])) { wp_send_json_error($data); }
 
