@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.10
+ * Version:      2.5.11
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.10');
+define('SC_VERSION', '2.5.11');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1412,6 +1412,11 @@ add_shortcode('societies_fiche', function($atts) {
     }
 
     $claim_url = home_url('/revendiquer/');
+
+    // Vérifie si le propriétaire de cette fiche a un abonnement actif
+    $owner_users   = get_users(['meta_key' => 'sc_company_title', 'meta_value' => $company['title'], 'number' => 1]);
+    $owner_sub     = !empty($owner_users) && sc_user_has_subscription($owner_users[0]->ID);
+
     ob_start(); ?>
     <div class="sc2-wrap">
 
@@ -1427,13 +1432,23 @@ add_shortcode('societies_fiche', function($atts) {
           </div>
           <?php endif; ?>
         </div>
-        <!-- NOTE : Données insuffisantes (note 5* uniquement si abonnement badge activé) -->
+        <?php if ($owner_sub): ?>
+        <!-- NOTE 5/5 — abonnement actif -->
+        <div class="sc2-hero-rating">
+          <div class="sc2-hero-score">5.0</div>
+          <div class="sc2-hero-stars">★★★★★</div>
+          <div class="sc2-hero-votes">Entreprise vérifiée</div>
+          <div class="sc2-hero-disclaimer">Note basée sur notre analyse qualitative</div>
+        </div>
+        <?php else: ?>
+        <!-- NOTE : Peu d'avis -->
         <div class="sc2-hero-rating sc2-hero-rating-nodata">
           <div class="sc2-nodata-icon">⭐</div>
           <div class="sc2-nodata-label">Peu d'avis disponibles</div>
           <div class="sc2-nodata-sub">Soyez le premier à partager votre expérience !</div>
           <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">Donner un avis →</a>
         </div>
+        <?php endif; ?>
       </div>
 
       <!-- CONTACT BAR -->
