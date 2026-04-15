@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.13
+ * Version:      2.5.14
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.13');
+define('SC_VERSION', '2.5.14');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -167,7 +167,7 @@ add_action('rest_api_init', function() {
         'callback'            => 'sc_rest_sync_fiche',
         'permission_callback' => function(WP_REST_Request $req) {
             $secret = $req->get_header('X-SC-Secret');
-            return $secret && $secret === get_option('societies_api_password', '');
+            return $secret && $secret === get_option('societies_webhook_secret', '');
         },
     ]);
 });
@@ -2072,6 +2072,12 @@ add_action('admin_init', function() {
             return $new;
         },
     ]);
+    register_setting('sc_options', 'societies_webhook_secret', [
+        'sanitize_callback' => function($new) {
+            if (empty(trim($new))) return get_option('societies_webhook_secret', '');
+            return sanitize_text_field($new);
+        },
+    ]);
     register_setting('sc_options', 'societies_subdomain_mode', ['sanitize_callback' => 'absint']);
     register_setting('sc_options', 'societies_footer_links', ['sanitize_callback' => 'wp_kses_post']);
 });
@@ -2551,6 +2557,40 @@ function sc_admin_settings() {
         <?php submit_button('Enregistrer'); ?>
       </form>
       </div>
+
+      <hr style="margin:24px 0">
+      <h2>Webhook secret (FastAPI → WordPress)</h2>
+      <p class="description" style="margin-bottom:12px">Clé secrète utilisée par le backend FastAPI pour créer les pages WordPress automatiquement lors de la génération d'une fiche. Copiez-la dans <code>WP_API_PASSWORD</code> de votre fichier <code>.env</code>.</p>
+      <form method="post" action="options.php">
+        <?php settings_fields('sc_options'); ?>
+        <table class="form-table">
+          <tr>
+            <th>Secret webhook</th>
+            <td>
+              <?php $wh_secret = get_option('societies_webhook_secret', ''); ?>
+              <?php if ($wh_secret): ?>
+              <code style="background:#f0f4ff;padding:6px 12px;border-radius:6px;font-size:13px;user-select:all"><?= esc_html($wh_secret) ?></code>
+              <p class="description" style="margin-top:6px">Copiez cette valeur dans <code>WP_API_PASSWORD</code> dans le fichier <code>.env</code> du backend.</p>
+              <?php else: ?>
+              <p class="description">Aucun secret configuré — générez-en un ci-dessous.</p>
+              <?php endif; ?>
+              <input type="hidden" name="societies_webhook_secret" value="<?= esc_attr($wh_secret) ?>">
+            </td>
+          </tr>
+        </table>
+        <?php submit_button('Enregistrer le secret', 'secondary', 'submit', false); ?>
+      </form>
+      <form method="post">
+        <?php wp_nonce_field('sc_gen_webhook_secret'); ?>
+        <button name="sc_gen_webhook_secret" value="1" class="button button-primary" style="margin-top:4px">🔑 Générer un nouveau secret</button>
+      </form>
+      <?php
+      if (isset($_POST['sc_gen_webhook_secret']) && check_admin_referer('sc_gen_webhook_secret')) {
+          $new_secret = bin2hex(random_bytes(24));
+          update_option('societies_webhook_secret', $new_secret);
+          echo '<div class="notice notice-success" style="margin-top:12px"><p>✅ Nouveau secret généré : <code style="user-select:all">' . esc_html($new_secret) . '</code> — copiez-le dans <code>WP_API_PASSWORD</code>.</p></div>';
+      }
+      ?>
 
       <hr style="margin:24px 0">
       <h2>Mode sous-domaine</h2>
