@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.14
+ * Version:      2.5.15
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.14');
+define('SC_VERSION', '2.5.15');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -1202,7 +1202,8 @@ add_shortcode('societies_search', function($atts) {
       xhr.onload=function(){
         var d=JSON.parse(xhr.responseText||'{}');
         if(!d.success){
-          resultsEl.innerHTML='<div class=\"sc-empty\"><div class=\"sc-empty-icon\">\u26a0\ufe0f</div><div class=\"sc-empty-title\">Une erreur est survenue</div></div>';
+          var errMsg=d.data&&d.data.error?d.data.error:'Erreur de connexion au backend';
+          resultsEl.innerHTML='<div class=\"sc-empty\"><div class=\"sc-empty-icon\">\u26a0\ufe0f</div><div class=\"sc-empty-title\">Une erreur est survenue</div><p style=\"font-size:13px;color:#6b7280\">'+scEsc(errMsg)+'</p></div>';
           return;
         }
         var items=d.data.results||[];
@@ -1367,7 +1368,14 @@ function sc_search_ajax_handler() {
     if ($city)   $qs .= '&city='     . rawurlencode($city);
     if ($sector) $qs .= '&category=' . rawurlencode($sector); // l'API attend "category", pas "sector"
     $data = sc_api('/api/search?' . $qs);
-    if (isset($data['error'])) { wp_send_json_error($data); }
+    if (isset($data['error'])) {
+        error_log('[SC Search] Erreur API: ' . $data['error'] . ' | qs=' . $qs);
+        wp_send_json_error($data);
+    }
+    if (empty($data) || (!isset($data['results']) && !isset($data['total']))) {
+        error_log('[SC Search] Réponse vide ou inattendue | qs=' . $qs . ' | data=' . json_encode($data));
+        wp_send_json_error(['error' => 'Réponse inattendue du backend', 'raw' => $data]);
+    }
 
     $companies = $data['results'] ?? [];
 
