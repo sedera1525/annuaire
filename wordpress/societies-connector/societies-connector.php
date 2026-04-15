@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.12
+ * Version:      2.5.13
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.12');
+define('SC_VERSION', '2.5.13');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -155,6 +155,54 @@ add_filter('cron_schedules', function($schedules) {
 register_deactivation_hook(__FILE__, function() {
     wp_clear_scheduled_hook('sc_auto_sync_fiches');
 });
+
+// =============================================================================
+// REST API — Endpoint webhook : crée la page WP d'une fiche dès génération
+// POST /wp-json/sc/v1/sync-fiche  { "title": "Nom entreprise" }
+// Header X-SC-Secret: <societies_api_password>
+// =============================================================================
+add_action('rest_api_init', function() {
+    register_rest_route('sc/v1', '/sync-fiche', [
+        'methods'             => 'POST',
+        'callback'            => 'sc_rest_sync_fiche',
+        'permission_callback' => function(WP_REST_Request $req) {
+            $secret = $req->get_header('X-SC-Secret');
+            return $secret && $secret === get_option('societies_api_password', '');
+        },
+    ]);
+});
+
+function sc_rest_sync_fiche(WP_REST_Request $request): WP_REST_Response {
+    $title = sanitize_text_field($request->get_param('title') ?? '');
+    if (!$title) return new WP_REST_Response(['error' => 'title required'], 400);
+
+    $existing = get_posts([
+        'post_type'   => 'page',
+        'post_status' => ['publish', 'draft'],
+        'meta_key'    => '_sc_company_title',
+        'meta_value'  => $title,
+        'numberposts' => 1,
+    ]);
+    if ($existing) {
+        return new WP_REST_Response(['status' => 'exists', 'id' => $existing[0]->ID, 'url' => get_permalink($existing[0]->ID)], 200);
+    }
+
+    $parent_id = sc_resolve_page_parent($title);
+    $post_id   = wp_insert_post([
+        'post_title'   => sanitize_text_field($title),
+        'post_name'    => sanitize_title($title),
+        'post_content' => '[societies_fiche title="' . esc_attr($title) . '"]',
+        'post_status'  => 'publish',
+        'post_type'    => 'page',
+        'post_parent'  => $parent_id,
+    ]);
+
+    if (is_wp_error($post_id)) {
+        return new WP_REST_Response(['error' => $post_id->get_error_message()], 500);
+    }
+    update_post_meta($post_id, '_sc_company_title', $title);
+    return new WP_REST_Response(['status' => 'created', 'id' => $post_id, 'url' => get_permalink($post_id)], 201);
+}
 
 // =============================================================================
 // LICENCE

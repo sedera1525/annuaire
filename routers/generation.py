@@ -3,6 +3,7 @@ Societies — Endpoints de génération OpenAI (simple, stream, batch)
 """
 import json
 import logging
+import os
 import re
 import sqlite3
 from datetime import datetime
@@ -30,6 +31,25 @@ from services.fiches import get_setting, set_setting
 
 logger   = logging.getLogger("societies")
 router   = APIRouter(tags=["generation"])
+
+
+def _notify_wp_create_page(title: str) -> None:
+    """Appelle le webhook WordPress pour créer la page WP de la fiche dès génération."""
+    import httpx
+    wp_url    = os.getenv("WP_SITE_URL", "").rstrip("/")
+    wp_secret = os.getenv("WP_API_PASSWORD", "")
+    if not wp_url or not wp_secret:
+        return
+    try:
+        r = httpx.post(
+            f"{wp_url}/wp-json/sc/v1/sync-fiche",
+            json={"title": title},
+            headers={"X-SC-Secret": wp_secret},
+            timeout=10,
+        )
+        logger.info(f"WP sync '{title}' → {r.status_code}")
+    except Exception as e:
+        logger.warning(f"WP webhook failed for '{title}': {e}")
 
 
 async def stream_generate(title: str, company_data: dict):
@@ -208,6 +228,7 @@ async def generate_fiche(request: Request, data: GenerateRequest):
                    model=result["model"],
                    completion_tokens=result["completion_tokens"])
         logger.info(f"Fiche générée : {title} — {result['completion_tokens']} tokens")
+        _notify_wp_create_page(title)
         return {
             "status":            "done",
             "qa_answered":       parsed["qa_answered"],
@@ -265,6 +286,7 @@ async def generate_batch(request: Request, data: BatchRequest):
                            bonus_text=parsed.get("bonus", ""),
                            model=result["model"],
                            completion_tokens=result["completion_tokens"])
+                _notify_wp_create_page(title)
                 return {"title": title, "status": "done",
                         "qa_answered_count": len(parsed["qa_answered"])}
             except Exception as e:
