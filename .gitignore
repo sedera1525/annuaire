@@ -22,3 +22,5 @@ docker-compose.prod.yml
  mailpit-smtp.php
 scripts/generate_license.py
 license.key
+design/
+.serena/
