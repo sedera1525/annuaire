@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.29
+ * Version:      2.5.30
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.29');
+define('SC_VERSION', '2.5.30');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -4089,7 +4089,7 @@ add_shortcode('societies_revendiquer', function() {
 
     ob_start(); ?>
     <style>
-    .scr-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:860px;margin:0 auto;padding:32px 20px 64px}
+    .scr-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:860px;margin:3% auto;padding:32px 20px 64px}
     .scr-hero{background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 60%,#ef4444 100%);border-radius:20px;padding:40px 32px;text-align:center;color:#fff;margin-bottom:28px}
     .scr-hero-icon{font-size:32px;margin-bottom:12px}
     .scr-hero-title{font-size:26px;font-weight:900;margin:0 0 12px;line-height:1.2}
