@@ -26,14 +26,18 @@ jobs:
             find / -name "wp-content" -type d 2>/dev/null | grep -v "proc\|sys\|opt/societies" | head -5
             WP_PLUGIN_DIR=$(find / -name "wp-content" -type d 2>/dev/null | grep -v "proc\|sys\|opt/societies" | head -1)
             if [ -n "$WP_PLUGIN_DIR" ]; then
+              # Détecte le user propriétaire de wp-content (www-data, apache, http…)
+              WP_OWNER=$(stat -c '%U' "$WP_PLUGIN_DIR")
               DEST="$WP_PLUGIN_DIR/plugins/societies-connector"
               mkdir -p "$DEST"
               rsync -a --delete /opt/societies/wordpress/societies-connector/ "$DEST/"
-              echo "✅ Plugin synchronisé → $DEST"
+              chown -R "$WP_OWNER":"$WP_OWNER" "$DEST"
+              echo "✅ Plugin synchronisé → $DEST (owner: $WP_OWNER)"
               # Sync thème topsocietes
               THEME_DEST="$WP_PLUGIN_DIR/themes/topsocietes-theme"
               if [ -d "$THEME_DEST" ]; then
                 rsync -a --delete /opt/societies/wordpress/topsocietes-theme/ "$THEME_DEST/"
+                chown -R "$WP_OWNER":"$WP_OWNER" "$THEME_DEST"
                 echo "✅ Thème synchronisé → $THEME_DEST"
               fi
               WP_ROOT="${WP_PLUGIN_DIR%/wp-content}"
