@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.24
+ * Version:      2.5.25
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.24');
+define('SC_VERSION', '2.5.25');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -18,6 +18,17 @@ add_filter('template_include', function(string $template): string {
     if (!file_exists($sc_template)) return $template;
     if (is_page(['recherche', 'recherche-entreprises', 'tarifs']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
         return $sc_template;
+    }
+    // Couvre aussi les fiches et pages tarifs quel que soit le thème actif
+    if (is_page()) {
+        global $post;
+        if ($post && (
+            has_shortcode($post->post_content, 'societies_fiche') ||
+            has_shortcode($post->post_content, 'societies_tarifs') ||
+            has_shortcode($post->post_content, 'societies_search')
+        )) {
+            return $sc_template;
+        }
     }
     return $template;
 }, 99);
@@ -1010,7 +1021,7 @@ add_shortcode('societies_search', function($atts) {
     .'#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
     .'.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;box-sizing:border-box;overflow-x:hidden}'
     .'.sc-hero{padding:56px 24px 44px;text-align:center;box-sizing:border-box;border-bottom:1px solid #e5e9f0}'
-    .'.sc-badge{display:inline-flex;align-items:center;gap:8px;border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#6366f1,#3b82f6) border-box;border-radius:50px;padding:7px 20px;font-size:12px;font-weight:700;color:#3b4fcf;letter-spacing:.3px;margin-bottom:22px}'
+    .'.sc-badge{display:inline-flex;align-items:center;gap:8px;border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#6366f1,#3b82f6) border-box;border-radius:50px;padding:7px 20px;font-size:12px;font-weight:700;color:#3b4fcf;letter-spacing:.3px;margin-top:32px;margin-bottom:22px}'
     .'.sc-badge-star{color:#f59e0b;font-style:normal}'
     .'.sc-hero-title{font-size:42px;font-weight:900;color:#111827;margin:0 0 12px;letter-spacing:-1.5px;line-height:1.1}'
     .'.sc-hero-title em{background:linear-gradient(135deg,#3b82f6,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-style:normal}'
@@ -1067,7 +1078,7 @@ add_shortcode('societies_search', function($atts) {
 
     <!-- HERO -->
     <div class="sc-hero">
-      <div class="sc-badge"><em class="sc-badge-star">★</em> <?= esc_html($total_db) ?> FICHES GÉNÉRÉES</div>
+      <div class="sc-badge"><em class="sc-badge-star">★</em> <?= esc_html($total_db) ?> FICHES</div>
       <h1 class="sc-hero-title">Trouvez n'importe quelle <em>entreprise française</em></h1>
       <p class="sc-hero-sub">Secteur d'activité, catégories — recherchez par n'importe quel critère</p>
       <div class="sc-search-row">
