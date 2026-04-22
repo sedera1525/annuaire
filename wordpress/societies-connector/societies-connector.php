@@ -2,21 +2,21 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.18
+ * Version:      2.5.19
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.18');
+define('SC_VERSION', '2.5.19');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
 add_filter('template_include', function(string $template): string {
     $sc_template = SC_DIR . 'templates/shortcode-page.php';
     if (!file_exists($sc_template)) return $template;
-    if (is_page(['recherche', 'tarifs']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
+    if (is_page(['recherche', 'recherche-entreprises', 'tarifs']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
         return $sc_template;
     }
     return $template;
