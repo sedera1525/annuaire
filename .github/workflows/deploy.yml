@@ -34,7 +34,10 @@ jobs:
               if command -v wp &>/dev/null; then
                 wp plugin activate societies-connector --path="$WP_ROOT" --allow-root 2>/dev/null && echo "✅ Plugin activé" || true
                 wp cache flush --path="$WP_ROOT" --allow-root 2>/dev/null && echo "✅ Cache WP vidé" || true
+                wp eval 'opcache_reset(); echo "opcache reset\n";' --path="$WP_ROOT" --allow-root 2>/dev/null && echo "✅ OPcache vidé" || true
               fi
+              # Reset PHP opcache directement si possible
+              php -r "if(function_exists('opcache_reset')){opcache_reset();echo 'opcache reset OK';}else{echo 'opcache non disponible';}" 2>/dev/null || true
             else
               echo "⚠️  wp-content introuvable — sync manuel requis"
             fi
