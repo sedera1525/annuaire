@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.25
+ * Version:      2.5.26
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.25');
+define('SC_VERSION', '2.5.26');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -176,6 +176,22 @@ add_filter('cron_schedules', function($schedules) {
 // Nettoie le cron à la désactivation du plugin
 register_deactivation_hook(__FILE__, function() {
     wp_clear_scheduled_hook('sc_auto_sync_fiches');
+});
+
+// Crée automatiquement la page /tarifs/ avec [societies_tarifs] si elle n'existe pas
+add_action('init', function() {
+    if (get_transient('sc_tarifs_page_checked')) return;
+    set_transient('sc_tarifs_page_checked', 1, DAY_IN_SECONDS);
+    $existing = get_posts(['post_type' => 'page', 'name' => 'tarifs', 'post_status' => 'publish', 'numberposts' => 1]);
+    if (!$existing) {
+        wp_insert_post([
+            'post_title'   => 'Tarifs',
+            'post_name'    => 'tarifs',
+            'post_content' => '[societies_tarifs]',
+            'post_status'  => 'publish',
+            'post_type'    => 'page',
+        ]);
+    }
 });
 
 // =============================================================================
@@ -1497,20 +1513,11 @@ add_shortcode('societies_fiche', function($atts) {
           </div>
           <?php endif; ?>
 
-          <!-- KPI — toujours affiché (– si pas de donnée) -->
-          <div class="sc2-card">
-            <h3 class="sc2-card-title">Indicateurs clés</h3>
-            <div class="sc2-kpi-grid">
-              <div class="sc2-kpi-item">
-                <div class="sc2-kpi-label">Chiffre d'affaires</div>
-                <div class="sc2-kpi-value<?= $ca_display ? '' : ' sc2-kpi-na' ?>"><?= esc_html($ca_display ?: '–') ?></div>
-              </div>
-              <div class="sc2-kpi-item">
-                <div class="sc2-kpi-label">Effectif</div>
-                <div class="sc2-kpi-value<?= $effectif_txt ? '' : ' sc2-kpi-na' ?>"><?= esc_html($effectif_txt ?: '–') ?></div>
-              </div>
-            </div>
+          <?php if ($bonus_text && $status === 'done'): ?>
+          <div class="sc2-bonus-card">
+            <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
           </div>
+          <?php endif; ?>
 
           <?php if (!empty($ca_history)): ?>
           <div class="sc2-card">
@@ -1585,8 +1592,10 @@ add_shortcode('societies_fiche', function($atts) {
           <?php endif; ?>
 
           <?php if (!empty($qa_answered)): ?>
-          <div class="sc2-card">
-            <h3 class="sc2-card-title">Analyse actuelle de l'entreprise</h3>
+          <div class="sc2-card sc2-card--analysis">
+            <div class="sc2-analysis-header">
+              <span class="sc2-analysis-title">Analyse actuelle de l'entreprise</span>
+            </div>
             <div class="sc2-qa-grid">
               <?php foreach ($qa_answered as $item): ?>
               <div class="sc2-qa-card">
@@ -1637,12 +1646,6 @@ add_shortcode('societies_fiche', function($atts) {
           </div>
           <?php endif; ?>
 
-          <?php if ($bonus_text && $status === 'done'): ?>
-          <div class="sc2-bonus-card">
-            <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
-          </div>
-          <?php endif; ?>
-
         </div><!-- .sc2-main -->
 
         <!-- COLONNE LATÉRALE -->
@@ -1664,22 +1667,6 @@ add_shortcode('societies_fiche', function($atts) {
               <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">Donner un avis →</a>
             </div>
             <?php endif; ?>
-          </div>
-
-          <!-- Score de fiabilité — toujours affiché -->
-          <div class="sc2-aside-card">
-            <h4 class="sc2-aside-title">Score de fiabilité</h4>
-            <div class="sc2-score-wrap">
-              <div class="sc2-score-ring"
-                   style="background:conic-gradient(#16a34a 0deg <?= esc_attr($score_deg) ?>deg,rgba(0,0,0,.07) <?= esc_attr($score_deg) ?>deg 360deg)"
-                   aria-label="<?= esc_attr($score_display . '/100') ?>">
-                <span><?= esc_html($score_display) ?></span>
-              </div>
-              <div class="sc2-score-label">
-                <strong><?= $score_display >= 70 ? 'Profil fiable' : ($score_display >= 50 ? 'Profil modéré' : 'Profil à vérifier') ?></strong>
-                <span>Données vérifiées, activité continue.</span>
-              </div>
-            </div>
           </div>
 
           <?php $has_contact_aside = !empty($company['phone']) || !empty($company['website']) || !empty($company['address']); ?>
@@ -1740,7 +1727,7 @@ add_shortcode('societies_fiche', function($atts) {
     :root{--sc-grad:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%);--sc-grad-btn:linear-gradient(135deg,#F97316,#EC4899);--sc-navy:#1e2d5a;--sc-orange:#F97316;--sc-purple:#8B5CF6}
 
     /* WRAP */
-    .sc2-wrap{max-width:1100px;margin:0 auto;padding:0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
+    .sc2-wrap{max-width:1100px;margin:0 auto;padding:32px 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
 
     /* HERO */
     .sc2-hero{background:linear-gradient(135deg,#fff8f4 0%,#fdf4ff 60%,#f0f4ff 100%);border-radius:20px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px;flex-wrap:wrap;border:1.5px solid #ede8ff;box-shadow:0 4px 28px rgba(139,92,246,.09);position:relative;overflow:hidden}
@@ -1842,11 +1829,15 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-dir-role{font-size:12px;color:#6b7280}
     .sc2-dir-since{font-size:11px;color:#9ca3af;margin-top:2px}
 
-    /* Q&A */
-    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-    .sc2-qa-card{border:1.5px solid #f0e8ff;border-left:4px solid var(--sc-orange);border-radius:0 14px 14px 14px;padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.05);transition:box-shadow .2s,transform .15s}
-    .sc2-qa-card:hover{box-shadow:0 6px 22px rgba(249,115,22,.12);transform:translateY(-2px)}
-    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
+    /* Q&A ANALYSE */
+    .sc2-card--analysis{padding:0;overflow:hidden}
+    .sc2-analysis-header{background:#f8fafc;border-bottom:3px solid #3b82f6;padding:18px 24px}
+    .sc2-analysis-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a}
+    .sc2-card--analysis .sc2-qa-grid{padding:20px 24px;grid-template-columns:repeat(2,1fr);gap:14px}
+    .sc2-qa-card{border:1.5px solid #e8edf5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 12px;padding:18px 20px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
+    .sc2-qa-card:nth-child(even){border-left-color:#3b82f6}
+    .sc2-qa-card:hover{box-shadow:0 6px 20px rgba(59,130,246,.1);transform:translateY(-2px)}
+    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px;line-height:1.5}
     .sc2-qa-a{color:#374151;font-size:13px;line-height:1.8}
 
     /* FAQ */
