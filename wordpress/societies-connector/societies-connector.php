@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.20
+ * Version:      2.5.21
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.20');
+define('SC_VERSION', '2.5.21');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1093,6 +1093,7 @@ add_shortcode('societies_search', function($atts) {
     <?php
     $html = ob_get_clean();
 
+    $ajax_url_js = esc_js($ajax_url);
     $js = <<<JSCODE
 (function(){
   var _scTimers={},_scState={};
@@ -1135,7 +1136,7 @@ add_shortcode('societies_search', function($atts) {
       paginEl.innerHTML='';
       var qFull=q+(st.form?' '+st.form:'');
       var xhr=new XMLHttpRequest();
-      xhr.open('POST','" . esc_js($ajax_url) . "');
+      xhr.open('POST','{$ajax_url_js}');
       xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
       xhr.onload=function(){
         var d=JSON.parse(xhr.responseText||'{}');
