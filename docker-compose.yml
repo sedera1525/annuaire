@@ -44,6 +44,7 @@ services:
       - wordpress_files:/var/www/html
       - ./wordpress/societies-connector:/var/www/html/wp-content/plugins/societies-connector
       - ./wordpress/mu-plugins:/var/www/html/wp-content/mu-plugins
+      - ./wordpress/topsocietes-theme:/var/www/html/wp-content/themes/topsocietes-theme
     depends_on:
       - wordpress-db
       - mailpit

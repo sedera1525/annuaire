@@ -2,14 +2,25 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.17
+ * Version:      2.5.18
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.17');
+define('SC_VERSION', '2.5.18');
+
+// Force le rendu du shortcode plugin sur les pages dont le thème posséderait
+// un template page-{slug}.php qui prendrait le dessus sur le_content().
+add_filter('template_include', function(string $template): string {
+    $sc_template = SC_DIR . 'templates/shortcode-page.php';
+    if (!file_exists($sc_template)) return $template;
+    if (is_page(['recherche', 'tarifs']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
+        return $sc_template;
+    }
+    return $template;
+}, 99);
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -487,7 +498,7 @@ add_shortcode('societies_listings', function($atts) {
     ob_start(); ?>
     <style>
       .sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:20px 0}
-      .sc-card{border:1px solid #e5e7eb;border-radius:10px;padding:16px;background:#fff;transition:box-shadow .2s}
+      .sc-card{border:1px solid #e5e7eb;border-radius:10px;padding:16px;transition:box-shadow .2s}
       .sc-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)}
       .sc-card h3{margin:0 0 4px;font-size:15px;color:#111}
       .sc-cat{color:#6b7280;font-size:12px;margin-bottom:8px}
@@ -813,7 +824,7 @@ add_shortcode('societies_pricing', function($atts) {
     .scp-title{font-size:34px;font-weight:800;color:#1a2744;margin:0 0 12px}
     .scp-sub{font-size:16px;color:#6b7280;max-width:520px;margin:0 auto}
     .scp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;text-align:left}
-    .scp-card{background:#fff;border:2px solid #e8edf3;border-radius:20px;
+    .scp-card{border:2px solid #e8edf3;border-radius:20px;
               padding:28px 22px;display:flex;flex-direction:column;gap:0;
               transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden}
     .scp-card:hover{transform:translateY(-6px);box-shadow:0 16px 48px rgba(0,0,0,.1)}
@@ -998,44 +1009,41 @@ add_shortcode('societies_search', function($atts) {
     .'body{background:#f1f4f9!important;overflow-x:hidden}'
     .'#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
     .'.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#f1f4f9;box-sizing:border-box;overflow-x:hidden}'
-    .'.sc-hero{background:#fff;padding:56px 24px 44px;text-align:center;box-sizing:border-box;border-bottom:1px solid #e5e9f0}'
+    .'.sc-hero{padding:56px 24px 44px;text-align:center;box-sizing:border-box;border-bottom:1px solid #e5e9f0}'
     .'.sc-badge{display:inline-flex;align-items:center;gap:8px;border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#6366f1,#3b82f6) border-box;border-radius:50px;padding:7px 20px;font-size:12px;font-weight:700;color:#3b4fcf;letter-spacing:.3px;margin-bottom:22px}'
     .'.sc-badge-star{color:#f59e0b;font-style:normal}'
     .'.sc-hero-title{font-size:42px;font-weight:900;color:#111827;margin:0 0 12px;letter-spacing:-1.5px;line-height:1.1}'
     .'.sc-hero-title em{background:linear-gradient(135deg,#3b82f6,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-style:normal}'
     .'.sc-hero-sub{font-size:15px;color:#6b7280;margin:0 0 32px;line-height:1.6;max-width:580px;display:block;margin-left:auto;margin-right:auto}'
-    .'.sc-search-row{max-width:800px;margin:0 auto;display:flex;align-items:stretch;background:#fff;border:2px solid #dde3ee;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);overflow:hidden}'
+    .'.sc-search-row{max-width:800px;margin:0 auto;display:flex;align-items:stretch;border:2px solid #dde3ee;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);overflow:hidden}'
     .'.sc-search-icon{display:flex;align-items:center;padding:0 14px;color:#9ca3af;font-size:17px;flex-shrink:0}'
     .'.sc-search-input{flex:1;border:none;outline:none;font-size:15px;color:#111827;background:transparent;padding:17px 4px;min-width:0}'
     .'.sc-search-input::placeholder{color:#b0bac9}'
     .'.sc-search-btn{background:#1e3a8a;color:#fff;border:none;padding:0 30px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .2s}'
     .'.sc-search-btn:hover{background:#1e40af}'
+    .'.sc-reset-btn{background:none;border:none;border-left:1px solid #e5e9f0;padding:0 16px;font-size:18px;color:#9ca3af;cursor:pointer;flex-shrink:0;line-height:1;transition:color .15s}'
+    .'.sc-reset-btn:hover{color:#ef4444}'
     .'.sc-filters{max-width:1100px;margin:24px auto 0;padding:0 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}'
-    .'.sc-filter-select{border:1.5px solid #d1d5db;border-radius:8px;padding:9px 14px;font-size:13px;color:#374151;background:#fff;cursor:pointer;outline:none;transition:border-color .15s}'
+    .'.sc-filter-select{border:1.5px solid #d1d5db;border-radius:8px;padding:9px 14px;font-size:13px;color:#374151;cursor:pointer;outline:none;transition:border-color .15s}'
     .'.sc-filter-select:hover,.sc-filter-select:focus{border-color:#6366f1}'
     .'.sc-pills{display:flex;gap:8px;flex-wrap:wrap}'
-    .'.sc-pill{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;color:#374151;background:#fff;cursor:pointer;transition:all .15s;line-height:1}'
+    .'.sc-pill{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;color:#374151;cursor:pointer;transition:all .15s;line-height:1}'
     .'.sc-pill:hover{border-color:#6366f1;color:#6366f1;background:#f5f3ff}'
     .'.sc-pill.active{background:#1e3a8a;border-color:#1e3a8a;color:#fff}'
     .'.sc-results-section{max-width:1100px;margin:20px auto 0;padding:0 24px 64px}'
     .'.sc-results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}'
     .'.sc-results-count{font-size:14px;color:#374151}'
     .'.sc-results-count strong{font-weight:700;color:#111827}'
-    .'.sc-sort-select{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;color:#374151;background:#fff;cursor:pointer;outline:none}'
     .'.sc-list{display:flex;flex-direction:column;gap:6px}'
-    .'.sc-row{display:flex;align-items:center;gap:16px;background:#fff;border:1.5px solid #e5e9f0;border-radius:12px;padding:16px 20px;text-decoration:none;color:inherit;transition:box-shadow .15s,border-color .15s}'
+    .'.sc-row{display:flex;align-items:center;gap:16px;border:1.5px solid #e5e9f0;border-radius:12px;padding:16px 20px;text-decoration:none;color:inherit;transition:box-shadow .15s,border-color .15s}'
     .'.sc-row:hover{box-shadow:0 4px 18px rgba(0,0,0,.09);border-color:#c7d2fe;text-decoration:none}'
-    .'.sc-rank{font-size:13px;font-weight:700;color:#9ca3af;width:28px;text-align:right;flex-shrink:0}'
-    .'.sc-avatar{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.5px}'
     .'.sc-row-main{flex:1;min-width:0}'
     .'.sc-row-name{font-size:15px;font-weight:700;color:#111827;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
     .'.sc-row-meta{font-size:12px;color:#6b7280;display:flex;align-items:center;flex-wrap:wrap;gap:0}'
     .'.sc-meta-sep{margin:0 7px;color:#d1d5db}'
-    .'.sc-row-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}'
-    .'.sc-row-rating{font-size:13px;font-weight:700;color:#f59e0b;white-space:nowrap}'
-    .'.sc-row-city{font-size:12px;color:#9ca3af}'
-    .'.sc-row-arrow{font-size:18px;color:#d1d5db;line-height:1}'
-    .'.sc-row:hover .sc-row-arrow{color:#6366f1}'
+    .'.sc-row-rating{font-size:12px;font-weight:700;color:#f59e0b;white-space:nowrap;margin-top:3px}'
+    .'.sc-row-cta{flex-shrink:0;font-size:13px;font-weight:700;color:#1e3a8a;text-decoration:none;border:1.5px solid #c7d2fe;border-radius:8px;padding:7px 14px;white-space:nowrap;transition:all .15s;background:#f5f7ff}'
+    .'.sc-row-cta:hover{background:#1e3a8a;color:#fff;border-color:#1e3a8a;text-decoration:none}'
     .'.sc-loader{display:flex;justify-content:center;padding:60px}'
     .'.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:sc-spin .7s linear infinite}'
     .'@keyframes sc-spin{to{transform:rotate(360deg)}}'
@@ -1043,11 +1051,11 @@ add_shortcode('societies_search', function($atts) {
     .'.sc-empty-icon{font-size:48px;margin-bottom:12px}'
     .'.sc-empty-title{font-size:18px;font-weight:600;color:#374151;margin-bottom:6px}'
     .'.sc-pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:28px;flex-wrap:wrap}'
-    .'.sc-pg-btn{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 15px;font-size:13px;font-weight:600;color:#374151;background:#fff;cursor:pointer;transition:all .15s;min-width:38px;text-align:center;line-height:1}'
+    .'.sc-pg-btn{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 15px;font-size:13px;font-weight:600;color:#374151;cursor:pointer;transition:all .15s;min-width:38px;text-align:center;line-height:1}'
     .'.sc-pg-btn:hover:not(:disabled){border-color:#6366f1;color:#6366f1}'
     .'.sc-pg-btn.active{background:#1e3a8a;border-color:#1e3a8a;color:#fff}'
     .'.sc-pg-btn:disabled{opacity:.38;cursor:default}'
-    .'@media(max-width:640px){.sc-hero{padding:36px 14px 32px}.sc-hero-title{font-size:26px;letter-spacing:-1px}.sc-search-btn{padding:0 16px;font-size:13px}.sc-filters{padding:14px 12px 0;gap:8px}.sc-results-section{padding:14px 12px 48px}.sc-row{padding:12px 14px;gap:10px}.sc-rank{display:none}.sc-row-right{display:none}}';
+    .'@media(max-width:640px){.sc-hero{padding:36px 14px 32px}.sc-hero-title{font-size:26px;letter-spacing:-1px}.sc-search-btn{padding:0 16px;font-size:13px}.sc-filters{padding:14px 12px 0;gap:8px}.sc-results-section{padding:14px 12px 48px}.sc-row{padding:12px 14px;gap:10px}.sc-row-cta{display:none}}';
     echo '<style>' . $sc_css . '</style>';
     ?>
 
@@ -1055,50 +1063,26 @@ add_shortcode('societies_search', function($atts) {
 
     <!-- HERO -->
     <div class="sc-hero">
-      <div class="sc-badge"><em class="sc-badge-star">★</em> <?= esc_html($total_db) ?> ENTREPRISES &mdash; DONNÉES INSEE &amp; GOOGLE</div>
+      <div class="sc-badge"><em class="sc-badge-star">★</em> <?= esc_html($total_db) ?> ENTREPRISES</div>
       <h1 class="sc-hero-title">Trouvez n'importe quelle <em>entreprise française</em></h1>
-      <p class="sc-hero-sub">SIREN, raison sociale, dirigeant, secteur d'activité — recherchez par n'importe quel critère</p>
+      <p class="sc-hero-sub">Secteur d'activité, catégories — recherchez par n'importe quel critère</p>
       <div class="sc-search-row">
         <span class="sc-search-icon">🔍</span>
         <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-search-input"
                placeholder="Nom, SIREN, ville, secteur..."
                oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
-               onkeydown="if(event.key==='Enter')scSearch('<?= esc_js($uid) ?>',1)"
+               onkeydown="if(event.key==='Enter')scSearch('<?= esc_js($uid) ?>',1,true)"
                autocomplete="off">
-        <button class="sc-search-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">Rechercher</button>
+        <button class="sc-search-btn" onclick="scSearch('<?= esc_js($uid) ?>',1,true)">Rechercher</button>
+        <button class="sc-reset-btn" onclick="scReset('<?= esc_js($uid) ?>')" title="Réinitialiser">✕</button>
       </div>
     </div>
 
-    <!-- FILTRES -->
-    <div class="sc-filters">
-      <select id="<?= esc_attr($uid) ?>-sector" class="sc-filter-select" onchange="scSearch('<?= esc_js($uid) ?>',1)">
-        <option value="">Tous les secteurs</option>
-        <?php foreach ($top_cats as $cat): ?>
-        <option value="<?= esc_attr($cat['category']) ?>"><?= esc_html($cat['category']) ?></option>
-        <?php endforeach; ?>
-      </select>
-      <select id="<?= esc_attr($uid) ?>-region" class="sc-filter-select" onchange="scSearch('<?= esc_js($uid) ?>',1)">
-        <option value="">Toutes les régions</option>
-        <?php foreach ($regions as $r): ?>
-        <option value="<?= esc_attr($r) ?>"><?= esc_html($r) ?></option>
-        <?php endforeach; ?>
-      </select>
-      <div class="sc-pills">
-        <button class="sc-pill active" id="<?= esc_attr($uid) ?>-pill-all"  onclick="scSetPill('<?= esc_js($uid) ?>','')">Tous</button>
-        <?php foreach (['SA','SAS','SARL','EURL','Micro-entreprise'] as $f): $fid = strtolower(str_replace(['-',' '],'', $f)); ?>
-        <button class="sc-pill" id="<?= esc_attr($uid) ?>-pill-<?= esc_attr($fid) ?>" onclick="scSetPill('<?= esc_js($uid) ?>','<?= esc_js($f) ?>')"><?= esc_html($f) ?></button>
-        <?php endforeach; ?>
-      </div>
-    </div>
-
+   
     <!-- RÉSULTATS -->
     <div class="sc-results-section" id="<?= esc_attr($uid) ?>-results-wrap" style="display:none">
       <div class="sc-results-header">
         <div id="<?= esc_attr($uid) ?>-status" class="sc-results-count"></div>
-        <select class="sc-sort-select" id="<?= esc_attr($uid) ?>-sort" onchange="scSearch('<?= esc_js($uid) ?>',1)">
-          <option value="rating">Trier : Pertinence</option>
-          <option value="alpha">Trier : A → Z</option>
-        </select>
       </div>
       <div id="<?= esc_attr($uid) ?>-results" class="sc-list"></div>
       <div id="<?= esc_attr($uid) ?>-pagination" class="sc-pagination"></div>
@@ -1112,16 +1096,20 @@ add_shortcode('societies_search', function($atts) {
     $js = <<<JSCODE
 (function(){
   var _scTimers={},_scState={};
-  var AV_COLORS=['#6366f1','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'];
   function initSt(uid){if(!_scState[uid])_scState[uid]={page:1,form:''};}
-  function avatar(name){
-    var w=(name||'').trim().split(/\s+/),init=w.length>=2?w[0][0]+w[1][0]:(w[0]||'?').substring(0,2);
-    var idx=0;for(var i=0;i<(name||'').length;i++)idx=(idx+name.charCodeAt(i))%AV_COLORS.length;
-    return {i:(init||'?').toUpperCase(),c:AV_COLORS[idx]};
-  }
   function dept(zip){return zip&&zip.length>=2?'('+zip.substring(0,2)+')':'';}
   if(!window.scSearchDebounce){
     window.scSearchDebounce=function(uid){clearTimeout(_scTimers[uid]);_scTimers[uid]=setTimeout(function(){scSearch(uid,1);},380);};
+    window.scReset=function(uid){
+      initSt(uid);
+      var q=document.getElementById(uid+'-q');if(q)q.value='';
+      var sec=document.getElementById(uid+'-sector');if(sec)sec.value='';
+      var reg=document.getElementById(uid+'-region');if(reg)reg.value='';
+      _scState[uid].form='';
+      document.querySelectorAll('[id^="'+uid+'-pill-"]').forEach(function(b){b.classList.remove('active');});
+      var all=document.getElementById(uid+'-pill-all');if(all)all.classList.add('active');
+      var wrap=document.getElementById(uid+'-results-wrap');if(wrap)wrap.style.display='none';
+    };
     window.scSetPill=function(uid,form){
       initSt(uid);_scState[uid].form=form;
       document.querySelectorAll('[id^="'+uid+'-pill-"]').forEach(function(b){b.classList.remove('active');});
@@ -1129,18 +1117,18 @@ add_shortcode('societies_search', function($atts) {
       var el=document.getElementById(key);if(el)el.classList.add('active');
       scSearch(uid,1);
     };
-    window.scSearch=function(uid,page){
+    window.scSearch=function(uid,page,force){
       initSt(uid);
       var st=_scState[uid];st.page=page||1;
       var q=(document.getElementById(uid+'-q')||{}).value||'';q=q.trim();
       var sector=(document.getElementById(uid+'-sector')||{}).value||'';
       var region=(document.getElementById(uid+'-region')||{}).value||'';
-      var sort=(document.getElementById(uid+'-sort')||{}).value||'rating';
+      var sort='rating';
       var resEl=document.getElementById(uid+'-results');
       var statEl=document.getElementById(uid+'-status');
       var paginEl=document.getElementById(uid+'-pagination');
       var wrapEl=document.getElementById(uid+'-results-wrap');
-      var hasInput=q.length>=2||sector||region||st.form;
+      var hasInput=force||q.length>=2||sector||region||st.form;
       if(!hasInput){wrapEl.style.display='none';return;}
       wrapEl.style.display='block';
       if(page===1)resEl.innerHTML='<div class="sc-loader"><div class="sc-spinner"></div></div>';
@@ -1155,20 +1143,21 @@ add_shortcode('societies_search', function($atts) {
         var items=d.data.results||[],total=d.data.total||0,off=(page-1)*{$pp};
         if(!items.length&&page===1){resEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">🔍</div><div class="sc-empty-title">Aucun résultat</div><p style="color:#9ca3af">Essayez un autre terme ou filtre.</p></div>';statEl.innerHTML='';return;}
         statEl.innerHTML='<strong>'+total.toLocaleString('fr-FR')+'</strong> résultat'+(total>1?'s':'');
-        resEl.innerHTML=items.map(function(c,i){
-          var av=avatar(c.title),d2=dept(c.zip_code||'');
+        resEl.innerHTML=items.map(function(c){
+          var d2=dept(c.zip_code||'');
           var meta=[];
           if(c.city)meta.push(scEsc(c.city)+(d2?' '+d2:''));
           if(c.category)meta.push(scEsc(c.category));
+          if(c.siren)meta.push('SIREN '+scEsc(c.siren));
           var rat=c.rating_value&&c.rating_value>0?'<span style="color:#f59e0b">★</span> '+parseFloat(c.rating_value).toFixed(1)+(c.rating_votes?' ('+c.rating_votes+')':''):'';
-          return '<a href="'+scEsc(c.url||'#')+'" class="sc-row">'
-            +'<div class="sc-rank">#'+(off+i+1)+'</div>'
-            +'<div class="sc-avatar" style="background:'+av.c+'">'+av.i+'</div>'
+          var url=scEsc(c.url||'#');
+          return '<a href="'+url+'" class="sc-row">'
             +'<div class="sc-row-main">'
             +'<div class="sc-row-name">'+scEsc(c.title)+'</div>'
             +'<div class="sc-row-meta">'+meta.map(function(m,mi){return(mi>0?'<span class="sc-meta-sep">·</span>':'')+m;}).join('')+'</div>'
+            +(rat?'<div class="sc-row-rating">'+rat+'</div>':'')
             +'</div>'
-            +'<div class="sc-row-right">'+(rat?'<div class="sc-row-rating">'+rat+'</div>':'')+'<div class="sc-row-arrow">›</div></div>'
+            +'<a href="'+url+'" class="sc-row-cta">Voir la fiche →</a>'
             +'</a>';
         }).join('');
         var tp=Math.ceil(total/{$pp});
@@ -1415,6 +1404,22 @@ add_shortcode('societies_fiche', function($atts) {
 
     $claim_url = home_url('/revendiquer/');
 
+    // Données complémentaires issues de l'API (optionnelles — présentes selon le dataset)
+    $siren       = $company['siren'] ?? $company['siren_number'] ?? '';
+    $siret       = $company['siret'] ?? '';
+    $forme_jur   = $company['forme_juridique'] ?? $company['legal_form'] ?? '';
+    $code_naf    = $company['code_naf'] ?? $company['naf_code'] ?? '';
+    $libelle_naf = $company['libelle_naf'] ?? $company['naf_label'] ?? '';
+    $capital     = $company['capital'] ?? 0;
+    $date_creation = $company['date_creation'] ?? '';
+    $ca_display  = $company['ca_display'] ?? '';
+    $effectif_txt = $company['effectif_display'] ?? (!empty($company['employees']) ? $company['employees'] . ' salariés' : '');
+    $score_fiab  = intval($company['score_fiabilite'] ?? 0);
+    $dir_raw     = $company['dirigeants'] ?? [];
+    $dirigeants  = is_array($dir_raw) ? $dir_raw : (json_decode((string)$dir_raw, true) ?: []);
+    $ch_raw      = $company['ca_history'] ?? [];
+    $ca_history  = is_array($ch_raw) ? $ch_raw : (json_decode((string)$ch_raw, true) ?: []);
+
     // Vérifie si le propriétaire de cette fiche a un abonnement actif
     $owner_users   = get_users(['meta_key' => 'sc_company_title', 'meta_value' => $company['title'], 'number' => 1]);
     $owner_sub     = !empty($owner_users) && sc_user_has_subscription($owner_users[0]->ID);
@@ -1465,6 +1470,121 @@ add_shortcode('societies_fiche', function($atts) {
         <?php endif; ?>
       </div>
       <?php endif; ?>
+
+      <!-- KPI / LEGAL / DIRIGEANTS / SCORE ─ données structurées -->
+      <?php $has_data_sections = $ca_display || $effectif_txt || !empty($ca_history) || $siren || $forme_jur || $code_naf || !empty($dirigeants) || $score_fiab; ?>
+      <?php if ($has_data_sections): ?>
+
+      <?php if ($ca_display || $effectif_txt): ?>
+      <div class="sc2-section">
+        <h2 class="sc2-section-title">Indicateurs clés</h2>
+        <div class="sc2-kpi-grid">
+          <?php if ($ca_display): ?>
+          <div class="sc2-kpi-item">
+            <div class="sc2-kpi-label">Chiffre d'affaires</div>
+            <div class="sc2-kpi-value"><?= esc_html($ca_display) ?></div>
+          </div>
+          <?php endif; ?>
+          <?php if ($effectif_txt): ?>
+          <div class="sc2-kpi-item">
+            <div class="sc2-kpi-label">Effectif</div>
+            <div class="sc2-kpi-value"><?= esc_html($effectif_txt) ?></div>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($ca_history)): ?>
+      <div class="sc2-section">
+        <h2 class="sc2-section-title">Évolution du chiffre d'affaires</h2>
+        <div class="sc2-chart-wrap">
+          <?php foreach ($ca_history as $bar): ?>
+          <div class="sc2-chart-row">
+            <div class="sc2-chart-year"><?= esc_html($bar['year'] ?? '') ?></div>
+            <div class="sc2-chart-track"><div class="sc2-chart-fill" style="width:<?= esc_attr($bar['pct'] ?? 100) ?>%"></div></div>
+            <div class="sc2-chart-val"><?= esc_html($bar['val'] ?? '') ?></div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($siren || $forme_jur || $code_naf || $capital || $date_creation): ?>
+      <div class="sc2-section">
+        <h2 class="sc2-section-title">Informations légales</h2>
+        <div class="sc2-legal-table">
+          <?php
+          $full_addr = '';
+          if (!empty($company['address'])) {
+              $full_addr = $company['address'];
+              if (!empty($company['zip_code'])) $full_addr .= ', ' . $company['zip_code'];
+              if (!empty($company['city']))     $full_addr .= ' ' . $company['city'];
+          }
+          $legal_rows = [
+              ['SIREN',           $siren],
+              ['SIRET (siège)',   $siret],
+              ['Forme juridique', $forme_jur],
+              ['Code NAF / APE',  $code_naf . ($libelle_naf ? ' — ' . $libelle_naf : '')],
+              ['Capital social',  $capital ? number_format((float)$capital, 0, ',', ' ') . ' €' : ''],
+              ['Date de création',$date_creation],
+              ['Adresse',         $full_addr],
+          ];
+          foreach ($legal_rows as [$label, $value]):
+              if (!$value) continue; ?>
+          <div class="sc2-legal-row">
+            <span class="sc2-legal-label"><?= esc_html($label) ?></span>
+            <span class="sc2-legal-value"><?= esc_html($value) ?></span>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($dirigeants)): ?>
+      <div class="sc2-section">
+        <h2 class="sc2-section-title">Dirigeants</h2>
+        <div class="sc2-dir-list">
+          <?php foreach ($dirigeants as $d):
+              $d_name  = $d['nom'] ?? $d['name'] ?? '';
+              $d_role  = $d['role'] ?? $d['titre'] ?? '';
+              $d_since = $d['depuis'] ?? $d['since'] ?? '';
+              if (!$d_name) continue;
+              $parts   = preg_split('/\s+/', trim($d_name));
+              $initials = mb_strtoupper(implode('', array_map(fn($p) => mb_substr($p, 0, 1), $parts)));
+              $initials = mb_substr($initials, 0, 2);
+          ?>
+          <div class="sc2-dir-row">
+            <div class="sc2-dir-avatar" aria-hidden="true"><?= esc_html($initials) ?></div>
+            <div>
+              <div class="sc2-dir-name"><?= esc_html($d_name) ?></div>
+              <?php if ($d_role): ?><div class="sc2-dir-role"><?= esc_html($d_role) ?></div><?php endif; ?>
+              <?php if ($d_since): ?><div class="sc2-dir-since">Depuis <?= esc_html($d_since) ?></div><?php endif; ?>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($score_fiab): $score_deg = round($score_fiab * 3.6); ?>
+      <div class="sc2-section">
+        <h2 class="sc2-section-title">Score de fiabilité</h2>
+        <div class="sc2-score-wrap">
+          <div class="sc2-score-ring"
+               style="background:conic-gradient(#16a34a 0deg <?= esc_attr($score_deg) ?>deg,rgba(0,0,0,.07) <?= esc_attr($score_deg) ?>deg 360deg)"
+               aria-label="<?= esc_attr($score_fiab . '/100') ?>">
+            <span><?= esc_html($score_fiab) ?></span>
+          </div>
+          <div class="sc2-score-label">
+            <strong><?= $score_fiab >= 70 ? 'Profil fiable' : ($score_fiab >= 50 ? 'Profil modéré' : 'Profil à surveiller') ?></strong>
+            <span>Données vérifiées, activité continue, dépôts à jour.</span>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php endif; /* has_data_sections */ ?>
 
       <!-- BONUS TEXT juste après le hero (①) -->
       <?php if ($bonus_text && $status === 'done'): ?>
@@ -1580,10 +1700,10 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px}
     .sc2-hero-name{margin:0 0 14px;font-size:32px;font-weight:900;color:var(--sc-navy);line-height:1.15;text-transform:uppercase;letter-spacing:.5px}
     .sc2-hero-sub{display:flex;flex-wrap:wrap;gap:10px}
-    .sc2-hero-sub span{background:#fff;color:#475569;font-size:13px;padding:5px 14px;border-radius:20px;border:1.5px solid #e8e0ff;font-weight:500}
+    .sc2-hero-sub span{color:#475569;font-size:13px;padding:5px 14px;border-radius:20px;border:1.5px solid #e8e0ff;font-weight:500}
 
     /* NOTE DONNÉES INSUFFISANTES */
-    .sc2-hero-rating-nodata{text-align:center;background:#fff;border:2px solid #f3e8ff;border-radius:16px;padding:18px 22px;flex-shrink:0;max-width:200px;box-shadow:0 2px 14px rgba(139,92,246,.1)}
+    .sc2-hero-rating-nodata{text-align:center;border:2px solid #f3e8ff;border-radius:16px;padding:18px 22px;flex-shrink:0;max-width:200px;box-shadow:0 2px 14px rgba(139,92,246,.1)}
     .sc2-nodata-icon{font-size:32px;margin-bottom:6px}
     .sc2-nodata-label{font-size:13px;font-weight:800;color:#1f2937;margin-bottom:4px}
     .sc2-nodata-sub{font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.4}
@@ -1591,14 +1711,14 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-nodata-link:hover{opacity:.88}
 
     /* NOTE avec score */
-    .sc2-hero-rating{text-align:center;background:#fff;border:2px solid #f3e8ff;border-radius:16px;padding:18px 24px;flex-shrink:0;box-shadow:0 2px 14px rgba(139,92,246,.1)}
+    .sc2-hero-rating{text-align:center;border:2px solid #f3e8ff;border-radius:16px;padding:18px 24px;flex-shrink:0;box-shadow:0 2px 14px rgba(139,92,246,.1)}
     .sc2-hero-score{font-size:48px;font-weight:900;line-height:1;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .sc2-hero-stars{color:#f59e0b;font-size:20px;letter-spacing:2px;margin:6px 0}
     .sc2-hero-votes{color:#94a3b8;font-size:12px}
     .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center;color:#94a3b8}
 
     /* CONTACT BAR */
-    .sc2-contact-bar{background:#fff;border:1.5px solid #f0f2f5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 0;padding:14px 22px;display:flex;flex-wrap:wrap;gap:20px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .sc2-contact-bar{border:1.5px solid #f0f2f5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 0;padding:14px 22px;display:flex;flex-wrap:wrap;gap:20px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
     .sc2-contact-item{color:#475569;font-size:13px;display:inline-flex;align-items:center;gap:6px;font-weight:500}
     .sc2-contact-link{color:var(--sc-orange);text-decoration:none;font-weight:600}
     .sc2-contact-link:hover{text-decoration:underline}
@@ -1614,13 +1734,13 @@ add_shortcode('societies_fiche', function($atts) {
 
     /* Q&A CARDS */
     .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:22px;margin-bottom:8px}
-    .sc2-qa-card{background:#fff;border:1.5px solid #f0e8ff;border-left:4px solid var(--sc-orange);border-radius:0 14px 14px 14px;padding:26px 28px;box-shadow:0 2px 14px rgba(0,0,0,.06);transition:box-shadow .2s,transform .15s}
+    .sc2-qa-card{border:1.5px solid #f0e8ff;border-left:4px solid var(--sc-orange);border-radius:0 14px 14px 14px;padding:26px 28px;box-shadow:0 2px 14px rgba(0,0,0,.06);transition:box-shadow .2s,transform .15s}
     .sc2-qa-card:hover{box-shadow:0 8px 28px rgba(249,115,22,.13);transform:translateY(-3px)}
     .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px}
     .sc2-qa-a{color:#374151;font-size:14px;line-height:1.85}
 
     /* FAQ ACCORDION */
-    .sc2-faq-wrap{background:#fff;border:1.5px solid #f0e8ff;border-radius:16px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.05);margin-bottom:8px}
+    .sc2-faq-wrap{border:1.5px solid #f0e8ff;border-radius:16px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.05);margin-bottom:8px}
     .sc2-faq-list{display:flex;flex-direction:column}
     .sc2-faq-item{border-bottom:1px solid #f5f0ff}
     .sc2-faq-item:last-child{border-bottom:none}
@@ -1634,6 +1754,43 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-faq-icon{background:var(--sc-grad-btn);color:#fff;font-size:11px;font-weight:800;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
     .sc2-faq-icon-r{background:var(--sc-grad)}
     .sc2-faq-locked{font-size:13px;color:#9ca3af;padding:8px 0}
+
+    /* KPI GRID */
+    .sc2-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:8px}
+    .sc2-kpi-item{border:1.5px solid #f0e8ff;border-radius:14px;padding:20px;text-align:center}
+    .sc2-kpi-label{font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .sc2-kpi-value{font-size:22px;font-weight:900;color:var(--sc-navy);line-height:1}
+
+    /* CA HISTORY CHART */
+    .sc2-chart-wrap{display:flex;flex-direction:column;gap:10px;margin-bottom:8px;border:1.5px solid #f0e8ff;border-radius:14px;padding:20px}
+    .sc2-chart-row{display:grid;grid-template-columns:44px 1fr 80px;align-items:center;gap:12px}
+    .sc2-chart-year{font-size:12px;font-weight:700;color:#6b7280;text-align:right}
+    .sc2-chart-track{background:#f1f5f9;border-radius:4px;height:10px;overflow:hidden}
+    .sc2-chart-fill{height:100%;background:var(--sc-grad-btn);border-radius:4px}
+    .sc2-chart-val{font-size:13px;font-weight:700;color:#1f2937}
+
+    /* LEGAL TABLE */
+    .sc2-legal-table{border:1.5px solid #f0e8ff;border-radius:14px;overflow:hidden;margin-bottom:8px}
+    .sc2-legal-row{display:flex;align-items:flex-start;padding:12px 20px;border-bottom:1px solid #f5f0ff;gap:12px}
+    .sc2-legal-row:last-child{border-bottom:none}
+    .sc2-legal-label{font-size:12px;color:#6b7280;font-weight:500;min-width:150px;flex-shrink:0;padding-top:1px}
+    .sc2-legal-value{font-size:13px;color:#1f2937;font-weight:600;word-break:break-word}
+
+    /* DIRIGEANTS */
+    .sc2-dir-list{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+    .sc2-dir-row{display:flex;align-items:center;gap:14px;border:1.5px solid #f0e8ff;border-radius:12px;padding:14px 18px}
+    .sc2-dir-avatar{width:44px;height:44px;border-radius:50%;background:var(--sc-grad-btn);color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sc2-dir-name{font-size:14px;font-weight:700;color:#1f2937;margin-bottom:2px}
+    .sc2-dir-role{font-size:12px;color:#6b7280}
+    .sc2-dir-since{font-size:11px;color:#9ca3af;margin-top:2px}
+
+    /* SCORE RING */
+    .sc2-score-wrap{display:flex;align-items:center;gap:24px;border:1.5px solid #f0e8ff;border-radius:14px;padding:24px;margin-bottom:8px}
+    .sc2-score-ring{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sc2-score-ring span{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#16a34a}
+    .sc2-score-label{display:flex;flex-direction:column;gap:4px}
+    .sc2-score-label strong{font-size:15px;font-weight:700;color:#1f2937}
+    .sc2-score-label span{font-size:13px;color:#6b7280;line-height:1.5}
 
     /* BONUS */
     .sc2-bonus-card{background:linear-gradient(135deg,#f0f4ff,#fdf4ff);border:1px solid #e0e7ff;border-radius:14px;padding:24px 28px;margin-top:20px;box-shadow:0 2px 10px rgba(59,91,219,.07)}
@@ -1809,21 +1966,21 @@ add_shortcode('societies_home', function() {
     /* Search */
     .sc-home-sw{position:relative;max-width:540px;margin:0 auto}
     .sc-home-si{width:100%;padding:16px 22px;border:none;border-radius:12px;font-size:16px;outline:none;box-shadow:0 4px 24px rgba(0,0,0,.25);box-sizing:border-box}
-    .sc-home-sd{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);z-index:200;max-height:280px;overflow-y:auto}
+    .sc-home-sd{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);z-index:200;max-height:280px;overflow-y:auto}
     .sc-home-sd a{display:block;padding:12px 18px;text-decoration:none;color:#1f2937;border-bottom:1px solid #f3f4f6;font-size:14px;transition:background .1s}
     .sc-home-sd a:last-child{border-bottom:none}
     .sc-home-sd a:hover{background:#f8fafc}
     .sc-home-sd-meta{font-size:12px;color:#9ca3af;display:block}
     /* Stats */
     .sc-home-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}
-    .sc-home-stat{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:22px;text-align:center}
+    .sc-home-stat{border:1px solid #e5e7eb;border-radius:14px;padding:22px;text-align:center}
     .sc-home-stat-n{font-size:26px;font-weight:800;color:#1a2744}
     .sc-home-stat-l{font-size:13px;color:#6b7280;margin-top:4px}
     /* Sections */
     .sc-home-section{margin-bottom:24px}
     .sc-home-sh{font-size:17px;font-weight:700;color:#1f2937;margin:0 0 14px;padding-bottom:8px;border-bottom:2px solid #e63946;display:inline-block}
     .sc-home-pills{display:flex;flex-wrap:wrap;gap:8px}
-    .sc-home-pill{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:7px 14px;font-size:13px;color:#374151}
+    .sc-home-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #e5e7eb;border-radius:20px;padding:7px 14px;font-size:13px;color:#374151}
     .sc-home-pill-c{background:#f1f5f9;color:#6b7280;font-size:11px;padding:2px 7px;border-radius:10px}
     /* CTA owner */
     .sc-home-owner{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#1a2744;border-radius:16px;padding:24px 32px;margin-top:8px;flex-wrap:wrap}
@@ -2015,6 +2172,46 @@ add_action('admin_menu', function() {
         'manage_options', 'societies-subscriptions', 'sc_admin_subscriptions');
     add_submenu_page('societies', 'Modération fiches', 'Modération',
         'manage_options', 'societies-moderation', 'sc_admin_moderation');
+    add_submenu_page('societies', 'Thème', 'Thème',
+        'manage_options', 'societies-theme', 'sc_admin_theme');
+});
+
+// Téléchargement du thème en ZIP — intercepté avant tout rendu HTML
+add_action('admin_init', function() {
+    if (!isset($_GET['page'], $_GET['sc_theme_dl']) || $_GET['page'] !== 'societies-theme') return;
+    if (!current_user_can('manage_options')) wp_die('Accès refusé.');
+    check_admin_referer('sc_theme_dl');
+
+    $theme_dir = get_theme_root() . '/topsocietes-theme';
+    if (!is_dir($theme_dir)) wp_die('Thème introuvable.');
+
+    $zip_path = sys_get_temp_dir() . '/topsocietes-theme-' . date('Ymd') . '.zip';
+    $zip = new ZipArchive();
+    if ($zip->open($zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        wp_die('Impossible de créer l\'archive ZIP.');
+    }
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($theme_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+    foreach ($iterator as $file) {
+        $relative = 'topsocietes-theme/' . $iterator->getSubPathname();
+        if ($file->isDir()) {
+            $zip->addEmptyDir($relative);
+        } else {
+            $zip->addFile($file->getPathname(), $relative);
+        }
+    }
+    $zip->close();
+
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="topsocietes-theme-' . date('Ymd') . '.zip"');
+    header('Content-Length: ' . filesize($zip_path));
+    header('Cache-Control: no-cache');
+    readfile($zip_path);
+    unlink($zip_path);
+    exit;
 });
 
 add_action('admin_init', function() {
@@ -2233,7 +2430,7 @@ function sc_client_dashboard() {
 
       <?php if (!$company_title): ?>
       <!-- Revendication entreprise -->
-      <div style="max-width:580px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;margin-top:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+      <div style="max-width:580px;border:1px solid #e5e7eb;border-radius:12px;padding:32px;margin-top:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
         <h2 style="margin-top:0;font-size:18px">🏢 Revendiquer mon entreprise</h2>
         <p style="color:#6b7280;margin-bottom:20px;font-size:14px">
           Recherchez votre entreprise dans notre base pour accéder à votre fiche et la personnaliser.
@@ -2245,7 +2442,7 @@ function sc_client_dashboard() {
                    placeholder="Tapez le nom de votre entreprise..."
                    style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;margin-bottom:4px"
                    oninput="scSearchCompany(this.value)">
-            <div id="sc-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:99;max-height:260px;overflow-y:auto"></div>
+            <div id="sc-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;border:1px solid #d1d5db;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:99;max-height:260px;overflow-y:auto"></div>
           </div>
           <input type="hidden" name="sc_company_title" id="sc-company-hidden" required>
           <div id="sc-selected" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:14px;color:#15803d"></div>
@@ -2425,7 +2622,7 @@ function sc_admin_dashboard() {
             'Fiches supprimées'   => number_format((int)($stats['deleted'] ?? 0), 0, ',', ' '),
         ];
         foreach ($cards as $label => $val): ?>
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px 28px;text-align:center;min-width:140px">
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:20px 28px;text-align:center;min-width:140px">
           <div style="font-size:28px;font-weight:700;color:#111"><?= $val ?></div>
           <div style="color:#6b7280;font-size:13px"><?= $label ?></div>
         </div>
@@ -3399,6 +3596,72 @@ function sc_enqueue_styles() {
 add_action('wp_head', 'sc_enqueue_styles');
 
 // =============================================================================
+// ADMIN PAGE — THÈME (téléchargement ZIP)
+// =============================================================================
+function sc_admin_theme() {
+    if (!current_user_can('manage_options')) return;
+
+    $theme_dir  = get_theme_root() . '/topsocietes-theme';
+    $theme_ok   = is_dir($theme_dir);
+    $dl_url     = wp_nonce_url(admin_url('admin.php?page=societies-theme&sc_theme_dl=1'), 'sc_theme_dl');
+
+    // Calcul taille du dossier
+    $dir_size = 0;
+    if ($theme_ok) {
+        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($theme_dir, RecursiveDirectoryIterator::SKIP_DOTS));
+        foreach ($it as $f) $dir_size += $f->getSize();
+    }
+    $size_fmt = $dir_size > 1048576 ? round($dir_size / 1048576, 1) . ' Mo' : round($dir_size / 1024) . ' Ko';
+
+    // Compter les fichiers
+    $file_count = $theme_ok ? iterator_count(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($theme_dir, RecursiveDirectoryIterator::SKIP_DOTS))) : 0;
+
+    echo sc_admin_logo(); ?>
+    <div class="wrap">
+      <h1 style="display:flex;align-items:center;gap:10px">🎨 Thème TOPsocietes</h1>
+
+      <?php if (!$theme_ok): ?>
+      <div class="notice notice-error"><p>⚠️ Thème introuvable : <code><?= esc_html($theme_dir) ?></code></p></div>
+      <?php else: ?>
+
+      <div style="max-width:600px;margin-top:24px">
+        <div style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:28px 32px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+          <h2 style="margin-top:0;font-size:18px">Exporter le thème</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+            <tr style="border-bottom:1px solid #f0f0f0">
+              <td style="padding:10px 0;color:#6b7280;width:40%">Nom du thème</td>
+              <td style="padding:10px 0;font-weight:600">topsocietes-theme</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f0f0f0">
+              <td style="padding:10px 0;color:#6b7280">Emplacement</td>
+              <td style="padding:10px 0;font-family:monospace;font-size:12px"><?= esc_html($theme_dir) ?></td>
+            </tr>
+            <tr style="border-bottom:1px solid #f0f0f0">
+              <td style="padding:10px 0;color:#6b7280">Fichiers</td>
+              <td style="padding:10px 0;font-weight:600"><?= esc_html($file_count) ?> fichiers</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;color:#6b7280">Taille estimée</td>
+              <td style="padding:10px 0;font-weight:600"><?= esc_html($size_fmt) ?></td>
+            </tr>
+          </table>
+          <a href="<?= esc_url($dl_url) ?>"
+             style="display:inline-flex;align-items:center;gap:8px;background:#1e3a8a;color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;transition:background .2s"
+             onmouseover="this.style.background='#1e40af'" onmouseout="this.style.background='#1e3a8a'">
+            ⬇️ Télécharger le thème (.zip)
+          </a>
+          <p style="font-size:12px;color:#9ca3af;margin-top:12px">
+            L'archive sera nommée <code>topsocietes-theme-<?= date('Ymd') ?>.zip</code>.
+          </p>
+        </div>
+      </div>
+
+      <?php endif; ?>
+    </div>
+    <?php
+}
+
+// =============================================================================
 // CSS GLOBAL — masquage header/sidebar/footer thème via wp_head (fiable)
 // =============================================================================
 add_action('wp_head', function() {
@@ -3575,3 +3838,238 @@ add_action('wp_footer', function() {
   </div>
 </a>';
 }, 97);
+
+// =============================================================================
+// SHORTCODE PAGE TARIFS UTILISATEUR [societies_tarifs]
+// =============================================================================
+
+add_shortcode('societies_tarifs', function() {
+    $plans = [
+        [
+            'name'     => 'Gratuit',
+            'desc'     => 'Accès aux informations de base sur toutes les entreprises françaises.',
+            'price'    => 0,
+            'featured' => false,
+            'badge'    => '',
+            'btn_text' => 'Commencer gratuitement',
+            'btn_url'  => home_url('/inscription/'),
+            'btn_style'=> 'outline',
+            'features' => [
+                [true,  'Recherche par nom / SIREN'],
+                [true,  'Fiche entreprise de base'],
+                [true,  '5 recherches / jour'],
+                [false, 'Données financières complètes'],
+                [false, 'Export CSV'],
+                [false, 'API Access'],
+            ],
+        ],
+        [
+            'name'     => 'Pro',
+            'desc'     => "Idéal pour les professionnels de la prospection et du renseignement d'entreprises.",
+            'price_m'  => 49,
+            'price_a'  => 39,
+            'featured' => true,
+            'badge'    => 'Le plus populaire',
+            'btn_text' => "Commencer l'essai gratuit",
+            'btn_url'  => home_url('/inscription-pro/'),
+            'btn_style'=> 'primary',
+            'features' => [
+                [true,  'Tout le plan Gratuit'],
+                [true,  'Recherches illimitées'],
+                [true,  'Données financières complètes'],
+                [true,  'Dirigeants & actionnaires'],
+                [true,  'Export CSV (500 / mois)'],
+                [false, 'API Access'],
+            ],
+        ],
+        [
+            'name'     => 'Entreprise',
+            'desc'     => 'Pour les équipes et organisations avec des besoins de données à grande échelle.',
+            'price_m'  => 199,
+            'price_a'  => 149,
+            'featured' => false,
+            'badge'    => '',
+            'btn_text' => 'Contacter nos équipes',
+            'btn_url'  => home_url('/contact/'),
+            'btn_style'=> 'outline',
+            'features' => [
+                [true, 'Tout le plan Pro'],
+                [true, 'API Access complète'],
+                [true, 'Export CSV illimité'],
+                [true, 'Webhooks & Intégrations'],
+                [true, 'Account Manager dédié'],
+                [true, 'SLA 99,9 %'],
+            ],
+        ],
+    ];
+
+    $faqs = [
+        [
+            'q' => 'Les données sont-elles mises à jour en temps réel ?',
+            'a' => "Nos données sont synchronisées quotidiennement depuis le RCS (Registre du Commerce et des Sociétés), l'INSEE et Infogreffe. Les données financières (bilans, CA) sont mises à jour annuellement dès leur dépôt.",
+        ],
+        [
+            'q' => 'Puis-je annuler mon abonnement à tout moment ?',
+            'a' => "Oui, vous pouvez annuler votre abonnement depuis votre espace membre à tout moment. Aucun frais d'annulation ne s'applique. Votre accès reste actif jusqu'à la fin de la période payée.",
+        ],
+        [
+            'q' => "L'API est-elle disponible avec le plan Pro ?",
+            'a' => "L'accès API complet est réservé au plan Entreprise. Le plan Pro bénéficie cependant d'exports CSV et d'un accès limité à l'API (100 requêtes / jour).",
+        ],
+        [
+            'q' => "Puis-je tester le plan Pro avant de m'engager ?",
+            'a' => "Absolument. Nous offrons un essai gratuit de 14 jours sur le plan Pro, sans carte bancaire requise. À l'issue de l'essai, vous choisissez librement de continuer ou non.",
+        ],
+        [
+            'q' => 'Comment fonctionne la facturation annuelle ?',
+            'a' => 'En optant pour la facturation annuelle, vous bénéficiez d\'une réduction de 20 % sur le tarif mensuel. La facturation est effectuée en une seule fois en début de période.',
+        ],
+    ];
+
+    ob_start(); ?>
+    <style>
+    .spt-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:40px 20px 60px;max-width:1160px;margin:0 auto}
+    .spt-hero{text-align:center;margin-bottom:48px}
+    .spt-title{font-size:34px;font-weight:800;color:#1a2744;margin:0 0 12px}
+    .spt-sub{font-size:16px;color:#6b7280;max-width:520px;margin:0 auto 28px}
+    .spt-toggle{display:inline-flex;background:#f1f5f9;border-radius:50px;padding:4px;gap:0}
+    .spt-toggle-btn{background:none;border:none;border-radius:50px;padding:10px 22px;font-size:14px;font-weight:600;color:#6b7280;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:8px;font-family:inherit}
+    .spt-toggle-btn.active{color:#1a2744;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+    .spt-save-badge{background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+    .spt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:64px}
+    .spt-card{border:2px solid #e8edf3;border-radius:20px;padding:32px 24px;display:flex;flex-direction:column;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+    .spt-card:hover{transform:translateY(-6px);box-shadow:0 16px 48px rgba(0,0,0,.1)}
+    .spt-card.featured{border-color:#6366f1;box-shadow:0 8px 32px rgba(99,102,241,.15)}
+    .spt-card-badge{position:absolute;top:18px;right:-34px;background:linear-gradient(135deg,#6366f1,#8B5CF6);color:#fff;font-size:11px;font-weight:700;padding:5px 48px;transform:rotate(45deg);letter-spacing:.5px}
+    .spt-plan-name{font-size:22px;font-weight:800;color:#1a2744;margin-bottom:8px}
+    .spt-plan-desc{font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:24px;min-height:48px}
+    .spt-price{margin-bottom:24px}
+    .spt-price-cur{font-size:24px;font-weight:700;color:#1a2744;vertical-align:top;margin-top:10px;display:inline-block}
+    .spt-price-amount{font-size:52px;font-weight:900;color:#1a2744;line-height:1}
+    .spt-price-period{font-size:14px;color:#9ca3af;margin-left:4px}
+    .spt-price-orig{font-size:12px;color:#9ca3af;margin-top:4px;min-height:18px}
+    .spt-divider{border:none;border-top:1px solid #f1f5f9;margin:0 0 20px}
+    .spt-features{list-style:none;padding:0;margin:0 0 28px;display:flex;flex-direction:column;gap:10px;flex:1}
+    .spt-feature{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#374151;line-height:1.45}
+    .spt-check-yes{color:#10b981;font-size:16px;flex-shrink:0;font-weight:700}
+    .spt-check-no{color:#d1d5db;font-size:16px;flex-shrink:0}
+    .spt-btn-primary{display:block;text-align:center;background:linear-gradient(135deg,#6366f1,#8B5CF6);color:#fff;font-size:15px;font-weight:700;padding:14px 24px;border-radius:12px;text-decoration:none;transition:opacity .2s}
+    .spt-btn-primary:hover{opacity:.88;color:#fff;text-decoration:none}
+    .spt-btn-outline{display:block;text-align:center;color:#1a2744;border:2px solid #e2e8f0;font-size:15px;font-weight:700;padding:14px 24px;border-radius:12px;text-decoration:none;transition:all .2s}
+    .spt-btn-outline:hover{border-color:#6366f1;color:#6366f1;text-decoration:none}
+    .spt-faq-header{text-align:center;margin-bottom:32px}
+    .spt-faq-eyebrow{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6366f1;margin-bottom:8px}
+    .spt-faq-title{font-size:28px;font-weight:800;color:#1a2744;margin:0}
+    .spt-faq-list{max-width:720px;margin:0 auto 64px}
+    .spt-faq-item{border-bottom:1px solid #e8edf3}
+    .spt-faq-item:first-child{border-top:1px solid #e8edf3}
+    .spt-faq-btn{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;padding:20px 0;cursor:pointer;text-align:left;font-family:inherit;font-size:15px;font-weight:600;color:#1a2744;gap:12px}
+    .spt-faq-icon{font-size:20px;color:#6366f1;flex-shrink:0;transition:transform .2s;line-height:1}
+    .spt-faq-item--open .spt-faq-icon{transform:rotate(45deg)}
+    .spt-faq-answer{font-size:14px;color:#6b7280;line-height:1.75;padding:0 0 20px;display:none}
+    .spt-faq-item--open .spt-faq-answer{display:block}
+    .spt-cta{background:linear-gradient(135deg,#1a2744,#1e3a8a);border-radius:20px;padding:48px 40px;display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap}
+    .spt-cta-title{font-size:26px;font-weight:800;color:#e8f4ff;margin:0 0 8px}
+    .spt-cta-desc{font-size:15px;color:rgba(191,216,255,.8);margin:0}
+    .spt-cta-btn{flex-shrink:0;background:linear-gradient(135deg,#6366f1,#8B5CF6);color:#fff;font-size:15px;font-weight:700;padding:16px 32px;border-radius:12px;text-decoration:none;transition:opacity .2s;white-space:nowrap}
+    .spt-cta-btn:hover{opacity:.88;color:#fff;text-decoration:none}
+    @media(max-width:900px){.spt-grid{grid-template-columns:1fr;max-width:420px;margin-left:auto;margin-right:auto}}
+    @media(max-width:600px){.spt-title{font-size:26px}.spt-cta{padding:32px 24px;flex-direction:column}.spt-cta-title{font-size:20px}}
+    </style>
+
+    <div class="spt-wrap">
+      <div class="spt-hero">
+        <h1 class="spt-title">Des tarifs transparents, sans surprise</h1>
+        <p class="spt-sub">Choisissez le plan adapté à vos besoins. Changez ou annulez à tout moment.</p>
+        <div class="spt-toggle" role="group" aria-label="Fréquence de facturation">
+          <button type="button" class="spt-toggle-btn active" data-billing="monthly" aria-pressed="true">Mensuel</button>
+          <button type="button" class="spt-toggle-btn" data-billing="annual" aria-pressed="false">
+            Annuel <span class="spt-save-badge">-20%</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="spt-grid">
+        <?php foreach ($plans as $plan):
+            $is_free = isset($plan['price']);
+            $pm = $plan['price_m'] ?? 0;
+            $pa = $plan['price_a'] ?? 0;
+        ?>
+        <div class="spt-card<?= $plan['featured'] ? ' featured' : '' ?>">
+          <?php if ($plan['badge']): ?>
+          <div class="spt-card-badge"><?= esc_html($plan['badge']) ?></div>
+          <?php endif; ?>
+          <div class="spt-plan-name"><?= esc_html($plan['name']) ?></div>
+          <div class="spt-plan-desc"><?= esc_html($plan['desc']) ?></div>
+          <div class="spt-price">
+            <span class="spt-price-cur">€</span><span class="spt-price-amount"<?= !$is_free ? ' data-monthly="'.esc_attr($pm).'" data-annual="'.esc_attr($pa).'"' : '' ?>><?= $is_free ? '0' : esc_html($pm) ?></span><span class="spt-price-period">/ mois</span>
+            <div class="spt-price-orig"<?= !$is_free ? ' data-annual-orig="au lieu de '.esc_attr($pm).' €/mois"' : '' ?>></div>
+          </div>
+          <hr class="spt-divider">
+          <ul class="spt-features">
+            <?php foreach ($plan['features'] as [$ok, $text]): ?>
+            <li class="spt-feature">
+              <span class="<?= $ok ? 'spt-check-yes' : 'spt-check-no' ?>" aria-hidden="true"><?= $ok ? '✓' : '✕' ?></span>
+              <?= esc_html($text) ?>
+            </li>
+            <?php endforeach; ?>
+          </ul>
+          <a href="<?= esc_url($plan['btn_url']) ?>" class="spt-btn-<?= esc_attr($plan['btn_style']) ?>"><?= esc_html($plan['btn_text']) ?></a>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <div class="spt-faq-header">
+        <div class="spt-faq-eyebrow">Questions fréquentes</div>
+        <h2 class="spt-faq-title">FAQ</h2>
+      </div>
+      <div class="spt-faq-list">
+        <?php foreach ($faqs as $i => $faq): ?>
+        <div class="spt-faq-item" id="spt-faq-<?= esc_attr($i) ?>">
+          <button type="button" class="spt-faq-btn" aria-expanded="false" aria-controls="spt-faq-ans-<?= esc_attr($i) ?>">
+            <?= esc_html($faq['q']) ?>
+            <span class="spt-faq-icon" aria-hidden="true">+</span>
+          </button>
+          <div class="spt-faq-answer" id="spt-faq-ans-<?= esc_attr($i) ?>" role="region">
+            <?= esc_html($faq['a']) ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <div class="spt-cta">
+        <div>
+          <div class="spt-cta-title">Prêt à commencer ?</div>
+          <p class="spt-cta-desc">Accédez gratuitement à plus de 4 millions de fiches entreprise. Aucune carte bancaire requise.</p>
+        </div>
+        <a href="<?= esc_url(home_url('/inscription/')) ?>" class="spt-cta-btn">Créer un compte gratuit →</a>
+      </div>
+    </div>
+    <script>
+    (function(){
+      var grid = document.querySelector('.spt-grid');
+      document.querySelectorAll('.spt-toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.spt-toggle-btn').forEach(function(b){ b.classList.remove('active'); b.setAttribute('aria-pressed','false'); });
+          btn.classList.add('active'); btn.setAttribute('aria-pressed','true');
+          var billing = btn.getAttribute('data-billing');
+          grid.querySelectorAll('.spt-price-amount[data-monthly]').forEach(function(el) {
+            el.textContent = billing === 'annual' ? el.getAttribute('data-annual') : el.getAttribute('data-monthly');
+          });
+          grid.querySelectorAll('.spt-price-orig[data-annual-orig]').forEach(function(el) {
+            el.textContent = billing === 'annual' ? el.getAttribute('data-annual-orig') : '';
+          });
+        });
+      });
+      document.querySelectorAll('.spt-faq-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var item = btn.closest('.spt-faq-item');
+          var open = item.classList.contains('spt-faq-item--open');
+          document.querySelectorAll('.spt-faq-item--open').forEach(function(i){ i.classList.remove('spt-faq-item--open'); i.querySelector('.spt-faq-btn').setAttribute('aria-expanded','false'); });
+          if (!open) { item.classList.add('spt-faq-item--open'); btn.setAttribute('aria-expanded','true'); }
+        });
+      });
+    })();
+    </script>
+    <?php return ob_get_clean();
+});
