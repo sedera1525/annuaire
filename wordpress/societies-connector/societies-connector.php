@@ -2,21 +2,21 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.26
+ * Version:      2.5.27
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.26');
+define('SC_VERSION', '2.5.27');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
 add_filter('template_include', function(string $template): string {
     $sc_template = SC_DIR . 'templates/shortcode-page.php';
     if (!file_exists($sc_template)) return $template;
-    if (is_page(['recherche', 'recherche-entreprises', 'tarifs']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
+    if (is_page(['recherche', 'recherche-entreprises', 'tarifs', 'revendiquer']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
         return $sc_template;
     }
     // Couvre aussi les fiches et pages tarifs quel que soit le thème actif
@@ -178,19 +178,19 @@ register_deactivation_hook(__FILE__, function() {
     wp_clear_scheduled_hook('sc_auto_sync_fiches');
 });
 
-// Crée automatiquement la page /tarifs/ avec [societies_tarifs] si elle n'existe pas
+// Crée automatiquement les pages /tarifs/ et /revendiquer/ si elles n'existent pas
 add_action('init', function() {
-    if (get_transient('sc_tarifs_page_checked')) return;
-    set_transient('sc_tarifs_page_checked', 1, DAY_IN_SECONDS);
-    $existing = get_posts(['post_type' => 'page', 'name' => 'tarifs', 'post_status' => 'publish', 'numberposts' => 1]);
-    if (!$existing) {
-        wp_insert_post([
-            'post_title'   => 'Tarifs',
-            'post_name'    => 'tarifs',
-            'post_content' => '[societies_tarifs]',
-            'post_status'  => 'publish',
-            'post_type'    => 'page',
-        ]);
+    if (get_transient('sc_core_pages_checked')) return;
+    set_transient('sc_core_pages_checked', 1, DAY_IN_SECONDS);
+    $pages = [
+        'tarifs'      => ['Tarifs',      '[societies_tarifs]'],
+        'revendiquer' => ['Revendiquer', '[societies_revendiquer]'],
+    ];
+    foreach ($pages as $slug => [$title, $content]) {
+        $existing = get_posts(['post_type' => 'page', 'name' => $slug, 'post_status' => 'publish', 'numberposts' => 1]);
+        if (!$existing) {
+            wp_insert_post(['post_title' => $title, 'post_name' => $slug, 'post_content' => $content, 'post_status' => 'publish', 'post_type' => 'page']);
+        }
     }
 });
 
@@ -1036,7 +1036,7 @@ add_shortcode('societies_search', function($atts) {
     .'body{background:#f1f4f9!important;overflow-x:hidden}'
     .'#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
     .'.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;box-sizing:border-box;overflow-x:hidden}'
-    .'.sc-hero{padding:56px 24px 44px;text-align:center;box-sizing:border-box;border-bottom:1px solid #e5e9f0}'
+    .'.sc-hero{padding:56px 24px 44px;text-align:center;box-sizing:border-box}'
     .'.sc-badge{display:inline-flex;align-items:center;gap:8px;border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#6366f1,#3b82f6) border-box;border-radius:50px;padding:7px 20px;font-size:12px;font-weight:700;color:#3b4fcf;letter-spacing:.3px;margin-top:32px;margin-bottom:22px}'
     .'.sc-badge-star{color:#f59e0b;font-style:normal}'
     .'.sc-hero-title{font-size:42px;font-weight:900;color:#111827;margin:0 0 12px;letter-spacing:-1.5px;line-height:1.1}'
@@ -1651,49 +1651,6 @@ add_shortcode('societies_fiche', function($atts) {
         <!-- COLONNE LATÉRALE -->
         <aside class="sc2-aside">
 
-          <!-- Note / Rating -->
-          <div class="sc2-aside-card">
-            <?php if ($owner_sub): ?>
-            <div class="sc2-rating-box">
-              <div class="sc2-rating-score">5.0</div>
-              <div class="sc2-rating-stars">★★★★★</div>
-              <div class="sc2-rating-label">Entreprise vérifiée</div>
-            </div>
-            <?php else: ?>
-            <div class="sc2-nodata-box">
-              <div class="sc2-nodata-icon">⭐</div>
-              <div class="sc2-nodata-label">Peu d'avis disponibles</div>
-              <div class="sc2-nodata-sub">Soyez le premier à partager votre expérience !</div>
-              <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">Donner un avis →</a>
-            </div>
-            <?php endif; ?>
-          </div>
-
-          <?php $has_contact_aside = !empty($company['phone']) || !empty($company['website']) || !empty($company['address']); ?>
-          <?php if ($has_contact_aside): ?>
-          <div class="sc2-aside-card">
-            <h4 class="sc2-aside-title">Contact</h4>
-            <?php if (!empty($company['phone'])): ?>
-            <div class="sc2-contact-item">
-              <span>📞</span>
-              <a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $company['phone'])) ?>" class="sc2-contact-val"><?= esc_html($company['phone']) ?></a>
-            </div>
-            <?php endif; ?>
-            <?php if (!empty($company['website'])): ?>
-            <div class="sc2-contact-item">
-              <span>🌐</span>
-              <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-contact-val"><?= esc_html(preg_replace('/^https?:\/\/(www\.)?/', '', rtrim($company['website'], '/'))) ?></a>
-            </div>
-            <?php endif; ?>
-            <?php if (!empty($company['address'])): ?>
-            <div class="sc2-contact-item">
-              <span>📍</span>
-              <span class="sc2-contact-val"><?= esc_html($company['address']) ?></span>
-            </div>
-            <?php endif; ?>
-          </div>
-          <?php endif; ?>
-
           <!-- CTA "Cette entreprise est la vôtre?" -->
           <div class="sc2-aside-card sc2-aside-cta">
             <h4 class="sc2-aside-cta-title">Cette entreprise est la vôtre ?</h4>
@@ -1730,7 +1687,7 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-wrap{max-width:1100px;margin:0 auto;padding:32px 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
 
     /* HERO */
-    .sc2-hero{background:linear-gradient(135deg,#fff8f4 0%,#fdf4ff 60%,#f0f4ff 100%);border-radius:20px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px;flex-wrap:wrap;border:1.5px solid #ede8ff;box-shadow:0 4px 28px rgba(139,92,246,.09);position:relative;overflow:hidden}
+    .sc2-hero{background:linear-gradient(135deg,#fff8f4 0%,#fdf4ff 60%,#f0f4ff 100%);border-radius:20px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px;flex-wrap:wrap;border:1.5px solid #ede8ff;box-shadow:0 4px 28px rgba(139,92,246,.09);position:relative;overflow:hidden; margin-top: 5%}
     .sc2-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--sc-grad)}
     .sc2-hero-left{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
     .sc2-hero-badge{width:60px;height:60px;border-radius:14px;background:var(--sc-grad-btn);color:#fff;font-size:18px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.5px}
@@ -1833,7 +1790,7 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-card--analysis{padding:0;overflow:hidden}
     .sc2-analysis-header{background:#f8fafc;border-bottom:3px solid #3b82f6;padding:18px 24px}
     .sc2-analysis-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a}
-    .sc2-card--analysis .sc2-qa-grid{padding:20px 24px;grid-template-columns:repeat(2,1fr);gap:14px}
+    .sc2-card--analysis .sc2-qa-grid{padding:20px 24px;grid-template-columns:repeat(2,1fr);gap:20px}
     .sc2-qa-card{border:1.5px solid #e8edf5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 12px;padding:18px 20px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
     .sc2-qa-card:nth-child(even){border-left-color:#3b82f6}
     .sc2-qa-card:hover{box-shadow:0 6px 20px rgba(59,130,246,.1);transform:translateY(-2px)}
@@ -4120,5 +4077,168 @@ add_shortcode('societies_tarifs', function() {
       });
     })();
     </script>
+    <?php return ob_get_clean();
+});
+
+// =============================================================================
+// SHORTCODE PAGE REVENDIQUER [societies_revendiquer]
+// =============================================================================
+
+add_shortcode('societies_revendiquer', function() {
+    $api_url = rtrim(get_option('societies_api_url', ''), '/');
+    $packs   = [];
+    if ($api_url) {
+        $parsed   = parse_url($api_url);
+        $base_url = ($parsed['scheme'] ?? 'http') . '://'
+                  . ($parsed['host'] ?? '')
+                  . (isset($parsed['port']) ? ':' . $parsed['port'] : '')
+                  . rtrim($parsed['path'] ?? '', '/');
+        $resp  = wp_remote_get($base_url . '/api/public/packs', ['timeout' => 8, 'sslverify' => false]);
+        if (!is_wp_error($resp)) {
+            $data  = json_decode(wp_remote_retrieve_body($resp), true);
+            $packs = $data['packs'] ?? [];
+        }
+    }
+
+    ob_start(); ?>
+    <style>
+    .scr-wrap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:860px;margin:0 auto;padding:32px 20px 64px}
+    .scr-hero{background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 60%,#ef4444 100%);border-radius:20px;padding:40px 32px;text-align:center;color:#fff;margin-bottom:28px}
+    .scr-hero-icon{font-size:32px;margin-bottom:12px}
+    .scr-hero-title{font-size:26px;font-weight:900;margin:0 0 12px;line-height:1.2}
+    .scr-hero-sub{font-size:14px;opacity:.9;margin:0;line-height:1.6;max-width:520px;display:block;margin-left:auto;margin-right:auto}
+    .scr-section{border-radius:14px;padding:24px 28px;margin-bottom:16px}
+    .scr-section--green{background:#f0fdf4;border:1.5px solid #bbf7d0}
+    .scr-section--blue{background:#eff6ff;border:1.5px solid #bfdbfe}
+    .scr-section--yellow{background:#fffbeb;border:1.5px solid #fde68a}
+    .scr-section-title{font-size:15px;font-weight:800;margin:0 0 14px;padding-bottom:10px;border-bottom:2px solid currentColor;display:inline-block}
+    .scr-section--green .scr-section-title{color:#15803d}
+    .scr-section--yellow .scr-section-title{color:#92400e}
+    .scr-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+    .scr-list li{font-size:13px;color:#374151;display:flex;align-items:flex-start;gap:8px;line-height:1.5}
+    .scr-info{font-size:13px;color:#1e40af;line-height:1.65;margin:0}
+    .scr-info strong{font-weight:700}
+    .scr-divider{border:none;border-top:2px solid #e5e7eb;margin:36px 0}
+    .scr-pricing-title{font-size:22px;font-weight:900;color:#1a2744;text-align:center;margin:0 0 8px}
+    .scr-pricing-sub{font-size:14px;color:#6b7280;text-align:center;margin:0 0 32px}
+    .scr-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .scr-card{border:2px solid #e8edf3;border-radius:18px;padding:22px 18px;display:flex;flex-direction:column;gap:0;background:#fff;position:relative}
+    .scr-card--featured{border-color:#8b5cf6;box-shadow:0 8px 32px rgba(139,92,246,.18)}
+    .scr-badge-pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:10px}
+    .scr-badge-pill--green{background:#dcfce7;color:#15803d}
+    .scr-badge-pill--blue{background:#dbeafe;color:#1e40af}
+    .scr-badge-pill--purple{background:#ede9fe;color:#5b21b6}
+    .scr-badge-pill--indigo{background:#e0e7ff;color:#3730a3}
+    .scr-featured-tag{position:absolute;top:-12px;right:16px;background:linear-gradient(135deg,#8b5cf6,#ec4899);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap}
+    .scr-price{font-size:32px;font-weight:900;color:#1a2744;margin:4px 0 2px;line-height:1}
+    .scr-price sup{font-size:18px;vertical-align:top;margin-top:4px;display:inline-block}
+    .scr-price-period{font-size:13px;color:#9ca3af;font-weight:400}
+    .scr-card-desc{font-size:13px;color:#6b7280;margin:8px 0 16px;line-height:1.5}
+    .scr-btn{display:block;text-align:center;padding:11px 16px;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;margin-bottom:18px;transition:opacity .15s}
+    .scr-btn:hover{opacity:.85;text-decoration:none}
+    .scr-btn--green{background:#22c55e;color:#fff}
+    .scr-btn--blue{background:#3b82f6;color:#fff}
+    .scr-btn--purple{background:#8b5cf6;color:#fff}
+    .scr-btn--indigo{background:#6366f1;color:#fff}
+    .scr-star-offer{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e;line-height:1.5;margin-bottom:14px}
+    .scr-star-offer strong{display:block;margin-bottom:4px}
+    .scr-feats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px;margin-top:auto}
+    .scr-feat{font-size:13px;color:#374151;display:flex;align-items:flex-start;gap:6px;line-height:1.45}
+    .scr-feat::before{content:"✓";color:#22c55e;font-weight:700;flex-shrink:0}
+    .scr-feat--purple::before{color:#8b5cf6}
+    @media(max-width:760px){.scr-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:500px){.scr-grid{grid-template-columns:1fr}}
+    </style>
+
+    <div class="scr-wrap">
+
+      <!-- HERO -->
+      <div class="scr-hero">
+        <div class="scr-hero-icon">🚀</div>
+        <h1 class="scr-hero-title">Améliorez votre image en ligne<br>dès aujourd'hui</h1>
+        <p class="scr-hero-sub">Votre fiche entreprise existe déjà… mais elle est incomplète.<br>En la personnalisant, vous reprenez le contrôle de votre image et rassurez vos futurs clients.</p>
+      </div>
+
+      <!-- GRATUIT -->
+      <div class="scr-section scr-section--green">
+        <div class="scr-section-title">🗂️ Ce que vous pouvez faire gratuitement</div>
+        <p style="font-size:13px;color:#374151;margin:0 0 12px">En créant votre compte, vous pouvez :</p>
+        <ul class="scr-list">
+          <li>✏️ Modifier les textes de votre fiche</li>
+          <li>🌟 Personnaliser la présentation de votre activité</li>
+          <li>💬 Répondre à 3 questions essentielles</li>
+          <li>👉 <strong>Objectif</strong> : présenter une image claire, professionnelle et maîtrisée</li>
+        </ul>
+      </div>
+
+      <!-- INFO MODÉRATION -->
+      <div class="scr-section scr-section--blue">
+        <p class="scr-info">
+          <strong>ℹ️ Une fois vos modifications effectuées</strong>, cliquez sur le bouton Valider — elles seront soumises à modération.<br>
+          Pour une modération expresse, vous pouvez souscrire à l'un de nos abonnements :
+        </p>
+      </div>
+
+      <!-- PREMIUM -->
+      <div class="scr-section scr-section--yellow">
+        <div class="scr-section-title">🔓 Débloquez tout le potentiel avec un abonnement</div>
+        <p style="font-size:13px;color:#374151;margin:0 0 12px">Certaines questions visibles sur votre fiche restent sans réponse.</p>
+        <p style="font-size:13px;color:#374151;margin:0 0 10px">👉 Avec un abonnement, vous pouvez :</p>
+        <ul class="scr-list">
+          <li>✅ Répondre aux 6 questions complémentaires, précises et très utiles pour vos futurs clients</li>
+          <li>✅ Mettre en avant vos services et vos points forts</li>
+          <li>✅ Renforcer votre crédibilité et votre visibilité</li>
+          <li>✅ Transformer votre fiche en véritable outil de conversion</li>
+        </ul>
+      </div>
+
+      <hr class="scr-divider">
+
+      <!-- PRICING -->
+      <h2 class="scr-pricing-title">Choisissez votre offre</h2>
+      <p class="scr-pricing-sub">Boostez la visibilité de votre entreprise. Sans engagement, résiliable à tout moment.</p>
+
+      <?php if (!empty($packs)): ?>
+      <div class="scr-grid">
+        <?php
+        $pill_cls = ['scr-badge-pill--green','scr-badge-pill--blue','scr-badge-pill--purple','scr-badge-pill--indigo'];
+        $btn_cls  = ['scr-btn--green','scr-btn--blue','scr-btn--purple','scr-btn--indigo'];
+        $feat_cls = ['','','scr-feat--purple','scr-feat--purple'];
+        foreach ($packs as $i => $pack):
+            $idx      = $i % 4;
+            $name     = esc_html($pack['name'] ?? '');
+            $price    = intval($pack['price_ht'] ?? 0);
+            $desc     = esc_html($pack['description'] ?? '');
+            $feats    = $pack['features'] ?? [];
+            $slug     = $pack['slug'] ?? '';
+            $buy_url  = esc_url($pack['buy_url'] ?? '#');
+            $featured = ($slug === 'pack-premium');
+            $has_star = in_array($slug, ['pack-visibilite','pack-premium']);
+        ?>
+        <div class="scr-card<?= $featured ? ' scr-card--featured' : '' ?>">
+          <?php if ($featured): ?><div class="scr-featured-tag">⭐ Le plus choisi</div><?php endif; ?>
+          <div class="scr-badge-pill <?= $pill_cls[$idx] ?>"><?= strtoupper($name) ?></div>
+          <div class="scr-price"><sup>€</sup><?= $price ?><span class="scr-price-period"> HT / mois</span></div>
+          <p class="scr-card-desc"><?= $desc ?></p>
+          <?php if ($has_star): ?>
+          <div class="scr-star-offer">
+            <strong>⭐ Option gratuite valable 30 jours :</strong>
+            Badge Note 5⭐ — si vous souhaitez ce badge en permanence, souscrivez au Pack Master.
+          </div>
+          <?php endif; ?>
+          <a href="<?= $buy_url ?>" class="scr-btn <?= $btn_cls[$idx] ?>">Commencer →</a>
+          <ul class="scr-feats">
+            <?php foreach ($feats as $feat): ?>
+            <li class="scr-feat <?= $feat_cls[$idx] ?>"><?= esc_html(is_array($feat) ? ($feat['label'] ?? $feat[1] ?? $feat[0] ?? '') : $feat) ?></li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php else: ?>
+      <p style="text-align:center;color:#6b7280">Offres temporairement indisponibles.</p>
+      <?php endif; ?>
+
+    </div>
     <?php return ob_get_clean();
 });

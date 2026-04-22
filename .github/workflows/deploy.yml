@@ -30,6 +30,12 @@ jobs:
               mkdir -p "$DEST"
               rsync -a --delete /opt/societies/wordpress/societies-connector/ "$DEST/"
               echo "✅ Plugin synchronisé → $DEST"
+              # Sync thème topsocietes
+              THEME_DEST="$WP_PLUGIN_DIR/themes/topsocietes-theme"
+              if [ -d "$THEME_DEST" ]; then
+                rsync -a --delete /opt/societies/wordpress/topsocietes-theme/ "$THEME_DEST/"
+                echo "✅ Thème synchronisé → $THEME_DEST"
+              fi
               WP_ROOT="${WP_PLUGIN_DIR%/wp-content}"
               if command -v wp &>/dev/null; then
                 wp plugin activate societies-connector --path="$WP_ROOT" --allow-root 2>/dev/null && echo "✅ Plugin activé" || true
