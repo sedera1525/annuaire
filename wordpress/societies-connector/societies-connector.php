@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.23
+ * Version:      2.5.24
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.23');
+define('SC_VERSION', '2.5.24');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -990,9 +990,9 @@ add_shortcode('societies_search', function($atts) {
     $ajax_url = admin_url('admin-ajax.php');
     $pp       = intval($atts['per_page']);
 
-    // Total entreprises pour le badge
-    $status = sc_api('/api/status');
-    $total_db = isset($status['rows']) ? number_format($status['rows'], 0, ',', ' ') : '4 755 908';
+    // Nombre de fiches générées (pas le total BDD)
+    $fiches_stats = sc_api('/api/fiches/stats');
+    $total_db = isset($fiches_stats['done']) ? number_format($fiches_stats['done'], 0, ',', ' ') : '–';
 
     // Top secteurs pour le dropdown
     $all_cats = sc_get_categories_clean();
@@ -1067,7 +1067,7 @@ add_shortcode('societies_search', function($atts) {
 
     <!-- HERO -->
     <div class="sc-hero">
-      <div class="sc-badge"><em class="sc-badge-star">★</em> <?= esc_html($total_db) ?> ENTREPRISES</div>
+      <div class="sc-badge"><em class="sc-badge-star">★</em> <?= esc_html($total_db) ?> FICHES GÉNÉRÉES</div>
       <h1 class="sc-hero-title">Trouvez n'importe quelle <em>entreprise française</em></h1>
       <p class="sc-hero-sub">Secteur d'activité, catégories — recherchez par n'importe quel critère</p>
       <div class="sc-search-row">
