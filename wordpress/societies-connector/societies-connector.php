@@ -2,21 +2,21 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.28
+ * Version:      2.5.29
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.28');
+define('SC_VERSION', '2.5.29');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
 add_filter('template_include', function(string $template): string {
     $sc_template = SC_DIR . 'templates/shortcode-page.php';
     if (!file_exists($sc_template)) return $template;
-    if (is_page(['recherche', 'recherche-entreprises', 'tarifs', 'revendiquer']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
+    if (is_page(['recherche', 'recherche-entreprises', 'tarifs', 'pack', 'revendiquer']) || is_page_template(['page-recherche.php', 'page-tarifs.php'])) {
         return $sc_template;
     }
     // Couvre aussi les fiches et pages tarifs quel que soit le thème actif
@@ -25,7 +25,8 @@ add_filter('template_include', function(string $template): string {
         if ($post && (
             has_shortcode($post->post_content, 'societies_fiche') ||
             has_shortcode($post->post_content, 'societies_tarifs') ||
-            has_shortcode($post->post_content, 'societies_search')
+            has_shortcode($post->post_content, 'societies_search') ||
+            has_shortcode($post->post_content, 'societies_pricing')
         )) {
             return $sc_template;
         }
@@ -184,6 +185,7 @@ add_action('init', function() {
     set_transient('sc_core_pages_checked', 1, DAY_IN_SECONDS);
     $pages = [
         'tarifs'      => ['Tarifs',      '[societies_tarifs]'],
+        'pack'        => ['Pack',         '[societies_pricing]'],
         'revendiquer' => ['Revendiquer', '[societies_revendiquer]'],
     ];
     foreach ($pages as $slug => [$title, $content]) {
@@ -1468,7 +1470,7 @@ add_shortcode('societies_fiche', function($atts) {
     if (!$sc2_init) $sc2_init = mb_strtoupper(mb_substr($company['title'], 0, 2));
     $score_display = $score_fiab ?: 64;
     $score_deg     = round($score_display * 3.6);
-    $tarifs_url    = home_url('/tarifs/');
+    $tarifs_url    = home_url('/pack/');
 
     ob_start(); ?>
     <div class="sc2-wrap">
@@ -1492,12 +1494,11 @@ add_shortcode('societies_fiche', function($atts) {
             </div>
           </div>
         </div>
+        <?php if (!empty($company['website'])): ?>
         <div class="sc2-hero-actions">
-          <?php if (!empty($company['website'])): ?>
           <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-btn-outline">🌐 Visiter le site</a>
-          <?php endif; ?>
-          <a href="<?= esc_url($tarifs_url) ?>" class="sc2-btn-primary-sm">Accès complet →</a>
         </div>
+        <?php endif; ?>
       </div>
 
       <!-- GRILLE DEUX COLONNES -->
@@ -1616,33 +1617,22 @@ add_shortcode('societies_fiche', function($atts) {
                   $a = $item['answer']   ?? $item['r'] ?? '';
                   if (!$q) continue; ?>
               <div class="sc2-faq-item<?= $a ? '' : ' sc2-faq-item--locked' ?>">
-                <button type="button" class="sc2-faq-toggle" aria-expanded="false">
+                <div class="sc2-faq-row">
                   <span class="sc2-faq-icon">Q</span>
                   <span class="sc2-faq-q-text"><?= esc_html($q) ?></span>
-                  <span class="sc2-faq-chevron">＋</span>
-                </button>
+                </div>
                 <?php if ($a): ?>
-                <div class="sc2-faq-body" hidden>
+                <div class="sc2-faq-body">
                   <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
                 </div>
                 <?php else: ?>
-                <div class="sc2-faq-body" hidden>
+                <div class="sc2-faq-body">
                   <div class="sc2-faq-locked">🔐 Réponse disponible avec un abonnement</div>
                 </div>
                 <?php endif; ?>
               </div>
               <?php endforeach; ?>
             </div></div>
-            <script>
-            document.querySelectorAll('.sc2-faq-toggle').forEach(function(btn){
-              btn.addEventListener('click',function(){
-                var item=btn.closest('.sc2-faq-item'),body=item.querySelector('.sc2-faq-body'),chev=btn.querySelector('.sc2-faq-chevron'),open=btn.getAttribute('aria-expanded')==='true';
-                btn.setAttribute('aria-expanded',open?'false':'true');
-                body.hidden=open;chev.textContent=open?'＋':'－';
-                item.classList.toggle('sc2-faq-item--open',!open);
-              });
-            });
-            </script>
           </div>
           <?php endif; ?>
 
@@ -1790,28 +1780,25 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-card--analysis{padding:0;overflow:hidden}
     .sc2-analysis-header{background:#f8fafc;border-bottom:3px solid #3b82f6;padding:18px 24px}
     .sc2-analysis-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a}
-    .sc2-card--analysis .sc2-qa-grid{padding:20px 24px;grid-template-columns:repeat(2,1fr);gap:20px}
+    .sc2-card--analysis .sc2-qa-grid{padding:24px;grid-template-columns:repeat(2,1fr);gap:24px}
     .sc2-qa-card{border:1.5px solid #e8edf5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 12px;padding:18px 20px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
     .sc2-qa-card:nth-child(even){border-left-color:#3b82f6}
     .sc2-qa-card:hover{box-shadow:0 6px 20px rgba(59,130,246,.1);transform:translateY(-2px)}
     .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px;line-height:1.5}
     .sc2-qa-a{color:#374151;font-size:13px;line-height:1.8}
 
-    /* FAQ */
+    /* FAQ — affichage direct sans accordéon */
     .sc2-faq-wrap{border:1px solid #f0e8ff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.04)}
     .sc2-faq-list{display:flex;flex-direction:column}
-    .sc2-faq-item{border-bottom:1px solid #f5f0ff}
+    .sc2-faq-item{border-bottom:1px solid #f5f0ff;padding:16px 20px}
     .sc2-faq-item:last-child{border-bottom:none}
-    .sc2-faq-toggle{display:flex;align-items:center;gap:12px;width:100%;background:none;border:none;padding:18px 20px;cursor:pointer;text-align:left;font-family:inherit;transition:background .15s}
-    .sc2-faq-toggle:hover{background:#fdf8ff}
-    .sc2-faq-q-text{flex:1;font-size:14px;font-weight:600;color:#1f2937}
-    .sc2-faq-chevron{font-size:18px;color:var(--sc-orange);flex-shrink:0}
-    .sc2-faq-item--open .sc2-faq-chevron{color:var(--sc-purple)}
-    .sc2-faq-body{padding:0 20px 18px 54px}
+    .sc2-faq-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+    .sc2-faq-q-text{flex:1;font-size:14px;font-weight:600;color:#1f2937;line-height:1.45}
+    .sc2-faq-body{padding-left:34px}
     .sc2-faq-a{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#6b7280;line-height:1.75}
     .sc2-faq-icon{background:var(--sc-grad-btn);color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
     .sc2-faq-icon-r{background:var(--sc-grad)}
-    .sc2-faq-locked{font-size:13px;color:#9ca3af;padding:6px 0}
+    .sc2-faq-locked{font-size:13px;color:#9ca3af;padding:2px 0}
 
     /* BONUS */
     .sc2-bonus-card{background:linear-gradient(135deg,#f0f4ff,#fdf4ff);border:1px solid #e0e7ff;border-radius:14px;padding:22px 26px;margin-bottom:18px;box-shadow:0 2px 10px rgba(59,91,219,.07)}
@@ -1831,8 +1818,8 @@ add_shortcode('societies_fiche', function($atts) {
       .sc2-hero-actions{flex-direction:row}
       .sc2-card{padding:18px 16px}
       .sc2-kpi-grid{grid-template-columns:1fr 1fr}
-      .sc2-faq-toggle{padding:14px 14px}
-      .sc2-faq-body{padding:0 14px 14px 46px}
+      .sc2-faq-item{padding:12px 14px}
+      .sc2-faq-body{padding-left:34px}
       .sc2-qa-grid{grid-template-columns:1fr}
     }
     </style>
