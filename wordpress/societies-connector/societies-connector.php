@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.16
+ * Version:      2.5.17
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.16');
+define('SC_VERSION', '2.5.17');
 define('SC_DIR', plugin_dir_path(__FILE__));
 define('SC_URL', plugin_dir_url(__FILE__));
 
@@ -974,189 +974,134 @@ function sc_get_categories_clean(): array {
 // =============================================================================
 
 add_shortcode('societies_search', function($atts) {
-    $atts     = shortcode_atts(['per_page' => 24, 'cats_page' => '/toutes-les-categories/'], $atts);
+    $atts     = shortcode_atts(['per_page' => 10, 'cats_page' => '/toutes-les-categories/'], $atts);
     $uid      = 'sc-search-' . wp_rand(1000, 9999);
     $ajax_url = admin_url('admin-ajax.php');
+    $pp       = intval($atts['per_page']);
 
-    // 8 catégories aléatoires
+    // Total entreprises pour le badge
+    $status = sc_api('/api/status');
+    $total_db = isset($status['rows']) ? number_format($status['rows'], 0, ',', ' ') : '4 755 908';
+
+    // Top secteurs pour le dropdown
     $all_cats = sc_get_categories_clean();
-    if (!empty($all_cats)) {
-        shuffle($all_cats);
-        $display_cats = array_slice($all_cats, 0, 8);
-    } else {
-        $display_cats = [];
-    }
+    $top_cats = array_slice($all_cats, 0, 80);
+
+    // Régions françaises
+    $regions = ['Auvergne-Rhône-Alpes','Bourgogne-Franche-Comté','Bretagne','Centre-Val de Loire','Corse','Grand Est','Hauts-de-France','Île-de-France','Normandie','Nouvelle-Aquitaine','Occitanie','Pays de la Loire','Provence-Alpes-Côte d\'Azur','Guadeloupe','Martinique','Guyane','La Réunion','Mayotte'];
+
     ob_start();
-    // CSS sans ligne vide (double \n) pour éviter que wpautop/Elementor injecte </p><p> et casse le parsing CSS
-    $sc_css = '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,[class*="sidebar"]:not([class*="sc2"]):not([class*="sc-"]),#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.btn-toggle-sidebar,.sidebar-toggle,.toggle-sidebar,[data-toggle="sidebar"],.over-dark,.off-canvas-wrap,.js-off-canvas-overlay{display:none!important}'
-    . 'body{background:#fff!important;overflow-x:hidden}'
-    . '#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
-    . '.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#fff;box-sizing:border-box;overflow-x:hidden}'
-    . '.sc-hero{background:#fff;padding:64px 24px 48px;text-align:center;box-sizing:border-box}'
-    . '.sc-hero-title{font-size:46px;font-weight:900;color:#1e2d5a;margin:0 0 14px;letter-spacing:-2px;line-height:1.08}'
-    . '.sc-hero-title em{background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-style:normal}'
-    . '.sc-hero-sub{font-size:16px;color:#6b7280;margin:0 0 40px;line-height:1.6;max-width:460px;display:block;margin-left:auto;margin-right:auto}'
-    . '.sc-hero-sub strong{color:#1a2744;font-weight:700}'
-    . '.sc-hero-bar{max-width:860px;margin:0 auto;display:flex;flex-direction:row;align-items:stretch;background:#fff;border:1.5px solid #e2e8f0;border-radius:50px;box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden;min-height:64px}'
-    . '.sc-hero-field{display:flex;flex-direction:row;align-items:center;flex:1;min-width:0;padding:0 20px;cursor:text;border-right:1px solid #e8edf4;position:relative}'
-    . '.sc-hero-field:last-of-type{border-right:none}'
-    . '.sc-hero-field:hover{background:#fafbfd}'
-    . '.sc-hero-field-icon{font-size:16px;margin-right:10px;flex-shrink:0;opacity:.6}'
-    . '.sc-hero-field-wrap{display:flex;flex-direction:column;flex:1;min-width:0;justify-content:center}'
-    . '.sc-hero-field-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#F97316;margin-bottom:3px;line-height:1}'
-    . '.sc-hero-input{width:100%;border:none;outline:none;font-size:14px;font-weight:500;color:#1f2937;background:transparent;padding:0;line-height:1.4}'
-    . '.sc-hero-input::placeholder{color:#c4cdd8;font-weight:400}'
-    . '.sc-hero-btn{background:linear-gradient(135deg,#F97316,#EC4899);border:none;margin:6px;border-radius:44px;width:52px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .2s;color:#fff;aspect-ratio:1}'
-    . '.sc-hero-btn:hover{opacity:.88}'
-    . '.sc-hero-stats{display:flex;flex-direction:row;gap:12px;justify-content:center;margin-top:28px;flex-wrap:nowrap}'
-    . '.sc-hero-stat{display:flex;flex-direction:row;align-items:center;gap:8px;background:#fff;border:1.5px solid #edf1f7;border-radius:50px;padding:8px 16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}'
-    . '.sc-hero-stat-icon{font-size:18px;flex-shrink:0}'
-    . '.sc-hero-stat-text strong{display:block;font-size:14px;font-weight:800;color:#1a2744;line-height:1.15}'
-    . '.sc-hero-stat-text span{font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;font-weight:600}'
-    . '.sc-cats-section{padding:56px 40px 64px;max-width:1280px;margin:0 auto;box-sizing:border-box}'
-    . '.sc-cats-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:32px;flex-wrap:wrap;gap:12px}'
-    . '.sc-cats-title{font-size:26px;font-weight:800;color:#1e2d5a;margin:0 0 4px;letter-spacing:-.5px}'
-    . '.sc-cats-sub{font-size:14px;color:#9ca3af;margin:0}'
-    . '.sc-cats-link{font-size:14px;font-weight:700;color:#F97316;text-decoration:none;white-space:nowrap}'
-    . '.sc-cats-link:hover{text-decoration:underline}'
-    . '.sc-cats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}'
-    . '.sc-cat-card{background:#fff;border:1.5px solid #f0f2f5;border-radius:18px;padding:28px 20px 22px;text-align:center;text-decoration:none;color:inherit;display:block;transition:box-shadow .18s,transform .18s,border-color .18s;box-shadow:0 1px 6px rgba(0,0,0,.04)}'
-    . '.sc-cat-card:hover{box-shadow:0 10px 36px rgba(249,115,22,.15);border-color:#F97316;transform:translateY(-4px);text-decoration:none}'
-    . '.sc-cat-icon{font-size:42px;margin-bottom:14px;display:block;line-height:1}'
-    . '.sc-cat-name{font-size:14px;font-weight:700;color:#1a2744;margin-bottom:5px;line-height:1.3}'
-    . '.sc-cat-count{font-size:12px;font-weight:600;background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
-    . '.sc-results-wrap{max-width:1280px;margin:0 auto;padding:0 40px 64px;box-sizing:border-box}'
-    . '.sc-status{font-size:14px;color:#6b7280;font-weight:500;margin-bottom:20px}'
-    . '.sc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}'
-    . '@media(max-width:1200px){.sc-grid{grid-template-columns:repeat(3,1fr)}}'
-    . '@media(max-width:900px){.sc-grid{grid-template-columns:repeat(2,1fr)}.sc-cats-grid{grid-template-columns:repeat(2,1fr)}}'
-    . '.sc-card{background:#fff;border:1.5px solid #edf1f7;border-radius:14px;padding:20px 22px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:10px;transition:box-shadow .18s,transform .18s;box-shadow:0 1px 4px rgba(0,0,0,.05)}'
-    . '.sc-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1);transform:translateY(-3px);text-decoration:none}'
-    . '.sc-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}'
-    . '.sc-card-name{font-size:15px;font-weight:700;color:#1e2d5a;line-height:1.35}'
-    . '.sc-card-badge{background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}'
-    . '.sc-card-tags{display:flex;flex-wrap:wrap;gap:5px}'
-    . '.sc-card-tag{background:#f1f5f9;color:#64748b;font-size:11px;padding:3px 9px;border-radius:20px}'
-    . '.sc-card-tag-city{background:#eff6ff;color:#3b82f6}'
-    . '.sc-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid #f1f5f9}'
-    . '.sc-card-stars{color:#f59e0b;font-size:14px}'
-    . '.sc-card-score{font-size:15px;font-weight:800;background:linear-gradient(135deg,#F97316,#EC4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}'
-    . '.sc-card-note{font-size:10px;color:#94a3b8;font-style:italic}'
-    . '.sc-card-arrow{color:#94a3b8;font-size:16px;transition:transform .15s}'
-    . '.sc-card:hover .sc-card-arrow{transform:translateX(4px);color:#F97316}'
-    . '.sc-empty{text-align:center;padding:60px 20px;color:#94a3b8}'
-    . '.sc-empty-icon{font-size:48px;margin-bottom:12px}'
-    . '.sc-empty-title{font-size:18px;font-weight:600;color:#374151;margin-bottom:6px}'
-    . '.sc-loader{display:flex;justify-content:center;padding:40px}'
-    . '.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#F97316;border-radius:50%;animation:sc-spin .7s linear infinite}'
-    . '@keyframes sc-spin{to{transform:rotate(360deg)}}'
-    . '.sc-more-wrap{text-align:center;margin-top:32px}'
-    . '.sc-more-btn{background:linear-gradient(135deg,#F97316,#EC4899);color:#fff;border:none;border-radius:10px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;box-shadow:0 3px 12px rgba(249,115,22,.3)}'
-    . '.sc-more-btn:hover{opacity:.88}'
-    . '.sc-advert{text-align:center;padding:14px 20px;margin-top:32px;background:#fff9f0;border:1px solid #fde68a;border-radius:10px}'
-    . '.sc-advert-link{color:#92400e;font-size:13px;font-weight:600;text-decoration:none}'
-    . '.sc-advert-link:hover{text-decoration:underline}'
-    . '@media(max-width:640px){.sc-hero{padding:40px 16px 36px}.sc-hero-title{font-size:30px;letter-spacing:-1px}.sc-hero-bar{flex-direction:column!important;background:transparent;border:none;box-shadow:none;border-radius:0;gap:10px;overflow:visible;min-height:auto}.sc-hero-field{border:1.5px solid #e2e8f0;border-radius:14px;background:#fff;min-height:56px;box-shadow:0 1px 6px rgba(0,0,0,.06)}.sc-hero-btn{border-radius:12px;width:100%;aspect-ratio:auto;min-height:50px;margin:0}.sc-hero-stats{gap:8px;flex-wrap:wrap}.sc-hero-stat{padding:7px 12px}.sc-cats-grid{grid-template-columns:repeat(2,1fr)}.sc-grid{grid-template-columns:1fr}.sc-cats-section,.sc-results-wrap{padding-left:16px;padding-right:16px}}';
+
+    // CSS redesign moteur de recherche
+    $sc_css =
+    '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,[class*="sidebar"]:not([class*="sc2"]):not([class*="sc-"]),#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.btn-toggle-sidebar,.sidebar-toggle,.toggle-sidebar,[data-toggle="sidebar"],.over-dark,.off-canvas-wrap,.js-off-canvas-overlay{display:none!important}'
+    .'body{background:#f1f4f9!important;overflow-x:hidden}'
+    .'#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
+    .'.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#f1f4f9;box-sizing:border-box;overflow-x:hidden}'
+    .'.sc-hero{background:#fff;padding:56px 24px 44px;text-align:center;box-sizing:border-box;border-bottom:1px solid #e5e9f0}'
+    .'.sc-badge{display:inline-flex;align-items:center;gap:8px;border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#6366f1,#3b82f6) border-box;border-radius:50px;padding:7px 20px;font-size:12px;font-weight:700;color:#3b4fcf;letter-spacing:.3px;margin-bottom:22px}'
+    .'.sc-badge-star{color:#f59e0b;font-style:normal}'
+    .'.sc-hero-title{font-size:42px;font-weight:900;color:#111827;margin:0 0 12px;letter-spacing:-1.5px;line-height:1.1}'
+    .'.sc-hero-title em{background:linear-gradient(135deg,#3b82f6,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-style:normal}'
+    .'.sc-hero-sub{font-size:15px;color:#6b7280;margin:0 0 32px;line-height:1.6;max-width:580px;display:block;margin-left:auto;margin-right:auto}'
+    .'.sc-search-row{max-width:800px;margin:0 auto;display:flex;align-items:stretch;background:#fff;border:2px solid #dde3ee;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);overflow:hidden}'
+    .'.sc-search-icon{display:flex;align-items:center;padding:0 14px;color:#9ca3af;font-size:17px;flex-shrink:0}'
+    .'.sc-search-input{flex:1;border:none;outline:none;font-size:15px;color:#111827;background:transparent;padding:17px 4px;min-width:0}'
+    .'.sc-search-input::placeholder{color:#b0bac9}'
+    .'.sc-search-btn{background:#1e3a8a;color:#fff;border:none;padding:0 30px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .2s}'
+    .'.sc-search-btn:hover{background:#1e40af}'
+    .'.sc-filters{max-width:1100px;margin:24px auto 0;padding:0 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}'
+    .'.sc-filter-select{border:1.5px solid #d1d5db;border-radius:8px;padding:9px 14px;font-size:13px;color:#374151;background:#fff;cursor:pointer;outline:none;transition:border-color .15s}'
+    .'.sc-filter-select:hover,.sc-filter-select:focus{border-color:#6366f1}'
+    .'.sc-pills{display:flex;gap:8px;flex-wrap:wrap}'
+    .'.sc-pill{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;color:#374151;background:#fff;cursor:pointer;transition:all .15s;line-height:1}'
+    .'.sc-pill:hover{border-color:#6366f1;color:#6366f1;background:#f5f3ff}'
+    .'.sc-pill.active{background:#1e3a8a;border-color:#1e3a8a;color:#fff}'
+    .'.sc-results-section{max-width:1100px;margin:20px auto 0;padding:0 24px 64px}'
+    .'.sc-results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}'
+    .'.sc-results-count{font-size:14px;color:#374151}'
+    .'.sc-results-count strong{font-weight:700;color:#111827}'
+    .'.sc-sort-select{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;font-size:13px;color:#374151;background:#fff;cursor:pointer;outline:none}'
+    .'.sc-list{display:flex;flex-direction:column;gap:6px}'
+    .'.sc-row{display:flex;align-items:center;gap:16px;background:#fff;border:1.5px solid #e5e9f0;border-radius:12px;padding:16px 20px;text-decoration:none;color:inherit;transition:box-shadow .15s,border-color .15s}'
+    .'.sc-row:hover{box-shadow:0 4px 18px rgba(0,0,0,.09);border-color:#c7d2fe;text-decoration:none}'
+    .'.sc-rank{font-size:13px;font-weight:700;color:#9ca3af;width:28px;text-align:right;flex-shrink:0}'
+    .'.sc-avatar{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.5px}'
+    .'.sc-row-main{flex:1;min-width:0}'
+    .'.sc-row-name{font-size:15px;font-weight:700;color:#111827;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    .'.sc-row-meta{font-size:12px;color:#6b7280;display:flex;align-items:center;flex-wrap:wrap;gap:0}'
+    .'.sc-meta-sep{margin:0 7px;color:#d1d5db}'
+    .'.sc-row-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}'
+    .'.sc-row-rating{font-size:13px;font-weight:700;color:#f59e0b;white-space:nowrap}'
+    .'.sc-row-city{font-size:12px;color:#9ca3af}'
+    .'.sc-row-arrow{font-size:18px;color:#d1d5db;line-height:1}'
+    .'.sc-row:hover .sc-row-arrow{color:#6366f1}'
+    .'.sc-loader{display:flex;justify-content:center;padding:60px}'
+    .'.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:sc-spin .7s linear infinite}'
+    .'@keyframes sc-spin{to{transform:rotate(360deg)}}'
+    .'.sc-empty{text-align:center;padding:60px 20px}'
+    .'.sc-empty-icon{font-size:48px;margin-bottom:12px}'
+    .'.sc-empty-title{font-size:18px;font-weight:600;color:#374151;margin-bottom:6px}'
+    .'.sc-pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:28px;flex-wrap:wrap}'
+    .'.sc-pg-btn{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 15px;font-size:13px;font-weight:600;color:#374151;background:#fff;cursor:pointer;transition:all .15s;min-width:38px;text-align:center;line-height:1}'
+    .'.sc-pg-btn:hover:not(:disabled){border-color:#6366f1;color:#6366f1}'
+    .'.sc-pg-btn.active{background:#1e3a8a;border-color:#1e3a8a;color:#fff}'
+    .'.sc-pg-btn:disabled{opacity:.38;cursor:default}'
+    .'@media(max-width:640px){.sc-hero{padding:36px 14px 32px}.sc-hero-title{font-size:26px;letter-spacing:-1px}.sc-search-btn{padding:0 16px;font-size:13px}.sc-filters{padding:14px 12px 0;gap:8px}.sc-results-section{padding:14px 12px 48px}.sc-row{padding:12px 14px;gap:10px}.sc-rank{display:none}.sc-row-right{display:none}}';
     echo '<style>' . $sc_css . '</style>';
     ?>
 
-    <!-- WRAP -->
     <div class="sc-wrap">
 
     <!-- HERO -->
     <div class="sc-hero">
-      <h1 class="sc-hero-title">Trouvez une <em>entreprise</em></h1>
-      <p class="sc-hero-sub">Accédez instantanément aux fiches détaillées de <strong>4,6 millions</strong> d'entreprises françaises.</p>
-      <div class="sc-hero-bar">
-        <div class="sc-hero-field">
-          <span class="sc-hero-field-icon">🔍</span>
-          <div class="sc-hero-field-wrap">
-            <span class="sc-hero-field-label">Recherche</span>
-            <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-hero-input"
-                   placeholder="Nom, ville, catégorie..."
-                   oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
-                   autocomplete="off">
-          </div>
-        </div>
-        <div class="sc-hero-field">
-          <span class="sc-hero-field-icon">📍</span>
-          <div class="sc-hero-field-wrap">
-            <span class="sc-hero-field-label">Localisation</span>
-            <input type="text" id="<?= esc_attr($uid) ?>-city" class="sc-hero-input"
-                   placeholder="Ville ou code postal..."
-                   oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
-                   autocomplete="off">
-          </div>
-        </div>
-        <div class="sc-hero-field">
-          <span class="sc-hero-field-icon">🏢</span>
-          <div class="sc-hero-field-wrap">
-            <span class="sc-hero-field-label">Secteur d'activité</span>
-            <input type="text" id="<?= esc_attr($uid) ?>-sector" class="sc-hero-input"
-                   placeholder="Ex: Restaurant, Médecin..."
-                   oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
-                   autocomplete="off">
-          </div>
-        </div>
-        <button class="sc-hero-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">🔍</button>
-      </div>
-      <div class="sc-hero-stats">
-        <div class="sc-hero-stat">
-          <span class="sc-hero-stat-icon">🌍</span>
-          <div class="sc-hero-stat-text"><strong>4 600 000+</strong><span>Entreprises</span></div>
-        </div>
-        <div class="sc-hero-stat">
-          <span class="sc-hero-stat-icon">⭐</span>
-          <div class="sc-hero-stat-text"><strong>5.0</strong><span>Note moyenne</span></div>
-        </div>
-        <div class="sc-hero-stat">
-          <span class="sc-hero-stat-icon">✅</span>
-          <div class="sc-hero-stat-text"><strong>100% Gratuit</strong><span>Accès aux fiches</span></div>
-        </div>
+      <div class="sc-badge"><em class="sc-badge-star">★</em> <?= esc_html($total_db) ?> ENTREPRISES &mdash; DONNÉES INSEE &amp; GOOGLE</div>
+      <h1 class="sc-hero-title">Trouvez n'importe quelle <em>entreprise française</em></h1>
+      <p class="sc-hero-sub">SIREN, raison sociale, dirigeant, secteur d'activité — recherchez par n'importe quel critère</p>
+      <div class="sc-search-row">
+        <span class="sc-search-icon">🔍</span>
+        <input type="text" id="<?= esc_attr($uid) ?>-q" class="sc-search-input"
+               placeholder="Nom, SIREN, ville, secteur..."
+               oninput="scSearchDebounce('<?= esc_js($uid) ?>')"
+               onkeydown="if(event.key==='Enter')scSearch('<?= esc_js($uid) ?>',1)"
+               autocomplete="off">
+        <button class="sc-search-btn" onclick="scSearch('<?= esc_js($uid) ?>',1)">Rechercher</button>
       </div>
     </div>
 
-    <!-- RÉSULTATS (masqués par défaut) -->
-    <div class="sc-results-wrap" id="<?= esc_attr($uid) ?>-results-wrap" style="display:none">
-      <div id="<?= esc_attr($uid) ?>-status" class="sc-status"></div>
-      <div id="<?= esc_attr($uid) ?>-results"></div>
-      <div id="<?= esc_attr($uid) ?>-more" class="sc-more-wrap" style="display:none">
-        <button class="sc-more-btn" onclick="scSearchLoadMore('<?= esc_js($uid) ?>')">Voir plus de résultats</button>
-      </div>
-    </div>
-
-    <!-- CATÉGORIES -->
-    <?php if (!empty($display_cats)): ?>
-    <div class="sc-cats-section" id="<?= esc_attr($uid) ?>-cats">
-      <div class="sc-cats-header">
-        <div>
-          <h2 class="sc-cats-title">Explorez par secteur</h2>
-          <p class="sc-cats-sub">Découvrez les entreprises les plus recherchées par catégorie.</p>
-        </div>
-        <a href="<?= esc_url($atts['cats_page']) ?>" class="sc-cats-link">Voir tout →</a>
-      </div>
-      <div class="sc-cats-grid">
-        <?php foreach ($display_cats as $cat):
-            $icon  = sc_category_icon($cat['category']);
-            $label = sc_format_count(intval($cat['count']));
-        ?>
-        <a href="<?= esc_url(get_permalink()) ?>?sector=<?= urlencode($cat['category']) ?>"
-           class="sc-cat-card"
-           onclick="scSetSector('<?= esc_js($uid) ?>','<?= esc_js($cat['category']) ?>');return false;">
-          <span class="sc-cat-icon"><?= $icon ?></span>
-          <div class="sc-cat-name"><?= esc_html($cat['category']) ?></div>
-          <div class="sc-cat-count"><?= esc_html($label) ?> entreprises</div>
-        </a>
+    <!-- FILTRES -->
+    <div class="sc-filters">
+      <select id="<?= esc_attr($uid) ?>-sector" class="sc-filter-select" onchange="scSearch('<?= esc_js($uid) ?>',1)">
+        <option value="">Tous les secteurs</option>
+        <?php foreach ($top_cats as $cat): ?>
+        <option value="<?= esc_attr($cat['category']) ?>"><?= esc_html($cat['category']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <select id="<?= esc_attr($uid) ?>-region" class="sc-filter-select" onchange="scSearch('<?= esc_js($uid) ?>',1)">
+        <option value="">Toutes les régions</option>
+        <?php foreach ($regions as $r): ?>
+        <option value="<?= esc_attr($r) ?>"><?= esc_html($r) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <div class="sc-pills">
+        <button class="sc-pill active" id="<?= esc_attr($uid) ?>-pill-all"  onclick="scSetPill('<?= esc_js($uid) ?>','')">Tous</button>
+        <?php foreach (['SA','SAS','SARL','EURL','Micro-entreprise'] as $f): $fid = strtolower(str_replace(['-',' '],'', $f)); ?>
+        <button class="sc-pill" id="<?= esc_attr($uid) ?>-pill-<?= esc_attr($fid) ?>" onclick="scSetPill('<?= esc_js($uid) ?>','<?= esc_js($f) ?>')"><?= esc_html($f) ?></button>
         <?php endforeach; ?>
       </div>
     </div>
-    <?php endif; ?>
 
-    <!-- BANDEAU PUBLICITAIRE -->
-    <div class="sc-advert">
-      <a href="https://www.topsocietes.com" target="_blank" rel="noopener" class="sc-advert-link">
-        Créer gratuitement votre page entreprise TOPsocietes.com →
-      </a>
+    <!-- RÉSULTATS -->
+    <div class="sc-results-section" id="<?= esc_attr($uid) ?>-results-wrap" style="display:none">
+      <div class="sc-results-header">
+        <div id="<?= esc_attr($uid) ?>-status" class="sc-results-count"></div>
+        <select class="sc-sort-select" id="<?= esc_attr($uid) ?>-sort" onchange="scSearch('<?= esc_js($uid) ?>',1)">
+          <option value="rating">Trier : Pertinence</option>
+          <option value="alpha">Trier : A → Z</option>
+        </select>
+      </div>
+      <div id="<?= esc_attr($uid) ?>-results" class="sc-list"></div>
+      <div id="<?= esc_attr($uid) ?>-pagination" class="sc-pagination"></div>
     </div>
 
     </div><!-- .sc-wrap -->
@@ -1164,94 +1109,83 @@ add_shortcode('societies_search', function($atts) {
     <?php
     $html = ob_get_clean();
 
-    // JS injecté via wp_footer pour contourner les filtres Elementor et le cache WP
-
-    $pp = intval($atts['per_page']);
-    $js = "
+    $js = <<<JSCODE
 (function(){
-  var _scTimers={}, _scPages={};
+  var _scTimers={},_scState={};
+  var AV_COLORS=['#6366f1','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'];
+  function initSt(uid){if(!_scState[uid])_scState[uid]={page:1,form:''};}
+  function avatar(name){
+    var w=(name||'').trim().split(/\s+/),init=w.length>=2?w[0][0]+w[1][0]:(w[0]||'?').substring(0,2);
+    var idx=0;for(var i=0;i<(name||'').length;i++)idx=(idx+name.charCodeAt(i))%AV_COLORS.length;
+    return {i:(init||'?').toUpperCase(),c:AV_COLORS[idx]};
+  }
+  function dept(zip){return zip&&zip.length>=2?'('+zip.substring(0,2)+')':'';}
   if(!window.scSearchDebounce){
-    window.scSearchDebounce=function(uid){
-      clearTimeout(_scTimers[uid]);
-      _scTimers[uid]=setTimeout(function(){scSearch(uid,1);},400);
-    };
-    window.scSetSector=function(uid,sector){
-      var sEl=document.getElementById(uid+'-sector');
-      if(sEl){sEl.value=sector;}
-      var catsEl=document.getElementById(uid+'-cats');
-      if(catsEl) catsEl.style.display='none';
-      document.getElementById(uid+'-results-wrap').style.display='block';
+    window.scSearchDebounce=function(uid){clearTimeout(_scTimers[uid]);_scTimers[uid]=setTimeout(function(){scSearch(uid,1);},380);};
+    window.scSetPill=function(uid,form){
+      initSt(uid);_scState[uid].form=form;
+      document.querySelectorAll('[id^="'+uid+'-pill-"]').forEach(function(b){b.classList.remove('active');});
+      var key=form?uid+'-pill-'+form.toLowerCase().replace(/[^a-z0-9]/g,''):uid+'-pill-all';
+      var el=document.getElementById(key);if(el)el.classList.add('active');
       scSearch(uid,1);
     };
     window.scSearch=function(uid,page){
-      var q=document.getElementById(uid+'-q').value.trim();
-      var cityEl=document.getElementById(uid+'-city');
-      var sectorEl=document.getElementById(uid+'-sector');
-      var city=cityEl?cityEl.value.trim():'';
-      var sector=sectorEl?sectorEl.value.trim():'';
-      var statusEl=document.getElementById(uid+'-status');
-      var resultsEl=document.getElementById(uid+'-results');
-      var moreEl=document.getElementById(uid+'-more');
-      var resultsWrap=document.getElementById(uid+'-results-wrap');
-      var catsEl=document.getElementById(uid+'-cats');
-      _scPages[uid]=page;
-      var hasInput=(q.length>=2)||(city.length>=2)||(sector.length>=2);
-      if(!hasInput){
-        resultsEl.innerHTML='';statusEl.textContent='';moreEl.style.display='none';
-        if(resultsWrap) resultsWrap.style.display='none';
-        if(catsEl) catsEl.style.display='block';
-        return;
-      }
-      if(resultsWrap) resultsWrap.style.display='block';
-      if(catsEl && page===1) catsEl.style.display='none';
-      if(page===1){
-        resultsEl.innerHTML='<div class=\"sc-loader\"><div class=\"sc-spinner\"></div></div>';
-        statusEl.textContent='';
-      }
+      initSt(uid);
+      var st=_scState[uid];st.page=page||1;
+      var q=(document.getElementById(uid+'-q')||{}).value||'';q=q.trim();
+      var sector=(document.getElementById(uid+'-sector')||{}).value||'';
+      var region=(document.getElementById(uid+'-region')||{}).value||'';
+      var sort=(document.getElementById(uid+'-sort')||{}).value||'rating';
+      var resEl=document.getElementById(uid+'-results');
+      var statEl=document.getElementById(uid+'-status');
+      var paginEl=document.getElementById(uid+'-pagination');
+      var wrapEl=document.getElementById(uid+'-results-wrap');
+      var hasInput=q.length>=2||sector||region||st.form;
+      if(!hasInput){wrapEl.style.display='none';return;}
+      wrapEl.style.display='block';
+      if(page===1)resEl.innerHTML='<div class="sc-loader"><div class="sc-spinner"></div></div>';
+      paginEl.innerHTML='';
+      var qFull=q+(st.form?' '+st.form:'');
       var xhr=new XMLHttpRequest();
       xhr.open('POST','" . esc_js($ajax_url) . "');
       xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded');
       xhr.onload=function(){
         var d=JSON.parse(xhr.responseText||'{}');
-        if(!d.success){
-          var errMsg=d.data&&d.data.error?d.data.error:'Erreur de connexion au backend';
-          resultsEl.innerHTML='<div class=\"sc-empty\"><div class=\"sc-empty-icon\">\u26a0\ufe0f</div><div class=\"sc-empty-title\">Une erreur est survenue</div><p style=\"font-size:13px;color:#6b7280\">'+scEsc(errMsg)+'</p></div>';
-          return;
-        }
-        var items=d.data.results||[];
-        var total=d.data.total||0;
-        if(items.length===0&&page===1){
-          resultsEl.innerHTML='<div class=\"sc-empty\"><div class=\"sc-empty-icon\">\ud83d\udd0d</div><div class=\"sc-empty-title\">Aucun r\u00e9sultat pour \"'+scEsc(q)+'\"</div><p>Essayez avec un autre nom, une ville ou un secteur.</p></div>';
-          statusEl.textContent='';moreEl.style.display='none';return;
-        }
-        statusEl.textContent=total.toLocaleString('fr-FR')+' entreprise'+(total>1?'s':'')+' trouv\u00e9e'+(total>1?'s':'');
-        var html=items.map(function(c){
-          var tags='';
-          if(c.category) tags+='<span class=\"sc-card-tag\">'+scEsc(c.category)+'</span>';
-          if(c.city) tags+='<span class=\"sc-card-tag sc-card-tag-city\">\ud83d\udccd '+scEsc(c.city)+'</span>';
-          return '<a href=\"'+scEsc(c.url||'#')+'\" class=\"sc-card\">'
-            +'<div class=\"sc-card-header\">'
-            +'<div class=\"sc-card-name\">'+scEsc(c.title)+'</div>'
-            +'<span class=\"sc-card-badge\">Fiche</span>'
+        if(!d.success){resEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">⚠️</div><div class="sc-empty-title">'+(d.data&&d.data.error?scEsc(d.data.error):'Erreur connexion')+'</div></div>';return;}
+        var items=d.data.results||[],total=d.data.total||0,off=(page-1)*{$pp};
+        if(!items.length&&page===1){resEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">🔍</div><div class="sc-empty-title">Aucun résultat</div><p style="color:#9ca3af">Essayez un autre terme ou filtre.</p></div>';statEl.innerHTML='';return;}
+        statEl.innerHTML='<strong>'+total.toLocaleString('fr-FR')+'</strong> résultat'+(total>1?'s':'');
+        resEl.innerHTML=items.map(function(c,i){
+          var av=avatar(c.title),d2=dept(c.zip_code||'');
+          var meta=[];
+          if(c.city)meta.push(scEsc(c.city)+(d2?' '+d2:''));
+          if(c.category)meta.push(scEsc(c.category));
+          var rat=c.rating_value&&c.rating_value>0?'<span style="color:#f59e0b">★</span> '+parseFloat(c.rating_value).toFixed(1)+(c.rating_votes?' ('+c.rating_votes+')':''):'';
+          return '<a href="'+scEsc(c.url||'#')+'" class="sc-row">'
+            +'<div class="sc-rank">#'+(off+i+1)+'</div>'
+            +'<div class="sc-avatar" style="background:'+av.c+'">'+av.i+'</div>'
+            +'<div class="sc-row-main">'
+            +'<div class="sc-row-name">'+scEsc(c.title)+'</div>'
+            +'<div class="sc-row-meta">'+meta.map(function(m,mi){return(mi>0?'<span class="sc-meta-sep">·</span>':'')+m;}).join('')+'</div>'
             +'</div>'
-            +(tags?'<div class=\"sc-card-tags\">'+tags+'</div>':'')
-            +'<div class=\"sc-card-footer\">'
-            +'<div><span class=\"sc-card-stars\">\u2605\u2605\u2605\u2605\u2605</span> <span class=\"sc-card-score\">5.0</span> <span class=\"sc-card-note\">Note interne</span></div>'
-            +'<span class=\"sc-card-arrow\">\u2192</span>'
-            +'</div>'
+            +'<div class="sc-row-right">'+(rat?'<div class="sc-row-rating">'+rat+'</div>':'')+'<div class="sc-row-arrow">›</div></div>'
             +'</a>';
         }).join('');
-        if(page===1) resultsEl.innerHTML='<div class=\"sc-grid\">'+html+'</div>';
-        else resultsEl.querySelector('.sc-grid').insertAdjacentHTML('beforeend',html);
-        var pp={$pp};
-        moreEl.style.display=(items.length>=pp&&total>(page*pp))?'':'none';
+        var tp=Math.ceil(total/{$pp});
+        if(tp>1){
+          var s=Math.max(1,page-2),e=Math.min(tp,s+4);if(e-s<4)s=Math.max(1,e-4);
+          var b='<button class="sc-pg-btn"'+(page<=1?' disabled':'')+' onclick="scSearch(\''+uid+'\','+(page-1)+')">← Précédent</button>';
+          for(var p2=s;p2<=e;p2++)b+='<button class="sc-pg-btn'+(p2===page?' active':'')+'" onclick="scSearch(\''+uid+'\','+p2+')">'+p2+'</button>';
+          b+='<button class="sc-pg-btn"'+(page>=tp?' disabled':'')+' onclick="scSearch(\''+uid+'\','+(page+1)+')">Suivant →</button>';
+          paginEl.innerHTML=b;
+        }
       };
-      xhr.send('action=sc_search&q='+encodeURIComponent(q)+'&city='+encodeURIComponent(city)+'&sector='+encodeURIComponent(sector)+'&page='+page+'&per_page={$pp}');
+      xhr.send('action=sc_search&q='+encodeURIComponent(qFull)+'&city='+encodeURIComponent(region)+'&sector='+encodeURIComponent(sector)+'&page='+page+'&per_page={$pp}');
     };
-    window.scSearchLoadMore=function(uid){ scSearch(uid,(_scPages[uid]||1)+1); };
-    window.scEsc=function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); };
+    window.scEsc=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
   }
-})();";
+})();
+JSCODE;
     static $sc_search_js_done = false;
     if (!$sc_search_js_done) {
         $sc_search_js_done = true;
