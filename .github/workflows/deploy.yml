@@ -17,7 +17,8 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
             cd /opt/societies
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             docker compose -f docker-compose.prod.yml build --no-cache societies
             docker compose -f docker-compose.prod.yml up -d societies
             # Sync plugin WordPress — détection chemin wp-content
