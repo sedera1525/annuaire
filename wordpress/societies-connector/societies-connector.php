@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.22
+ * Version:      2.5.23
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.22');
+define('SC_VERSION', '2.5.23');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1031,19 +1031,22 @@ add_shortcode('societies_search', function($atts) {
     .'.sc-pill:hover{border-color:#6366f1;color:#6366f1;background:#f5f3ff}'
     .'.sc-pill.active{background:#1e3a8a;border-color:#1e3a8a;color:#fff}'
     .'.sc-results-section{max-width:1100px;margin:20px auto 0;padding:0 24px 64px}'
-    .'.sc-results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}'
+    .'.sc-results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px}'
     .'.sc-results-count{font-size:14px;color:#374151}'
     .'.sc-results-count strong{font-weight:700;color:#111827}'
-    .'.sc-list{display:flex;flex-direction:column;gap:6px}'
-    .'.sc-row{display:flex;align-items:center;gap:16px;border:1.5px solid #e5e9f0;border-radius:12px;padding:16px 20px;text-decoration:none;color:inherit;transition:box-shadow .15s,border-color .15s}'
-    .'.sc-row:hover{box-shadow:0 4px 18px rgba(0,0,0,.09);border-color:#c7d2fe;text-decoration:none}'
-    .'.sc-row-main{flex:1;min-width:0}'
-    .'.sc-row-name{font-size:15px;font-weight:700;color:#111827;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-    .'.sc-row-meta{font-size:12px;color:#6b7280;display:flex;align-items:center;flex-wrap:wrap;gap:0}'
-    .'.sc-meta-sep{margin:0 7px;color:#d1d5db}'
-    .'.sc-row-rating{font-size:12px;font-weight:700;color:#f59e0b;white-space:nowrap;margin-top:3px}'
-    .'.sc-row-cta{flex-shrink:0;font-size:13px;font-weight:700;color:#1e3a8a;text-decoration:none;border:1.5px solid #c7d2fe;border-radius:8px;padding:7px 14px;white-space:nowrap;transition:all .15s;background:#f5f7ff}'
-    .'.sc-row-cta:hover{background:#1e3a8a;color:#fff;border-color:#1e3a8a;text-decoration:none}'
+    .'.sc-list{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}'
+    .'.sc-card{display:flex;flex-direction:column;border:1.5px solid #e5e9f0;border-radius:14px;padding:20px;text-decoration:none;color:inherit;background:#fff;transition:box-shadow .18s,border-color .18s,transform .18s}'
+    .'.sc-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.1);border-color:#c7d2fe;transform:translateY(-3px);text-decoration:none}'
+    .'.sc-card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}'
+    .'.sc-card-badge{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.5px}'
+    .'.sc-card-info{flex:1;min-width:0}'
+    .'.sc-card-name{font-size:14px;font-weight:700;color:#111827;margin-bottom:4px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+    .'.sc-card-cat{font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    .'.sc-card-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px;margin-bottom:16px}'
+    .'.sc-card-city{color:#6b7280}'
+    .'.sc-card-rat{font-weight:700;color:#f59e0b}'
+    .'.sc-card-cta{font-size:13px;font-weight:700;color:#1e3a8a;border:1.5px solid #c7d2fe;border-radius:8px;padding:9px 14px;text-align:center;transition:all .15s;background:#f5f7ff;margin-top:auto}'
+    .'.sc-card:hover .sc-card-cta{background:#1e3a8a;color:#fff;border-color:#1e3a8a}'
     .'.sc-loader{display:flex;justify-content:center;padding:60px}'
     .'.sc-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:sc-spin .7s linear infinite}'
     .'@keyframes sc-spin{to{transform:rotate(360deg)}}'
@@ -1055,7 +1058,8 @@ add_shortcode('societies_search', function($atts) {
     .'.sc-pg-btn:hover:not(:disabled){border-color:#6366f1;color:#6366f1}'
     .'.sc-pg-btn.active{background:#1e3a8a;border-color:#1e3a8a;color:#fff}'
     .'.sc-pg-btn:disabled{opacity:.38;cursor:default}'
-    .'@media(max-width:640px){.sc-hero{padding:36px 14px 32px}.sc-hero-title{font-size:26px;letter-spacing:-1px}.sc-search-btn{padding:0 16px;font-size:13px}.sc-filters{padding:14px 12px 0;gap:8px}.sc-results-section{padding:14px 12px 48px}.sc-row{padding:12px 14px;gap:10px}.sc-row-cta{display:none}}';
+    .'@media(max-width:860px){.sc-list{grid-template-columns:repeat(2,1fr)}}'
+    .'@media(max-width:640px){.sc-hero{padding:36px 14px 32px}.sc-hero-title{font-size:26px;letter-spacing:-1px}.sc-search-btn{padding:0 16px;font-size:13px}.sc-filters{padding:14px 12px 0;gap:8px}.sc-results-section{padding:14px 12px 48px}.sc-list{grid-template-columns:1fr}}';
     echo '<style>' . $sc_css . '</style>';
     ?>
 
@@ -1146,19 +1150,22 @@ add_shortcode('societies_search', function($atts) {
         statEl.innerHTML='<strong>'+total.toLocaleString('fr-FR')+'</strong> résultat'+(total>1?'s':'');
         resEl.innerHTML=items.map(function(c){
           var d2=dept(c.zip_code||'');
-          var meta=[];
-          if(c.city)meta.push(scEsc(c.city)+(d2?' '+d2:''));
-          if(c.category)meta.push(scEsc(c.category));
-          if(c.siren)meta.push('SIREN '+scEsc(c.siren));
-          var rat=c.rating_value&&c.rating_value>0?'<span style="color:#f59e0b">★</span> '+parseFloat(c.rating_value).toFixed(1)+(c.rating_votes?' ('+c.rating_votes+')':''):'';
+          var rat=c.rating_value&&c.rating_value>0?'<span class="sc-card-rat"><span style="color:#f59e0b">★</span> '+parseFloat(c.rating_value).toFixed(1)+(c.rating_votes?' ('+c.rating_votes+')':'')+'</span>':'';
           var url=scEsc(c.url||'#');
-          return '<a href="'+url+'" class="sc-row">'
-            +'<div class="sc-row-main">'
-            +'<div class="sc-row-name">'+scEsc(c.title)+'</div>'
-            +'<div class="sc-row-meta">'+meta.map(function(m,mi){return(mi>0?'<span class="sc-meta-sep">·</span>':'')+m;}).join('')+'</div>'
-            +(rat?'<div class="sc-row-rating">'+rat+'</div>':'')
+          var words=(c.title||'').trim().split(/\s+/);
+          var badge=words.slice(0,2).map(function(w){return w[0]?w[0].toUpperCase():'';}).join('');
+          return '<a href="'+url+'" class="sc-card">'
+            +'<div class="sc-card-head">'
+            +'<div class="sc-card-badge">'+badge+'</div>'
+            +'<div class="sc-card-info">'
+            +'<div class="sc-card-name">'+scEsc(c.title)+'</div>'
+            +(c.category?'<div class="sc-card-cat">'+scEsc(c.category)+'</div>':'')
+            +'</div></div>'
+            +'<div class="sc-card-foot">'
+            +(c.city?'<span class="sc-card-city">📍 '+scEsc(c.city)+(d2?' '+d2:'')+'</span>':'')
+            +rat
             +'</div>'
-            +'<a href="'+url+'" class="sc-row-cta">Voir la fiche →</a>'
+            +'<div class="sc-card-cta">Voir la fiche →</div>'
             +'</a>';
         }).join('');
         var tp=Math.ceil(total/{$pp});
