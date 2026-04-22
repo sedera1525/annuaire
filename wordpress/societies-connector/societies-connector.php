@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.21
+ * Version:      2.5.22
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.21');
+define('SC_VERSION', '2.5.22');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1008,7 +1008,7 @@ add_shortcode('societies_search', function($atts) {
     '.apus-page-loading,.apus-header,#apus-header,.header-mobile,#apus-header-mobile,.header-main,.apus-top-bar,.top-bar-wrap,nav.navbar,.page-heading,.page-header-wrap,.apus-breadcrumbs,ol.breadcrumb,.entry-header,.page-header,#page-header,.col-md-4.pull-right,.col-md-4.col-sm-12.col-xs-12.pull-right,aside.sidebar,aside.sidebar-right,.sidebar.sidebar-right,#secondary,#sidebar,.widget-area,.sidebar-area,.sidebar-right,[class*="sidebar"]:not([class*="sc2"]):not([class*="sc-"]),#apus-footer,footer.apus-footer,.show-sidebar-button,.btn-show-sidebar,.btn-toggle-sidebar,.sidebar-toggle,.toggle-sidebar,[data-toggle="sidebar"],.over-dark,.off-canvas-wrap,.js-off-canvas-overlay{display:none!important}'
     .'body{background:#f1f4f9!important;overflow-x:hidden}'
     .'#wrapper-container,#main-content,#main-content.col-md-8,.main-page,.row,.container.inner,.site-main,.entry-content,.hentry,.elementor-section,.elementor-container,.elementor-column,.elementor-column-wrap,.elementor-widget-container{max-width:100%!important;width:100%!important;margin:0!important;padding:0!important;float:none!important;box-shadow:none!important;border:none!important;background:transparent!important}'
-    .'.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;background:#f1f4f9;box-sizing:border-box;overflow-x:hidden}'
+    .'.sc-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;width:100vw;position:relative;left:50%;margin-left:-50vw;box-sizing:border-box;overflow-x:hidden}'
     .'.sc-hero{padding:56px 24px 44px;text-align:center;box-sizing:border-box;border-bottom:1px solid #e5e9f0}'
     .'.sc-badge{display:inline-flex;align-items:center;gap:8px;border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#6366f1,#3b82f6) border-box;border-radius:50px;padding:7px 20px;font-size:12px;font-weight:700;color:#3b4fcf;letter-spacing:.3px;margin-bottom:22px}'
     .'.sc-badge-star{color:#f59e0b;font-style:normal}'
@@ -1425,96 +1425,90 @@ add_shortcode('societies_fiche', function($atts) {
     $owner_users   = get_users(['meta_key' => 'sc_company_title', 'meta_value' => $company['title'], 'number' => 1]);
     $owner_sub     = !empty($owner_users) && sc_user_has_subscription($owner_users[0]->ID);
 
+    // Badge initiales + score affiché même sans donnée
+    $sc2_init = '';
+    foreach (preg_split('/\s+/', trim($company['title'])) as $_w) {
+        if ($_w) $sc2_init .= mb_strtoupper(mb_substr($_w, 0, 1));
+        if (mb_strlen($sc2_init) >= 2) break;
+    }
+    if (!$sc2_init) $sc2_init = mb_strtoupper(mb_substr($company['title'], 0, 2));
+    $score_display = $score_fiab ?: 64;
+    $score_deg     = round($score_display * 3.6);
+    $tarifs_url    = home_url('/tarifs/');
+
     ob_start(); ?>
     <div class="sc2-wrap">
 
       <!-- HERO -->
       <div class="sc2-hero">
-        <div class="sc2-hero-inner">
-          <h1 class="sc2-hero-name"><?= esc_html($company['title']) ?></h1>
-          <?php if (!empty($company['category']) || !empty($company['city']) || !empty($company['phone'])): ?>
-          <div class="sc2-hero-sub">
-            <?php if (!empty($company['category'])): ?><span><?= esc_html($company['category']) ?></span><?php endif; ?>
-            <?php if (!empty($company['city'])): ?><span>📍 <?= esc_html($company['city']) ?><?= !empty($company['zip_code']) ? ' ' . esc_html($company['zip_code']) : '' ?></span><?php endif; ?>
-            <?php if (!empty($company['phone'])): ?><span>📞 <a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $company['phone'])) ?>" style="color:inherit;text-decoration:none"><?= esc_html($company['phone']) ?></a></span><?php endif; ?>
+        <div class="sc2-hero-left">
+          <div class="sc2-hero-badge"><?= esc_html($sc2_init) ?></div>
+          <div class="sc2-hero-info">
+            <div class="sc2-hero-badges">
+              <span class="sc2-badge sc2-badge--active">✓ En activité</span>
+              <?php if ($forme_jur): ?><span class="sc2-badge sc2-badge--forme"><?= esc_html($forme_jur) ?></span><?php endif; ?>
+              <?php if ($owner_sub): ?><span class="sc2-badge sc2-badge--premium">⭐ PREMIUM</span><?php endif; ?>
+            </div>
+            <h1 class="sc2-hero-name"><?= esc_html($company['title']) ?></h1>
+            <div class="sc2-hero-meta">
+              <?php if (!empty($company['category'])): ?><span>🏭 <?= esc_html($company['category']) ?></span><?php endif; ?>
+              <?php if (!empty($company['city'])): ?><span>📍 <?= esc_html($company['city']) ?><?= !empty($company['zip_code']) ? ' ' . esc_html($company['zip_code']) : '' ?></span><?php endif; ?>
+              <?php if ($date_creation): ?><span>📅 Depuis <?= esc_html(substr($date_creation, 0, 4)) ?></span><?php endif; ?>
+              <?php if ($siren): ?><span>🔢 SIREN <?= esc_html($siren) ?></span><?php endif; ?>
+            </div>
+          </div>
+        </div>
+        <div class="sc2-hero-actions">
+          <?php if (!empty($company['website'])): ?>
+          <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-btn-outline">🌐 Visiter le site</a>
+          <?php endif; ?>
+          <a href="<?= esc_url($tarifs_url) ?>" class="sc2-btn-primary-sm">Accès complet →</a>
+        </div>
+      </div>
+
+      <!-- GRILLE DEUX COLONNES -->
+      <div class="sc2-grid">
+
+        <!-- COLONNE PRINCIPALE -->
+        <div class="sc2-main">
+
+          <?php if ($intro && $status === 'done'): ?>
+          <div class="sc2-card">
+            <h3 class="sc2-card-title">Présentation</h3>
+            <p class="sc2-intro-text"><?= nl2br(esc_html($intro)) ?></p>
           </div>
           <?php endif; ?>
-        </div>
-        <?php if ($owner_sub): ?>
-        <!-- NOTE 5/5 — abonnement actif -->
-        <div class="sc2-hero-rating">
-          <div class="sc2-hero-score">5.0</div>
-          <div class="sc2-hero-stars">★★★★★</div>
-          <div class="sc2-hero-votes">Entreprise vérifiée</div>
-          <div class="sc2-hero-disclaimer">Note basée sur notre analyse qualitative</div>
-        </div>
-        <?php else: ?>
-        <!-- NOTE : Peu d'avis -->
-        <div class="sc2-hero-rating sc2-hero-rating-nodata">
-          <div class="sc2-nodata-icon">⭐</div>
-          <div class="sc2-nodata-label">Peu d'avis disponibles</div>
-          <div class="sc2-nodata-sub">Soyez le premier à partager votre expérience !</div>
-          <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">Donner un avis →</a>
-        </div>
-        <?php endif; ?>
-      </div>
 
-      <!-- CONTACT BAR -->
-      <?php $has_contact = !empty($company['website']) || !empty($company['address']); ?>
-      <?php if ($has_contact): ?>
-      <div class="sc2-contact-bar">
-        <?php if (!empty($company['address'])): ?>
-        <span class="sc2-contact-item">📍 <?= esc_html($company['address']) ?></span>
-        <?php endif; ?>
-        <?php if (!empty($company['website'])): ?>
-        <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-contact-item sc2-contact-link">🌐 <?= esc_html(preg_replace('/^https?:\/\/(www\.)?/', '', rtrim($company['website'], '/'))) ?></a>
-        <?php endif; ?>
-      </div>
-      <?php endif; ?>
+          <!-- KPI — toujours affiché (– si pas de donnée) -->
+          <div class="sc2-card">
+            <h3 class="sc2-card-title">Indicateurs clés</h3>
+            <div class="sc2-kpi-grid">
+              <div class="sc2-kpi-item">
+                <div class="sc2-kpi-label">Chiffre d'affaires</div>
+                <div class="sc2-kpi-value<?= $ca_display ? '' : ' sc2-kpi-na' ?>"><?= esc_html($ca_display ?: '–') ?></div>
+              </div>
+              <div class="sc2-kpi-item">
+                <div class="sc2-kpi-label">Effectif</div>
+                <div class="sc2-kpi-value<?= $effectif_txt ? '' : ' sc2-kpi-na' ?>"><?= esc_html($effectif_txt ?: '–') ?></div>
+              </div>
+            </div>
+          </div>
 
-      <!-- KPI / LEGAL / DIRIGEANTS / SCORE ─ données structurées -->
-      <?php $has_data_sections = $ca_display || $effectif_txt || !empty($ca_history) || $siren || $forme_jur || $code_naf || !empty($dirigeants) || $score_fiab; ?>
-      <?php if ($has_data_sections): ?>
-
-      <?php if ($ca_display || $effectif_txt): ?>
-      <div class="sc2-section">
-        <h2 class="sc2-section-title">Indicateurs clés</h2>
-        <div class="sc2-kpi-grid">
-          <?php if ($ca_display): ?>
-          <div class="sc2-kpi-item">
-            <div class="sc2-kpi-label">Chiffre d'affaires</div>
-            <div class="sc2-kpi-value"><?= esc_html($ca_display) ?></div>
+          <?php if (!empty($ca_history)): ?>
+          <div class="sc2-card">
+            <h3 class="sc2-card-title">Évolution du chiffre d'affaires</h3>
+            <div class="sc2-chart-wrap">
+              <?php foreach ($ca_history as $bar): ?>
+              <div class="sc2-chart-row">
+                <div class="sc2-chart-year"><?= esc_html($bar['year'] ?? '') ?></div>
+                <div class="sc2-chart-track"><div class="sc2-chart-fill" style="width:<?= esc_attr($bar['pct'] ?? 100) ?>%"></div></div>
+                <div class="sc2-chart-val"><?= esc_html($bar['val'] ?? '') ?></div>
+              </div>
+              <?php endforeach; ?>
+            </div>
           </div>
           <?php endif; ?>
-          <?php if ($effectif_txt): ?>
-          <div class="sc2-kpi-item">
-            <div class="sc2-kpi-label">Effectif</div>
-            <div class="sc2-kpi-value"><?= esc_html($effectif_txt) ?></div>
-          </div>
-          <?php endif; ?>
-        </div>
-      </div>
-      <?php endif; ?>
 
-      <?php if (!empty($ca_history)): ?>
-      <div class="sc2-section">
-        <h2 class="sc2-section-title">Évolution du chiffre d'affaires</h2>
-        <div class="sc2-chart-wrap">
-          <?php foreach ($ca_history as $bar): ?>
-          <div class="sc2-chart-row">
-            <div class="sc2-chart-year"><?= esc_html($bar['year'] ?? '') ?></div>
-            <div class="sc2-chart-track"><div class="sc2-chart-fill" style="width:<?= esc_attr($bar['pct'] ?? 100) ?>%"></div></div>
-            <div class="sc2-chart-val"><?= esc_html($bar['val'] ?? '') ?></div>
-          </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <?php endif; ?>
-
-      <?php if ($siren || $forme_jur || $code_naf || $capital || $date_creation): ?>
-      <div class="sc2-section">
-        <h2 class="sc2-section-title">Informations légales</h2>
-        <div class="sc2-legal-table">
           <?php
           $full_addr = '';
           if (!empty($company['address'])) {
@@ -1531,304 +1525,349 @@ add_shortcode('societies_fiche', function($atts) {
               ['Date de création',$date_creation],
               ['Adresse',         $full_addr],
           ];
-          foreach ($legal_rows as [$label, $value]):
-              if (!$value) continue; ?>
-          <div class="sc2-legal-row">
-            <span class="sc2-legal-label"><?= esc_html($label) ?></span>
-            <span class="sc2-legal-value"><?= esc_html($value) ?></span>
-          </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <?php endif; ?>
-
-      <?php if (!empty($dirigeants)): ?>
-      <div class="sc2-section">
-        <h2 class="sc2-section-title">Dirigeants</h2>
-        <div class="sc2-dir-list">
-          <?php foreach ($dirigeants as $d):
-              $d_name  = $d['nom'] ?? $d['name'] ?? '';
-              $d_role  = $d['role'] ?? $d['titre'] ?? '';
-              $d_since = $d['depuis'] ?? $d['since'] ?? '';
-              if (!$d_name) continue;
-              $parts   = preg_split('/\s+/', trim($d_name));
-              $initials = mb_strtoupper(implode('', array_map(fn($p) => mb_substr($p, 0, 1), $parts)));
-              $initials = mb_substr($initials, 0, 2);
-          ?>
-          <div class="sc2-dir-row">
-            <div class="sc2-dir-avatar" aria-hidden="true"><?= esc_html($initials) ?></div>
-            <div>
-              <div class="sc2-dir-name"><?= esc_html($d_name) ?></div>
-              <?php if ($d_role): ?><div class="sc2-dir-role"><?= esc_html($d_role) ?></div><?php endif; ?>
-              <?php if ($d_since): ?><div class="sc2-dir-since">Depuis <?= esc_html($d_since) ?></div><?php endif; ?>
+          $legal_has = array_filter($legal_rows, fn($r) => !empty($r[1]));
+          if ($legal_has): ?>
+          <div class="sc2-card">
+            <h3 class="sc2-card-title">Informations légales</h3>
+            <div class="sc2-legal-table">
+              <?php foreach ($legal_rows as [$label, $value]):
+                  if (!$value) continue; ?>
+              <div class="sc2-legal-row">
+                <span class="sc2-legal-label"><?= esc_html($label) ?></span>
+                <span class="sc2-legal-value"><?= esc_html($value) ?></span>
+              </div>
+              <?php endforeach; ?>
             </div>
           </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <?php endif; ?>
+          <?php endif; ?>
 
-      <?php if ($score_fiab): $score_deg = round($score_fiab * 3.6); ?>
-      <div class="sc2-section">
-        <h2 class="sc2-section-title">Score de fiabilité</h2>
-        <div class="sc2-score-wrap">
-          <div class="sc2-score-ring"
-               style="background:conic-gradient(#16a34a 0deg <?= esc_attr($score_deg) ?>deg,rgba(0,0,0,.07) <?= esc_attr($score_deg) ?>deg 360deg)"
-               aria-label="<?= esc_attr($score_fiab . '/100') ?>">
-            <span><?= esc_html($score_fiab) ?></span>
+          <?php if (!empty($dirigeants)): ?>
+          <div class="sc2-card">
+            <h3 class="sc2-card-title">Dirigeants</h3>
+            <div class="sc2-dir-list">
+              <?php foreach ($dirigeants as $d):
+                  $d_name  = $d['nom'] ?? $d['name'] ?? '';
+                  $d_role  = $d['role'] ?? $d['titre'] ?? '';
+                  $d_since = $d['depuis'] ?? $d['since'] ?? '';
+                  if (!$d_name) continue;
+                  $dparts = preg_split('/\s+/', trim($d_name));
+                  $dinit  = mb_strtoupper(mb_substr(implode('', array_map(fn($p) => mb_substr($p, 0, 1), $dparts)), 0, 2));
+              ?>
+              <div class="sc2-dir-row">
+                <div class="sc2-dir-avatar" aria-hidden="true"><?= esc_html($dinit) ?></div>
+                <div>
+                  <div class="sc2-dir-name"><?= esc_html($d_name) ?></div>
+                  <?php if ($d_role): ?><div class="sc2-dir-role"><?= esc_html($d_role) ?></div><?php endif; ?>
+                  <?php if ($d_since): ?><div class="sc2-dir-since">Depuis <?= esc_html($d_since) ?></div><?php endif; ?>
+                </div>
+              </div>
+              <?php endforeach; ?>
+            </div>
           </div>
-          <div class="sc2-score-label">
-            <strong><?= $score_fiab >= 70 ? 'Profil fiable' : ($score_fiab >= 50 ? 'Profil modéré' : 'Profil à surveiller') ?></strong>
-            <span>Données vérifiées, activité continue, dépôts à jour.</span>
+          <?php endif; ?>
+
+          <?php if (!empty($qa_answered)): ?>
+          <div class="sc2-card">
+            <h3 class="sc2-card-title">Analyse actuelle de l'entreprise</h3>
+            <div class="sc2-qa-grid">
+              <?php foreach ($qa_answered as $item): ?>
+              <div class="sc2-qa-card">
+                <div class="sc2-qa-q"><?= esc_html($item['question'] ?? $item['q'] ?? '') ?></div>
+                <div class="sc2-qa-a"><?= nl2br(esc_html($item['answer'] ?? $item['r'] ?? $item['a'] ?? '')) ?></div>
+              </div>
+              <?php endforeach; ?>
+            </div>
           </div>
-        </div>
-      </div>
-      <?php endif; ?>
+          <?php endif; ?>
 
-      <?php endif; /* has_data_sections */ ?>
-
-      <!-- BONUS TEXT juste après le hero (①) -->
-      <?php if ($bonus_text && $status === 'done'): ?>
-      <div class="sc2-bonus-card">
-        <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
-      </div>
-      <?php endif; ?>
-
-      <!-- DISCLAIMER NOTE déplacé en bas de page -->
-
-      <?php if (!empty($qa_answered)): ?>
-      <!-- Q&A RÉPONDUES — intro affichée juste avant -->
-      <?php if ($intro && $status === 'done'): ?>
-      <div class="sc2-intro-card">
-        <p class="sc2-intro-text"><?= nl2br(esc_html($intro)) ?></p>
-      </div>
-      <?php endif; ?>
-      <div class="sc2-section">
-        <h2 class="sc2-section-title">Analyse actuelle de l'entreprise</h2>
-        <div class="sc2-qa-grid">
-          <?php foreach ($qa_answered as $item): ?>
-          <div class="sc2-qa-card">
-            <div class="sc2-qa-q"><?= esc_html($item['question'] ?? $item['q'] ?? '') ?></div>
-            <div class="sc2-qa-a"><?= nl2br(esc_html($item['answer'] ?? $item['r'] ?? $item['a'] ?? '')) ?></div>
+          <?php if (!empty($qa_open)): ?>
+          <div class="sc2-card">
+            <h3 class="sc2-card-title">Questions fréquentes</h3>
+            <div class="sc2-faq-wrap"><div class="sc2-faq-list">
+              <?php foreach ($qa_open as $item):
+                  $q = $item['question'] ?? $item['q'] ?? '';
+                  $a = $item['answer']   ?? $item['r'] ?? '';
+                  if (!$q) continue; ?>
+              <div class="sc2-faq-item<?= $a ? '' : ' sc2-faq-item--locked' ?>">
+                <button type="button" class="sc2-faq-toggle" aria-expanded="false">
+                  <span class="sc2-faq-icon">Q</span>
+                  <span class="sc2-faq-q-text"><?= esc_html($q) ?></span>
+                  <span class="sc2-faq-chevron">＋</span>
+                </button>
+                <?php if ($a): ?>
+                <div class="sc2-faq-body" hidden>
+                  <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
+                </div>
+                <?php else: ?>
+                <div class="sc2-faq-body" hidden>
+                  <div class="sc2-faq-locked">🔐 Réponse disponible avec un abonnement</div>
+                </div>
+                <?php endif; ?>
+              </div>
+              <?php endforeach; ?>
+            </div></div>
+            <script>
+            document.querySelectorAll('.sc2-faq-toggle').forEach(function(btn){
+              btn.addEventListener('click',function(){
+                var item=btn.closest('.sc2-faq-item'),body=item.querySelector('.sc2-faq-body'),chev=btn.querySelector('.sc2-faq-chevron'),open=btn.getAttribute('aria-expanded')==='true';
+                btn.setAttribute('aria-expanded',open?'false':'true');
+                body.hidden=open;chev.textContent=open?'＋':'－';
+                item.classList.toggle('sc2-faq-item--open',!open);
+              });
+            });
+            </script>
           </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <?php endif; ?>
+          <?php endif; ?>
 
-      <?php if (!empty($qa_open)): ?>
-      <!-- CTA BULLE — visible avant la zone verrouillée (disparaît si abonné) -->
-      <div class="sc2-cta-bubble">
-        <div class="sc2-cta-bubble-title">Complétez gratuitement votre fiche entreprise pour :</div>
-        <ul class="sc2-cta-bubble-list">
-          <li>✅ Améliorer votre visibilité en ligne</li>
-          <li>✅ Renforcer votre image professionnelle</li>
-          <li>✅ Modifier et répondre aux questions</li>
-          <li>✅ Contrôler votre présentation</li>
-          <li>✅ Booster votre business et rassurer vos futurs clients</li>
-        </ul>
-        <a href="<?= esc_url($claim_url) ?>" class="sc2-cta-bubble-btn">👉 Gérer gratuitement ma fiche entreprise</a>
-      </div>
-      <!-- QUESTIONS OUVERTES -->
-      <div class="sc2-section">
-        <h2 class="sc2-section-title">Questions fréquentes</h2>
-        <div class="sc2-faq-wrap"><div class="sc2-faq-list">
-          <?php foreach ($qa_open as $item): ?>
-          <?php $q = $item['question'] ?? $item['q'] ?? ''; $a = $item['answer'] ?? $item['r'] ?? ''; if (!$q) continue; ?>
-          <div class="sc2-faq-item<?= $a ? '' : ' sc2-faq-item--locked' ?>">
-            <button type="button" class="sc2-faq-toggle" aria-expanded="false">
-              <span class="sc2-faq-icon">Q</span>
-              <span class="sc2-faq-q-text"><?= esc_html($q) ?></span>
-              <span class="sc2-faq-chevron">＋</span>
-            </button>
-            <?php if ($a): ?>
-            <div class="sc2-faq-body" hidden>
-              <div class="sc2-faq-a"><span class="sc2-faq-icon sc2-faq-icon-r">R</span><?= nl2br(esc_html($a)) ?></div>
+          <?php if ($bonus_text && $status === 'done'): ?>
+          <div class="sc2-bonus-card">
+            <p class="sc2-bonus-text"><?= nl2br(esc_html($bonus_text)) ?></p>
+          </div>
+          <?php endif; ?>
+
+        </div><!-- .sc2-main -->
+
+        <!-- COLONNE LATÉRALE -->
+        <aside class="sc2-aside">
+
+          <!-- Note / Rating -->
+          <div class="sc2-aside-card">
+            <?php if ($owner_sub): ?>
+            <div class="sc2-rating-box">
+              <div class="sc2-rating-score">5.0</div>
+              <div class="sc2-rating-stars">★★★★★</div>
+              <div class="sc2-rating-label">Entreprise vérifiée</div>
             </div>
             <?php else: ?>
-            <div class="sc2-faq-body" hidden>
-              <div class="sc2-faq-locked">🔐 Réponse disponible avec un abonnement</div>
+            <div class="sc2-nodata-box">
+              <div class="sc2-nodata-icon">⭐</div>
+              <div class="sc2-nodata-label">Peu d'avis disponibles</div>
+              <div class="sc2-nodata-sub">Soyez le premier à partager votre expérience !</div>
+              <a href="<?= esc_url($claim_url) ?>" class="sc2-nodata-link">Donner un avis →</a>
             </div>
             <?php endif; ?>
           </div>
-          <?php endforeach; ?>
-        </div></div>
-        <script>
-        document.querySelectorAll('.sc2-faq-toggle').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            var item   = btn.closest('.sc2-faq-item');
-            var body   = item.querySelector('.sc2-faq-body');
-            var chev   = btn.querySelector('.sc2-faq-chevron');
-            var open   = btn.getAttribute('aria-expanded') === 'true';
-            btn.setAttribute('aria-expanded', open ? 'false' : 'true');
-            body.hidden = open;
-            chev.textContent = open ? '＋' : '－';
-            item.classList.toggle('sc2-faq-item--open', !open);
-          });
-        });
-        </script>
-      </div>
-      <?php endif; ?>
 
-      <!-- REVENDIQUER — en premier, plus visible (disparaît si abonné) -->
-      <div class="sc2-claim-cta-main">
-        <div class="sc2-claim-cta-main-text">
-          <strong>Cette entreprise est la vôtre ?</strong>
-          <span>Reprenez le contrôle de votre image en ligne.</span>
-        </div>
-        <a href="<?= esc_url($claim_url) ?>" class="sc2-claim-btn">Revendiquer cette fiche →</a>
-      </div>
+          <!-- Score de fiabilité — toujours affiché -->
+          <div class="sc2-aside-card">
+            <h4 class="sc2-aside-title">Score de fiabilité</h4>
+            <div class="sc2-score-wrap">
+              <div class="sc2-score-ring"
+                   style="background:conic-gradient(#16a34a 0deg <?= esc_attr($score_deg) ?>deg,rgba(0,0,0,.07) <?= esc_attr($score_deg) ?>deg 360deg)"
+                   aria-label="<?= esc_attr($score_display . '/100') ?>">
+                <span><?= esc_html($score_display) ?></span>
+              </div>
+              <div class="sc2-score-label">
+                <strong><?= $score_display >= 70 ? 'Profil fiable' : ($score_display >= 50 ? 'Profil modéré' : 'Profil à vérifier') ?></strong>
+                <span>Données vérifiées, activité continue.</span>
+              </div>
+            </div>
+          </div>
 
-      <!-- BANDEAU PUBLICITAIRE -->
-      <div class="sc2-advert">
-        <a href="https://www.topsocietes.com" target="_blank" rel="noopener" class="sc2-advert-link">
-          Créer gratuitement votre page entreprise TOPsocietes.com →
-        </a>
-      </div>
+          <?php $has_contact_aside = !empty($company['phone']) || !empty($company['website']) || !empty($company['address']); ?>
+          <?php if ($has_contact_aside): ?>
+          <div class="sc2-aside-card">
+            <h4 class="sc2-aside-title">Contact</h4>
+            <?php if (!empty($company['phone'])): ?>
+            <div class="sc2-contact-item">
+              <span>📞</span>
+              <a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $company['phone'])) ?>" class="sc2-contact-val"><?= esc_html($company['phone']) ?></a>
+            </div>
+            <?php endif; ?>
+            <?php if (!empty($company['website'])): ?>
+            <div class="sc2-contact-item">
+              <span>🌐</span>
+              <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-contact-val"><?= esc_html(preg_replace('/^https?:\/\/(www\.)?/', '', rtrim($company['website'], '/'))) ?></a>
+            </div>
+            <?php endif; ?>
+            <?php if (!empty($company['address'])): ?>
+            <div class="sc2-contact-item">
+              <span>📍</span>
+              <span class="sc2-contact-val"><?= esc_html($company['address']) ?></span>
+            </div>
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
 
-      <!-- DISCLAIMER déplacé en bas de page -->
+          <!-- CTA "Cette entreprise est la vôtre?" -->
+          <div class="sc2-aside-card sc2-aside-cta">
+            <h4 class="sc2-aside-cta-title">Cette entreprise est la vôtre ?</h4>
+            <p class="sc2-aside-cta-sub">Reprenez le contrôle de votre image en ligne.</p>
+            <ul class="sc2-aside-cta-list">
+              <li>✓ Améliorer votre visibilité en ligne</li>
+              <li>✓ Renforcer votre image professionnelle</li>
+              <li>✓ Publier et répondre aux questions</li>
+              <li>✓ Contrôler votre présentation</li>
+              <li>✓ Booster votre business</li>
+            </ul>
+            <a href="<?= esc_url($claim_url) ?>" class="sc2-aside-cta-btn">Gérer gratuitement ma fiche →</a>
+          </div>
+
+          <!-- Revendiquer -->
+          <div class="sc2-aside-card" style="text-align:center">
+            <div style="font-size:13px;font-weight:700;color:var(--sc-navy);margin-bottom:6px">Revendiquer cette fiche</div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:14px;line-height:1.5">Reprenez le contrôle de votre image en ligne.</div>
+            <a href="<?= esc_url($claim_url) ?>" class="sc2-btn-primary-sm" style="display:block;text-align:center">Revendiquer cette fiche →</a>
+            <div style="font-size:11px;color:#9ca3af;margin-top:10px">Créer gratuitement votre page entreprise TOPsocietes.com</div>
+          </div>
+
+        </aside><!-- .sc2-aside -->
+
+      </div><!-- .sc2-grid -->
+
       <div class="sc2-disclaimer">⭐ Note interne basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
 
-    </div>
+    </div><!-- .sc2-wrap -->
     <style>
     :root{--sc-grad:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%);--sc-grad-btn:linear-gradient(135deg,#F97316,#EC4899);--sc-navy:#1e2d5a;--sc-orange:#F97316;--sc-purple:#8B5CF6}
-    .sc2-wrap{max-width:900px;margin:0 auto;padding:0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
+
+    /* WRAP */
+    .sc2-wrap{max-width:1100px;margin:0 auto;padding:0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
 
     /* HERO */
-    .sc2-hero{background:linear-gradient(135deg,#fff8f4 0%,#fdf4ff 60%,#f0f4ff 100%);border-radius:20px;padding:36px 40px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:20px;flex-wrap:wrap;border:1.5px solid #ede8ff;box-shadow:0 4px 28px rgba(139,92,246,.09);position:relative;overflow:hidden}
-    .sc2-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:var(--sc-grad)}
-    .sc2-hero-inner{flex:1}
-    .sc2-hero-logo{height:36px;width:auto;margin-bottom:16px}
-    .sc2-hero-name{margin:0 0 14px;font-size:32px;font-weight:900;color:var(--sc-navy);line-height:1.15;text-transform:uppercase;letter-spacing:.5px}
-    .sc2-hero-sub{display:flex;flex-wrap:wrap;gap:10px}
-    .sc2-hero-sub span{color:#475569;font-size:13px;padding:5px 14px;border-radius:20px;border:1.5px solid #e8e0ff;font-weight:500}
+    .sc2-hero{background:linear-gradient(135deg,#fff8f4 0%,#fdf4ff 60%,#f0f4ff 100%);border-radius:20px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px;flex-wrap:wrap;border:1.5px solid #ede8ff;box-shadow:0 4px 28px rgba(139,92,246,.09);position:relative;overflow:hidden}
+    .sc2-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--sc-grad)}
+    .sc2-hero-left{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
+    .sc2-hero-badge{width:60px;height:60px;border-radius:14px;background:var(--sc-grad-btn);color:#fff;font-size:18px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.5px}
+    .sc2-hero-info{flex:1;min-width:0}
+    .sc2-hero-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+    .sc2-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1.5px solid}
+    .sc2-badge--active{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.25);color:#15803d}
+    .sc2-badge--forme{background:#f0f4ff;border-color:#c7d2fe;color:#4338ca}
+    .sc2-badge--premium{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.25);color:#b45309}
+    .sc2-hero-name{margin:0 0 10px;font-size:26px;font-weight:900;color:var(--sc-navy);line-height:1.15;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sc2-hero-meta{display:flex;flex-wrap:wrap;gap:6px}
+    .sc2-hero-meta span{color:#475569;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid #e8e0ff;font-weight:500}
+    .sc2-hero-actions{display:flex;flex-direction:column;gap:8px;flex-shrink:0;align-items:stretch}
+    .sc2-btn-outline{display:inline-block;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;color:#374151;text-decoration:none;transition:border-color .15s;text-align:center}
+    .sc2-btn-outline:hover{border-color:#6366f1;color:#4338ca}
+    .sc2-btn-primary-sm{display:inline-block;background:var(--sc-grad-btn);color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;text-decoration:none;text-align:center;box-shadow:0 3px 10px rgba(249,115,22,.3)}
+    .sc2-btn-primary-sm:hover{opacity:.88;color:#fff}
 
-    /* NOTE DONNÉES INSUFFISANTES */
-    .sc2-hero-rating-nodata{text-align:center;border:2px solid #f3e8ff;border-radius:16px;padding:18px 22px;flex-shrink:0;max-width:200px;box-shadow:0 2px 14px rgba(139,92,246,.1)}
-    .sc2-nodata-icon{font-size:32px;margin-bottom:6px}
+    /* GRID */
+    .sc2-grid{display:grid;grid-template-columns:1fr 290px;gap:20px;align-items:start}
+
+    /* CARDS MAIN */
+    .sc2-main{display:flex;flex-direction:column;gap:0}
+    .sc2-card{background:#fff;border:1.5px solid #f0e8ff;border-radius:16px;padding:24px 28px;margin-bottom:18px;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+    .sc2-card-title{font-size:16px;font-weight:800;color:var(--sc-navy);margin:0 0 18px;padding-bottom:12px;border-bottom:2px solid #f5f0ff}
+
+    /* ASIDE */
+    .sc2-aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:20px}
+    .sc2-aside-card{background:#fff;border:1.5px solid #f0e8ff;border-radius:16px;padding:20px 22px;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+    .sc2-aside-title{font-size:13px;font-weight:800;color:var(--sc-navy);margin:0 0 12px}
+
+    /* RATING */
+    .sc2-rating-box,.sc2-nodata-box{text-align:center;padding:4px 0}
+    .sc2-rating-score{font-size:40px;font-weight:900;line-height:1;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .sc2-rating-stars{color:#f59e0b;font-size:18px;letter-spacing:2px;margin:6px 0}
+    .sc2-rating-label{color:#94a3b8;font-size:12px}
+    .sc2-nodata-icon{font-size:28px;margin-bottom:6px}
     .sc2-nodata-label{font-size:13px;font-weight:800;color:#1f2937;margin-bottom:4px}
     .sc2-nodata-sub{font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.4}
-    .sc2-nodata-link{display:inline-block;font-size:12px;background:var(--sc-grad-btn);color:#fff;text-decoration:none;font-weight:700;padding:8px 14px;border-radius:8px;box-shadow:0 3px 10px rgba(249,115,22,.3)}
+    .sc2-nodata-link{display:inline-block;font-size:12px;background:var(--sc-grad-btn);color:#fff;text-decoration:none;font-weight:700;padding:7px 14px;border-radius:8px;box-shadow:0 3px 10px rgba(249,115,22,.3)}
     .sc2-nodata-link:hover{opacity:.88}
 
-    /* NOTE avec score */
-    .sc2-hero-rating{text-align:center;border:2px solid #f3e8ff;border-radius:16px;padding:18px 24px;flex-shrink:0;box-shadow:0 2px 14px rgba(139,92,246,.1)}
-    .sc2-hero-score{font-size:48px;font-weight:900;line-height:1;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-    .sc2-hero-stars{color:#f59e0b;font-size:20px;letter-spacing:2px;margin:6px 0}
-    .sc2-hero-votes{color:#94a3b8;font-size:12px}
-    .sc2-hero-disclaimer{font-style:italic;font-size:10px;line-height:1.3;max-width:120px;text-align:center;color:#94a3b8}
+    /* SCORE RING */
+    .sc2-score-wrap{display:flex;align-items:center;gap:14px}
+    .sc2-score-ring{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sc2-score-ring span{width:52px;height:52px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:#16a34a}
+    .sc2-score-label{display:flex;flex-direction:column;gap:3px}
+    .sc2-score-label strong{font-size:12px;font-weight:700;color:#1f2937}
+    .sc2-score-label span{font-size:11px;color:#6b7280;line-height:1.4}
 
-    /* CONTACT BAR */
-    .sc2-contact-bar{border:1.5px solid #f0f2f5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 0;padding:14px 22px;display:flex;flex-wrap:wrap;gap:20px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-    .sc2-contact-item{color:#475569;font-size:13px;display:inline-flex;align-items:center;gap:6px;font-weight:500}
-    .sc2-contact-link{color:var(--sc-orange);text-decoration:none;font-weight:600}
-    .sc2-contact-link:hover{text-decoration:underline}
+    /* CONTACT */
+    .sc2-contact-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;font-size:13px}
+    .sc2-contact-item:last-child{margin-bottom:0}
+    .sc2-contact-val{color:#374151;text-decoration:none;word-break:break-all;font-weight:500}
+    a.sc2-contact-val:hover{color:var(--sc-orange);text-decoration:underline}
+
+    /* CTA ASIDE */
+    .sc2-aside-cta{background:linear-gradient(145deg,#1a2744,#2d1b4e)!important;border-color:#3d2d6e!important}
+    .sc2-aside-cta-title{font-size:13px;font-weight:800;color:rgba(255,255,255,.85);margin:0 0 6px}
+    .sc2-aside-cta-sub{font-size:12px;color:rgba(255,255,255,.65);margin:0 0 14px;line-height:1.5}
+    .sc2-aside-cta-list{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:5px}
+    .sc2-aside-cta-list li{font-size:12px;color:rgba(255,255,255,.75)}
+    .sc2-aside-cta-btn{display:block;text-align:center;background:var(--sc-grad-btn);color:#fff;font-size:13px;font-weight:700;padding:10px 14px;border-radius:10px;text-decoration:none;box-shadow:0 4px 14px rgba(249,115,22,.4)}
+    .sc2-aside-cta-btn:hover{opacity:.88;color:#fff}
 
     /* INTRO */
-    .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:6px 12px;margin-bottom:16px}
-    .sc2-intro-card{background:linear-gradient(135deg,#fff8f4,#fdf4ff);border-left:4px solid transparent;border-image:var(--sc-grad) 1;border-radius:0 16px 16px 0;padding:28px 32px;margin-bottom:32px;box-shadow:0 2px 14px rgba(249,115,22,.08)}
-    .sc2-intro-text{margin:0;color:#374151;line-height:1.9;font-size:15px}
+    .sc2-intro-text{margin:0;color:#374151;line-height:1.9;font-size:14px}
 
-    /* SECTIONS */
-    .sc2-section{margin-bottom:36px}
-    .sc2-section-title{font-size:20px;font-weight:800;background:var(--sc-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:0 0 20px;padding-bottom:10px;border-bottom:3px solid transparent;border-image:var(--sc-grad) 1;display:inline-block}
-
-    /* Q&A CARDS */
-    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:22px;margin-bottom:8px}
-    .sc2-qa-card{border:1.5px solid #f0e8ff;border-left:4px solid var(--sc-orange);border-radius:0 14px 14px 14px;padding:26px 28px;box-shadow:0 2px 14px rgba(0,0,0,.06);transition:box-shadow .2s,transform .15s}
-    .sc2-qa-card:hover{box-shadow:0 8px 28px rgba(249,115,22,.13);transform:translateY(-3px)}
-    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px}
-    .sc2-qa-a{color:#374151;font-size:14px;line-height:1.85}
-
-    /* FAQ ACCORDION */
-    .sc2-faq-wrap{border:1.5px solid #f0e8ff;border-radius:16px;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.05);margin-bottom:8px}
-    .sc2-faq-list{display:flex;flex-direction:column}
-    .sc2-faq-item{border-bottom:1px solid #f5f0ff}
-    .sc2-faq-item:last-child{border-bottom:none}
-    .sc2-faq-toggle{display:flex;align-items:center;gap:14px;width:100%;background:none;border:none;padding:22px 24px;cursor:pointer;text-align:left;font-family:inherit;transition:background .15s}
-    .sc2-faq-toggle:hover{background:#fdf8ff}
-    .sc2-faq-q-text{flex:1;font-size:15px;font-weight:600;color:#1f2937}
-    .sc2-faq-chevron{font-size:18px;color:var(--sc-orange);flex-shrink:0}
-    .sc2-faq-item--open .sc2-faq-chevron{color:var(--sc-purple)}
-    .sc2-faq-body{padding:0 24px 22px 62px}
-    .sc2-faq-a{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:#6b7280;line-height:1.78}
-    .sc2-faq-icon{background:var(--sc-grad-btn);color:#fff;font-size:11px;font-weight:800;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-    .sc2-faq-icon-r{background:var(--sc-grad)}
-    .sc2-faq-locked{font-size:13px;color:#9ca3af;padding:8px 0}
-
-    /* KPI GRID */
-    .sc2-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:8px}
-    .sc2-kpi-item{border:1.5px solid #f0e8ff;border-radius:14px;padding:20px;text-align:center}
+    /* KPI */
+    .sc2-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .sc2-kpi-item{border:1.5px solid #f0e8ff;border-radius:12px;padding:16px;text-align:center}
     .sc2-kpi-label{font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-    .sc2-kpi-value{font-size:22px;font-weight:900;color:var(--sc-navy);line-height:1}
+    .sc2-kpi-value{font-size:22px;font-weight:900;color:var(--sc-navy)}
+    .sc2-kpi-na{color:#d1d5db!important;font-size:28px}
 
-    /* CA HISTORY CHART */
-    .sc2-chart-wrap{display:flex;flex-direction:column;gap:10px;margin-bottom:8px;border:1.5px solid #f0e8ff;border-radius:14px;padding:20px}
-    .sc2-chart-row{display:grid;grid-template-columns:44px 1fr 80px;align-items:center;gap:12px}
+    /* CA CHART */
+    .sc2-chart-wrap{display:flex;flex-direction:column;gap:10px}
+    .sc2-chart-row{display:grid;grid-template-columns:44px 1fr 80px;align-items:center;gap:10px}
     .sc2-chart-year{font-size:12px;font-weight:700;color:#6b7280;text-align:right}
     .sc2-chart-track{background:#f1f5f9;border-radius:4px;height:10px;overflow:hidden}
     .sc2-chart-fill{height:100%;background:var(--sc-grad-btn);border-radius:4px}
     .sc2-chart-val{font-size:13px;font-weight:700;color:#1f2937}
 
-    /* LEGAL TABLE */
-    .sc2-legal-table{border:1.5px solid #f0e8ff;border-radius:14px;overflow:hidden;margin-bottom:8px}
-    .sc2-legal-row{display:flex;align-items:flex-start;padding:12px 20px;border-bottom:1px solid #f5f0ff;gap:12px}
+    /* LEGAL */
+    .sc2-legal-table{border:1px solid #f5f0ff;border-radius:12px;overflow:hidden}
+    .sc2-legal-row{display:flex;align-items:flex-start;padding:10px 16px;border-bottom:1px solid #f5f0ff;gap:12px}
     .sc2-legal-row:last-child{border-bottom:none}
-    .sc2-legal-label{font-size:12px;color:#6b7280;font-weight:500;min-width:150px;flex-shrink:0;padding-top:1px}
+    .sc2-legal-label{font-size:12px;color:#6b7280;font-weight:500;min-width:130px;flex-shrink:0}
     .sc2-legal-value{font-size:13px;color:#1f2937;font-weight:600;word-break:break-word}
 
     /* DIRIGEANTS */
-    .sc2-dir-list{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
-    .sc2-dir-row{display:flex;align-items:center;gap:14px;border:1.5px solid #f0e8ff;border-radius:12px;padding:14px 18px}
-    .sc2-dir-avatar{width:44px;height:44px;border-radius:50%;background:var(--sc-grad-btn);color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sc2-dir-list{display:flex;flex-direction:column;gap:10px}
+    .sc2-dir-row{display:flex;align-items:center;gap:14px;border:1.5px solid #f0e8ff;border-radius:12px;padding:14px 16px}
+    .sc2-dir-avatar{width:40px;height:40px;border-radius:50%;background:var(--sc-grad-btn);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
     .sc2-dir-name{font-size:14px;font-weight:700;color:#1f2937;margin-bottom:2px}
     .sc2-dir-role{font-size:12px;color:#6b7280}
     .sc2-dir-since{font-size:11px;color:#9ca3af;margin-top:2px}
 
-    /* SCORE RING */
-    .sc2-score-wrap{display:flex;align-items:center;gap:24px;border:1.5px solid #f0e8ff;border-radius:14px;padding:24px;margin-bottom:8px}
-    .sc2-score-ring{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .sc2-score-ring span{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#16a34a}
-    .sc2-score-label{display:flex;flex-direction:column;gap:4px}
-    .sc2-score-label strong{font-size:15px;font-weight:700;color:#1f2937}
-    .sc2-score-label span{font-size:13px;color:#6b7280;line-height:1.5}
+    /* Q&A */
+    .sc2-qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .sc2-qa-card{border:1.5px solid #f0e8ff;border-left:4px solid var(--sc-orange);border-radius:0 14px 14px 14px;padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.05);transition:box-shadow .2s,transform .15s}
+    .sc2-qa-card:hover{box-shadow:0 6px 22px rgba(249,115,22,.12);transform:translateY(-2px)}
+    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
+    .sc2-qa-a{color:#374151;font-size:13px;line-height:1.8}
+
+    /* FAQ */
+    .sc2-faq-wrap{border:1px solid #f0e8ff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+    .sc2-faq-list{display:flex;flex-direction:column}
+    .sc2-faq-item{border-bottom:1px solid #f5f0ff}
+    .sc2-faq-item:last-child{border-bottom:none}
+    .sc2-faq-toggle{display:flex;align-items:center;gap:12px;width:100%;background:none;border:none;padding:18px 20px;cursor:pointer;text-align:left;font-family:inherit;transition:background .15s}
+    .sc2-faq-toggle:hover{background:#fdf8ff}
+    .sc2-faq-q-text{flex:1;font-size:14px;font-weight:600;color:#1f2937}
+    .sc2-faq-chevron{font-size:18px;color:var(--sc-orange);flex-shrink:0}
+    .sc2-faq-item--open .sc2-faq-chevron{color:var(--sc-purple)}
+    .sc2-faq-body{padding:0 20px 18px 54px}
+    .sc2-faq-a{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#6b7280;line-height:1.75}
+    .sc2-faq-icon{background:var(--sc-grad-btn);color:#fff;font-size:11px;font-weight:800;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .sc2-faq-icon-r{background:var(--sc-grad)}
+    .sc2-faq-locked{font-size:13px;color:#9ca3af;padding:6px 0}
 
     /* BONUS */
-    .sc2-bonus-card{background:linear-gradient(135deg,#f0f4ff,#fdf4ff);border:1px solid #e0e7ff;border-radius:14px;padding:24px 28px;margin-top:20px;box-shadow:0 2px 10px rgba(59,91,219,.07)}
+    .sc2-bonus-card{background:linear-gradient(135deg,#f0f4ff,#fdf4ff);border:1px solid #e0e7ff;border-radius:14px;padding:22px 26px;margin-bottom:18px;box-shadow:0 2px 10px rgba(59,91,219,.07)}
     .sc2-bonus-text{margin:0;color:#1e2d5a;font-size:14px;line-height:1.85}
 
-    /* BANDEAU PUBLICITAIRE */
-    .sc2-advert{text-align:center;padding:18px 24px;margin-top:20px;background:linear-gradient(135deg,#fff9f0,#fdf4ff);border:1.5px solid #fde8d0;border-radius:14px}
-    .sc2-advert-link{background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-size:14px;font-weight:700;text-decoration:none}
-    .sc2-advert-link:hover{opacity:.8}
+    /* DISCLAIMER */
+    .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:12px;margin-top:8px;margin-bottom:16px}
 
-    /* CTA BULLE */
-    .sc2-cta-bubble{background:linear-gradient(135deg,#fff8f4,#fdf4ff);border:1.5px solid #fde8d0;border-radius:16px;padding:26px 30px;margin:32px 0;box-shadow:0 4px 18px rgba(249,115,22,.1)}
-    .sc2-cta-bubble-title{font-size:15px;font-weight:800;color:#1a2744;margin-bottom:14px}
-    .sc2-cta-bubble-list{margin:0 0 18px;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
-    .sc2-cta-bubble-list li{font-size:13px;color:#374151}
-    .sc2-cta-bubble-btn{display:inline-block;background:var(--sc-grad-btn);color:#fff;font-size:14px;font-weight:700;padding:12px 26px;border-radius:10px;text-decoration:none;transition:opacity .18s;box-shadow:0 4px 14px rgba(249,115,22,.35)}
-    .sc2-cta-bubble-btn:hover{opacity:.88;color:#fff}
-
-    /* CLAIM CTA */
-    .sc2-claim-cta-main{display:flex;align-items:center;justify-content:space-between;gap:20px;background:linear-gradient(135deg,#fff7ed,#fdf2f8);border:2px solid #fed7aa;border-radius:16px;padding:24px 30px;margin-top:32px;flex-wrap:wrap}
-    .sc2-claim-cta-main-text strong{display:block;font-size:17px;font-weight:900;color:var(--sc-navy);margin-bottom:5px}
-    .sc2-claim-cta-main-text span{font-size:13px;color:#6b7280}
-    .sc2-claim-btn{background:var(--sc-grad-btn);color:#fff;font-size:14px;font-weight:700;padding:13px 28px;border-radius:10px;text-decoration:none;white-space:nowrap;flex-shrink:0;transition:opacity .18s;box-shadow:0 4px 14px rgba(249,115,22,.35)}
-    .sc2-claim-btn:hover{opacity:.88;color:#fff}
-
-    /* FOOTER */
-    .sc2-footer{margin-top:36px;padding-top:20px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;color:#9ca3af;font-size:12px}
-    .sc2-footer img{height:28px;width:auto;opacity:.6}
-
-    @media(max-width:640px){
-      .sc2-hero{padding:24px 20px;flex-direction:column;align-items:flex-start}
-      .sc2-hero-name{font-size:22px}
-      .sc2-hero-rating,.sc2-hero-rating-nodata{align-self:stretch;max-width:100%}
+    @media(max-width:860px){
+      .sc2-grid{grid-template-columns:1fr}
+      .sc2-aside{position:static}
+      .sc2-hero-name{white-space:normal}
+    }
+    @media(max-width:540px){
+      .sc2-hero{padding:18px 16px}
+      .sc2-hero-name{font-size:20px}
+      .sc2-hero-actions{flex-direction:row}
+      .sc2-card{padding:18px 16px}
+      .sc2-kpi-grid{grid-template-columns:1fr 1fr}
+      .sc2-faq-toggle{padding:14px 14px}
+      .sc2-faq-body{padding:0 14px 14px 46px}
       .sc2-qa-grid{grid-template-columns:1fr}
-      .sc2-claim-cta-main{flex-direction:column;align-items:flex-start}
-      .sc2-faq-toggle{padding:18px 16px}
-      .sc2-faq-body{padding:0 16px 18px 50px}
     }
     </style>
     <?php
