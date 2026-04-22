@@ -109,3 +109,27 @@ def download_plugin():
         media_type="application/zip",
         headers={"Content-Disposition": "attachment; filename=societies-connector.zip"},
     )
+
+
+def _build_theme_zip() -> io.BytesIO:
+    theme_dir = Path(__file__).parent.parent / "wordpress" / "topsocietes-theme"
+    if not theme_dir.exists():
+        raise HTTPException(status_code=404, detail="Thème introuvable sur ce serveur")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in theme_dir.rglob("*"):
+            if f.is_file():
+                zf.write(f, f"topsocietes-theme/{f.relative_to(theme_dir)}")
+    buf.seek(0)
+    return buf
+
+
+@router.get("/theme/download", dependencies=[Depends(require_admin)])
+def download_theme():
+    """Télécharge le ZIP du thème topsocietes-theme (réservé aux admins)."""
+    buf = _build_theme_zip()
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=topsocietes-theme.zip"},
+    )
