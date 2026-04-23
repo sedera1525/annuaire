@@ -123,7 +123,7 @@ $score_deg = round( $score * 3.6 );
                         🌐 <?php esc_html_e( 'Visiter le site', 'topsocietes' ); ?>
                     </a>
                 <?php endif; ?>
-                <a href="<?php echo esc_url( home_url( '/tarifs/' ) ); ?>" class="ts-btn-secondary" style="font-size:13px;padding:10px 20px">
+                <a href="<?php echo esc_url( home_url( '/pack/' ) ); ?>" class="ts-btn-secondary" style="font-size:13px;padding:10px 20px">
                     <?php esc_html_e( 'Accès complet', 'topsocietes' ); ?>
                 </a>
             </div>
@@ -311,7 +311,7 @@ $score_deg = round( $score * 3.6 );
                     <p style="font-size:13px;margin-bottom:18px;opacity:.8;line-height:1.6">
                         <?php esc_html_e( 'Accédez aux bilans complets, actionnaires, procédures judiciaires et bien plus.', 'topsocietes' ); ?>
                     </p>
-                    <a href="<?php echo esc_url( home_url( '/tarifs/' ) ); ?>" class="ts-btn-primary" style="width:100%;justify-content:center">
+                    <a href="<?php echo esc_url( home_url( '/pack/' ) ); ?>" class="ts-btn-primary" style="width:100%;justify-content:center">
                         <?php esc_html_e( 'Débloquer les données', 'topsocietes' ); ?>
                     </a>
                 </div>

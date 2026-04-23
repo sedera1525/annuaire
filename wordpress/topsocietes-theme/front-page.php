@@ -12,7 +12,7 @@ $defaults = [
         'accent'   => __( 'efficaces, transparentes et abordables', 'topsocietes' ),
         'desc'     => __( 'Pour développer vos activités à l\'international. Création de sociétés, introductions bancaires et structures optimisées dans les principales juridictions mondiales.', 'topsocietes' ),
         'btn_text' => __( 'Créer ma société →', 'topsocietes' ),
-        'btn_url'  => '/tarifs/',
+        'btn_url'  => '/pack/',
     ],
     [
         'badge'    => '',
@@ -20,7 +20,7 @@ $defaults = [
         'accent'   => __( 'accompagne les entrepreneurs', 'topsocietes' ),
         'desc'     => __( 'dans la création ou l\'acquisition de sociétés étrangères, avec une approche claire : rendre l\'international accessible grâce à une tarification volontairement basse, sans compromis sur la conformité ni la qualité.', 'topsocietes' ),
         'btn_text' => __( 'Découvrir nos offres →', 'topsocietes' ),
-        'btn_url'  => '/tarifs/',
+        'btn_url'  => '/pack/',
     ],
     [
         'badge'    => __( 'Europe · Asie · USA — 0 % impôt société', 'topsocietes' ),
