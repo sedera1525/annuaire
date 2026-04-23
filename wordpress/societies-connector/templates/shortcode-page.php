@@ -6,8 +6,10 @@
  */
 if (!defined('ABSPATH')) exit;
 get_header();
+echo '<div class="ts-page">';
 while (have_posts()) {
     the_post();
     the_content();
 }
+echo '</div>';
 get_footer();
