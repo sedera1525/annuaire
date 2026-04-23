@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.33
+ * Version:      2.5.34
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.33');
+define('SC_VERSION', '2.5.34');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -2149,6 +2149,24 @@ add_action('wp_ajax_sc_bulk_create_batch', function() {
     ]);
 });
 
+// AJAX — lance la sync backend → WP en arrière-plan
+add_action('wp_ajax_sc_sync_wp_pages_start', function() {
+    check_ajax_referer('sc_sync_wp', 'nonce');
+    if (!current_user_can('manage_options')) wp_send_json_error('Non autorisé');
+    $result = sc_api('/api/generate/sync-wp-pages', 'POST');
+    if (!empty($result['error'])) wp_send_json_error($result['error']);
+    wp_send_json_success($result);
+});
+
+// AJAX — retourne l'état de la sync
+add_action('wp_ajax_sc_sync_wp_pages_status', function() {
+    check_ajax_referer('sc_sync_wp', 'nonce');
+    if (!current_user_can('manage_options')) wp_send_json_error('Non autorisé');
+    $result = sc_api('/api/generate/sync-wp-pages');
+    if (!empty($result['error'])) wp_send_json_error($result['error']);
+    wp_send_json_success($result);
+});
+
 // =============================================================================
 // ADMIN
 // =============================================================================
@@ -2948,6 +2966,10 @@ function sc_admin_fiches() {
         <button id="sc-bulk-btn" class="button button-primary" onclick="scBulkStart()">
           📄 Créer toutes les pages manquantes
         </button>
+        <button id="sc-sync-btn" class="button" onclick="scSyncStart()"
+                title="Lance la création de toutes les pages via le backend — tourne en arrière-plan, sans garder le navigateur ouvert">
+          🚀 Sync backend → WP (arrière-plan)
+        </button>
         <form method="post" style="display:inline"
               onsubmit="return confirm('Migrer les slugs des pages existantes vers /ville/métier/nom/ ? Cette opération est irréversible.')">
           <?php wp_nonce_field('sc_migrate_slugs'); ?>
@@ -3003,6 +3025,57 @@ function sc_admin_fiches() {
           .catch(function(e) {
             document.getElementById('sc-bulk-status').textContent = '❌ Erreur réseau';
             document.getElementById('sc-bulk-btn').disabled = false;
+          });
+      }
+
+      // ── Sync backend → WP (arrière-plan) ──────────────────────────────────
+      var scSyncTimer = null;
+      var scSyncNonce = '<?= wp_create_nonce('sc_sync_wp') ?>';
+      function scSyncStart() {
+        if (!confirm('Lancer la synchronisation backend → WP pour toutes les fiches ?\nLe processus tourne en arrière-plan sur le serveur — vous pouvez fermer cette page.')) return;
+        var btn = document.getElementById('sc-sync-btn');
+        btn.disabled = true;
+        document.getElementById('sc-bulk-status').textContent = 'Démarrage…';
+        document.getElementById('sc-bulk-bar').style.display = 'block';
+        var fd = new FormData();
+        fd.append('action', 'sc_sync_wp_pages_start');
+        fd.append('nonce', scSyncNonce);
+        fetch(ajaxurl, {method:'POST', body:fd})
+          .then(function(r){ return r.json(); })
+          .then(function(res) {
+            if (!res.success) {
+              document.getElementById('sc-bulk-status').textContent = '❌ ' + res.data;
+              btn.disabled = false;
+              return;
+            }
+            document.getElementById('sc-bulk-status').textContent =
+              'Sync démarrée — ' + (res.data.total || '?') + ' fiches à traiter…';
+            scSyncTimer = setInterval(scSyncPoll, 4000);
+          })
+          .catch(function() {
+            document.getElementById('sc-bulk-status').textContent = '❌ Erreur réseau';
+            btn.disabled = false;
+          });
+      }
+      function scSyncPoll() {
+        var fd = new FormData();
+        fd.append('action', 'sc_sync_wp_pages_status');
+        fd.append('nonce', scSyncNonce);
+        fetch(ajaxurl, {method:'POST', body:fd})
+          .then(function(r){ return r.json(); })
+          .then(function(res) {
+            if (!res.success) return;
+            var d = res.data;
+            var pct = d.total ? Math.min(100, Math.round((d.done + d.errors) / d.total * 100)) : 0;
+            document.getElementById('sc-bulk-fill').style.width = pct + '%';
+            document.getElementById('sc-bulk-status').textContent =
+              '✅ ' + d.done + ' créées · ❌ ' + d.errors + ' erreurs · ' + pct + '% (' + d.total + ' total)';
+            if (!d.running && d.finished) {
+              clearInterval(scSyncTimer);
+              document.getElementById('sc-sync-btn').disabled = false;
+              document.getElementById('sc-bulk-status').textContent =
+                '✅ Terminé — ' + d.done + ' pages créées, ' + d.errors + ' erreurs.';
+            }
           });
       }
       </script>

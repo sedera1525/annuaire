@@ -419,6 +419,74 @@ async def fix_existing_intros(data: dict = Body(default={})):
 
 
 # =============================================================================
+# SYNC BULK — crée les pages WP pour toutes les fiches sans page
+# =============================================================================
+
+_sync_wp_state: dict = {"running": False, "done": 0, "errors": 0, "total": 0, "finished": False}
+
+@router.post("/generate/sync-wp-pages", dependencies=[Depends(require_admin)])
+async def sync_wp_pages_start(data: dict = Body(default={})):
+    """
+    Lance en arrière-plan la création des pages WP pour toutes les fiches status=done.
+    Appeler GET /generate/sync-wp-pages pour suivre la progression.
+    """
+    import asyncio as _aio
+    if _sync_wp_state["running"]:
+        return {"status": "already_running", **_sync_wp_state}
+
+    concurrency = min(int(data.get("concurrency", 10)), 30)
+
+    async def _run():
+        _sync_wp_state.update({"running": True, "done": 0, "errors": 0, "total": 0, "finished": False})
+        conn = sqlite3.connect(FICHES_DB)
+        try:
+            rows = conn.execute(
+                "SELECT company_title FROM fiches WHERE status='done' ORDER BY id ASC"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        titles = [r[0] for r in rows if r[0]]
+        _sync_wp_state["total"] = len(titles)
+
+        sem = _aio.Semaphore(concurrency)
+
+        async def _sync_one(title: str):
+            async with sem:
+                try:
+                    import httpx as _httpx
+                    wp_url    = os.getenv("WP_SITE_URL", "").rstrip("/")
+                    wp_secret = os.getenv("WP_API_PASSWORD", "")
+                    if not wp_url or not wp_secret:
+                        return
+                    r = await _httpx.AsyncClient(timeout=10).post(
+                        f"{wp_url}/wp-json/sc/v1/sync-fiche",
+                        json={"title": title},
+                        headers={"X-SC-Secret": wp_secret},
+                    )
+                    if r.status_code in (200, 201):
+                        _sync_wp_state["done"] += 1
+                    else:
+                        _sync_wp_state["errors"] += 1
+                except Exception:
+                    _sync_wp_state["errors"] += 1
+
+        await _aio.gather(*[_sync_one(t) for t in titles])
+        _sync_wp_state.update({"running": False, "finished": True})
+        logger.info(f"sync-wp-pages terminé : {_sync_wp_state['done']} ok / {_sync_wp_state['errors']} erreurs")
+
+    import asyncio as _aio
+    _aio.create_task(_run())
+    return {"status": "started", "total": _sync_wp_state["total"]}
+
+
+@router.get("/generate/sync-wp-pages", dependencies=[Depends(require_admin)])
+def sync_wp_pages_status():
+    """Retourne l'état courant de la synchronisation WP pages."""
+    return _sync_wp_state
+
+
+# =============================================================================
 # GESTION DU PROMPT DE GÉNÉRATION
 # =============================================================================
 
