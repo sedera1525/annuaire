@@ -24,20 +24,31 @@ _EXCLUDED_KEYWORDS = [
     # Lieux de culte
     "church", "mosque", "temple", "synagogue", "worship", "cathedral",
     "chapel", "parish", "eglise", "église", "mosquée", "culte",
-    "religious", "religion",
+    "religious", "religion", "abbaye", "couvent", "prieuré",
+    "lieu de culte", "place of worship",
     # Établissements publics / administrations
     "city hall", "town hall", "mairie", "prefecture", "préfecture",
-    "government", "administration", "dgfip", "ddpp", "impot", "impôt",
-    "tax office", "trésor public", "caf ", "pôle emploi", "pole emploi",
-    # Santé publique
-    "hospital", "hopital", "hôpital", "clinic", "clinique",
-    "emergency room", "urgence", "chu ", "chru", "aphp",
+    "sous-préfecture", "sous-prefecture",
+    "government", "gouvernement", "ministère", "ministere",
+    "administration", "service public", "établissement public",
+    "dgfip", "dgddi", "ddpp", "direccte", "dreal", "drfip",
+    "impot", "impôt", "tax office", "trésor public", "tresor public",
+    "caf ", "cpam", "urssaf", "rsi ", "msa ", "carsat",
+    "pôle emploi", "pole emploi", "france travail",
+    "tribunal", "cour d'appel", "cour de cassation", "conseil d'etat",
+    "prud'hommes", "prud'homme",
+    "sénat", "senat", "assemblée nationale", "assemblee nationale",
+    "préfet", "prefet", "sous-prefet", "sous-préfet",
+    # Santé publique (hôpitaux publics uniquement)
+    "hospital", "hopital", "hôpital", "emergency room",
+    "urgence", "chu ", "chru", "aphp", "centre hospitalier",
     # Forces de l'ordre
     "police", "gendarmerie", "commissariat", "fire station",
-    "firefighter", "pompier", "brigade",
+    "firefighter", "pompier", "brigade", "sdis ",
     # Syndicats / partis politiques
     "syndicat", "trade union", "labor union", "political party",
-    "parti politique", "cgt", "cfdt", "fo ", "cfe-cgc",
+    "parti politique", "cgt", "cfdt", "cfe-cgc", "unsa ",
+    "solidaires", "fsu ", "unef ", "medef", "cpme",
 ]
 
 

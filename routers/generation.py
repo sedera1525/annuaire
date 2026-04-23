@@ -54,6 +54,16 @@ def _notify_wp_create_page(title: str) -> None:
 
 async def stream_generate(title: str, company_data: dict):
     """Async generator — SSE temps réel pour une génération unique."""
+    category = company_data.get("category")
+    if not category:
+        company_row = fetch_company(title)
+        if company_row:
+            category = company_row.get("category")
+    if is_excluded_category(category):
+        logger.info(f"Fiche exclue (stream, catégorie non éligible) : {title} — {category}")
+        yield sse("excluded", message="Catégorie non éligible à la génération")
+        return
+
     api_key = get_openai_key()
     if not api_key:
         yield sse("error", message="Clé API OpenAI manquante dans .env")
@@ -197,6 +207,15 @@ def get_fiche_endpoint(title: str):
 @limiter.limit("30/minute")
 async def generate_fiche(request: Request, data: GenerateRequest):
     title    = data.title.strip()
+    category = data.category
+    # Si la catégorie n'est pas fournie dans la requête, on la récupère depuis la base
+    if not category:
+        company_row = fetch_company(title)
+        if company_row:
+            category = company_row.get("category")
+    if is_excluded_category(category):
+        logger.info(f"Fiche exclue (catégorie non éligible) : {title} — {category}")
+        return {"status": "excluded", "title": title, "reason": "Catégorie non éligible à la génération"}
     existing = get_fiche(title)
     if existing and existing["status"] == "done":
         try:

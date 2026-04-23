@@ -43,10 +43,10 @@ function topsocietes_footer_col1_fallback(): void {
 
 function topsocietes_footer_col2_fallback(): void {
     $links = [
-        __( 'Nos packs', 'topsocietes' )           => '/pack/',
-        __( 'Pack Premium', 'topsocietes' )         => '/pack/#premium',
-        __( 'Introduction HSBC', 'topsocietes' )    => '/pack/#hsbc',
-        __( 'API Entreprises', 'topsocietes' )      => '/pack/#api',
+        __( 'Nos tarifs', 'topsocietes' )           => '/tarifs/',
+        __( 'Pack Premium', 'topsocietes' )         => '/tarifs/#premium',
+        __( 'Introduction HSBC', 'topsocietes' )    => '/tarifs/#hsbc',
+        __( 'API Entreprises', 'topsocietes' )      => '/tarifs/#api',
     ];
     echo '<ul class="ts-footer-links">';
     foreach ( $links as $label => $path ) {

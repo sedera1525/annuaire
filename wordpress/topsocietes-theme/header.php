@@ -42,7 +42,7 @@ function topsocietes_primary_menu_fallback(): void {
     echo '<ul class="ts-nav-menu">';
     echo '<li><a href="' . esc_url( home_url( '/' ) ) . '">' . esc_html__( 'Accueil', 'topsocietes' ) . '</a></li>';
     echo '<li><a href="' . esc_url( home_url( '/recherche/' ) ) . '">' . esc_html__( 'Recherche', 'topsocietes' ) . '</a></li>';
-    echo '<li><a href="' . esc_url( home_url( '/pack/' ) ) . '">' . esc_html__( 'Pack', 'topsocietes' ) . '</a></li>';
+    echo '<li><a href="' . esc_url( home_url( '/tarifs/' ) ) . '">' . esc_html__( 'Tarifs', 'topsocietes' ) . '</a></li>';
     echo '<li><a href="' . esc_url( home_url( '/a-propos/' ) ) . '">' . esc_html__( 'À propos', 'topsocietes' ) . '</a></li>';
     echo '</ul>';
 }
