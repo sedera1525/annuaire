@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.32
+ * Version:      2.5.33
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.32');
+define('SC_VERSION', '2.5.33');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1652,7 +1652,7 @@ add_shortcode('societies_fiche', function($atts) {
               <li>✓ Contrôler votre présentation</li>
               <li>✓ Booster votre business</li>
             </ul>
-            <a href="<?= esc_url($claim_url) ?>" class="sc2-aside-cta-btn">Gérer gratuitement ma fiche →</a>
+            <span class="sc2-aside-cta-btn">Gérer gratuitement ma fiche</span>
           </div>
 
           <!-- Revendiquer -->
