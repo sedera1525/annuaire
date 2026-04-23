@@ -5,7 +5,7 @@
 get_header();
 ?>
 <style>
-.ts-prose-page{max-width:820px;margin:48px auto 80px;padding:0 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
+.ts-prose-page{max-width:820px;margin:5% auto 80px;padding:0 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
 .ts-prose-page h1{font-size:32px;font-weight:800;color:#111827;margin:0 0 24px;line-height:1.2;border-bottom:3px solid #f0f4ff;padding-bottom:16px}
 .ts-prose-page h2{font-size:22px;font-weight:700;color:#1e3a8a;margin:36px 0 12px}
 .ts-prose-page h3{font-size:17px;font-weight:700;color:#374151;margin:28px 0 10px}
