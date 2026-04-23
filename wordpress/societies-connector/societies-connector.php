@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.34
+ * Version:      2.5.35
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.34');
+define('SC_VERSION', '2.5.35');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1472,8 +1472,87 @@ add_shortcode('societies_fiche', function($atts) {
     $score_deg     = round($score_display * 3.6);
     $tarifs_url    = home_url('/pack/');
 
+    // Breadcrumb — région et département déduits du code postal
+    $zip       = $company['zip_code'] ?? '';
+    $dept_code = '';
+    if ($zip) {
+        $dept_code = (substr($zip, 0, 2) === '97' || substr($zip, 0, 2) === '98')
+                     ? substr($zip, 0, 3)
+                     : substr($zip, 0, 2);
+    }
+    $depts = [
+        '01'=>['Ain','Auvergne-Rhône-Alpes'],'02'=>['Aisne','Hauts-de-France'],
+        '03'=>['Allier','Auvergne-Rhône-Alpes'],'04'=>['Alpes-de-Haute-Provence','Provence-Alpes-Côte d\'Azur'],
+        '05'=>['Hautes-Alpes','Provence-Alpes-Côte d\'Azur'],'06'=>['Alpes-Maritimes','Provence-Alpes-Côte d\'Azur'],
+        '07'=>['Ardèche','Auvergne-Rhône-Alpes'],'08'=>['Ardennes','Grand Est'],
+        '09'=>['Ariège','Occitanie'],'10'=>['Aube','Grand Est'],
+        '11'=>['Aude','Occitanie'],'12'=>['Aveyron','Occitanie'],
+        '13'=>['Bouches-du-Rhône','Provence-Alpes-Côte d\'Azur'],'14'=>['Calvados','Normandie'],
+        '15'=>['Cantal','Auvergne-Rhône-Alpes'],'16'=>['Charente','Nouvelle-Aquitaine'],
+        '17'=>['Charente-Maritime','Nouvelle-Aquitaine'],'18'=>['Cher','Centre-Val de Loire'],
+        '19'=>['Corrèze','Nouvelle-Aquitaine'],'2A'=>['Corse-du-Sud','Corse'],
+        '2B'=>['Haute-Corse','Corse'],'21'=>['Côte-d\'Or','Bourgogne-Franche-Comté'],
+        '22'=>['Côtes-d\'Armor','Bretagne'],'23'=>['Creuse','Nouvelle-Aquitaine'],
+        '24'=>['Dordogne','Nouvelle-Aquitaine'],'25'=>['Doubs','Bourgogne-Franche-Comté'],
+        '26'=>['Drôme','Auvergne-Rhône-Alpes'],'27'=>['Eure','Normandie'],
+        '28'=>['Eure-et-Loir','Centre-Val de Loire'],'29'=>['Finistère','Bretagne'],
+        '30'=>['Gard','Occitanie'],'31'=>['Haute-Garonne','Occitanie'],
+        '32'=>['Gers','Occitanie'],'33'=>['Gironde','Nouvelle-Aquitaine'],
+        '34'=>['Hérault','Occitanie'],'35'=>['Ille-et-Vilaine','Bretagne'],
+        '36'=>['Indre','Centre-Val de Loire'],'37'=>['Indre-et-Loire','Centre-Val de Loire'],
+        '38'=>['Isère','Auvergne-Rhône-Alpes'],'39'=>['Jura','Bourgogne-Franche-Comté'],
+        '40'=>['Landes','Nouvelle-Aquitaine'],'41'=>['Loir-et-Cher','Centre-Val de Loire'],
+        '42'=>['Loire','Auvergne-Rhône-Alpes'],'43'=>['Haute-Loire','Auvergne-Rhône-Alpes'],
+        '44'=>['Loire-Atlantique','Pays de la Loire'],'45'=>['Loiret','Centre-Val de Loire'],
+        '46'=>['Lot','Occitanie'],'47'=>['Lot-et-Garonne','Nouvelle-Aquitaine'],
+        '48'=>['Lozère','Occitanie'],'49'=>['Maine-et-Loire','Pays de la Loire'],
+        '50'=>['Manche','Normandie'],'51'=>['Marne','Grand Est'],
+        '52'=>['Haute-Marne','Grand Est'],'53'=>['Mayenne','Pays de la Loire'],
+        '54'=>['Meurthe-et-Moselle','Grand Est'],'55'=>['Meuse','Grand Est'],
+        '56'=>['Morbihan','Bretagne'],'57'=>['Moselle','Grand Est'],
+        '58'=>['Nièvre','Bourgogne-Franche-Comté'],'59'=>['Nord','Hauts-de-France'],
+        '60'=>['Oise','Hauts-de-France'],'61'=>['Orne','Normandie'],
+        '62'=>['Pas-de-Calais','Hauts-de-France'],'63'=>['Puy-de-Dôme','Auvergne-Rhône-Alpes'],
+        '64'=>['Pyrénées-Atlantiques','Nouvelle-Aquitaine'],'65'=>['Hautes-Pyrénées','Occitanie'],
+        '66'=>['Pyrénées-Orientales','Occitanie'],'67'=>['Bas-Rhin','Grand Est'],
+        '68'=>['Haut-Rhin','Grand Est'],'69'=>['Rhône','Auvergne-Rhône-Alpes'],
+        '70'=>['Haute-Saône','Bourgogne-Franche-Comté'],'71'=>['Saône-et-Loire','Bourgogne-Franche-Comté'],
+        '72'=>['Sarthe','Pays de la Loire'],'73'=>['Savoie','Auvergne-Rhône-Alpes'],
+        '74'=>['Haute-Savoie','Auvergne-Rhône-Alpes'],'75'=>['Paris','Île-de-France'],
+        '76'=>['Seine-Maritime','Normandie'],'77'=>['Seine-et-Marne','Île-de-France'],
+        '78'=>['Yvelines','Île-de-France'],'79'=>['Deux-Sèvres','Nouvelle-Aquitaine'],
+        '80'=>['Somme','Hauts-de-France'],'81'=>['Tarn','Occitanie'],
+        '82'=>['Tarn-et-Garonne','Occitanie'],'83'=>['Var','Provence-Alpes-Côte d\'Azur'],
+        '84'=>['Vaucluse','Provence-Alpes-Côte d\'Azur'],'85'=>['Vendée','Pays de la Loire'],
+        '86'=>['Vienne','Nouvelle-Aquitaine'],'87'=>['Haute-Vienne','Nouvelle-Aquitaine'],
+        '88'=>['Vosges','Grand Est'],'89'=>['Yonne','Bourgogne-Franche-Comté'],
+        '90'=>['Territoire de Belfort','Bourgogne-Franche-Comté'],'91'=>['Essonne','Île-de-France'],
+        '92'=>['Hauts-de-Seine','Île-de-France'],'93'=>['Seine-Saint-Denis','Île-de-France'],
+        '94'=>['Val-de-Marne','Île-de-France'],'95'=>['Val-d\'Oise','Île-de-France'],
+        '971'=>['Guadeloupe','Guadeloupe'],'972'=>['Martinique','Martinique'],
+        '973'=>['Guyane','Guyane'],'974'=>['La Réunion','La Réunion'],'976'=>['Mayotte','Mayotte'],
+    ];
+    $dept_name = $depts[$dept_code][0] ?? '';
+    $region    = $depts[$dept_code][1] ?? '';
+    $city_name = $company['city'] ?? '';
+    $cat_name  = $company['category'] ?? '';
+    $city_url  = $city_name ? home_url('/' . sanitize_title($city_name) . '/') : '';
+    $cat_url   = ($city_name && $cat_name) ? home_url('/' . sanitize_title($city_name) . '/' . sanitize_title($cat_name) . '/') : '';
+    $region_url = $region ? home_url('/recherche-entreprises/?region=' . urlencode($region)) : '';
+    $dept_url   = $dept_name ? home_url('/recherche-entreprises/?dept=' . urlencode($dept_code)) : '';
+
     ob_start(); ?>
     <div class="sc2-wrap">
+
+      <!-- BREADCRUMB -->
+      <nav class="sc2-breadcrumb" aria-label="Fil d'Ariane">
+        <a href="<?= esc_url(home_url('/')) ?>">Accueil</a>
+        <?php if ($region): ?><span>›</span><a href="<?= esc_url($region_url) ?>"><?= esc_html($region) ?></a><?php endif; ?>
+        <?php if ($dept_name): ?><span>›</span><a href="<?= esc_url($dept_url) ?>"><?= esc_html($dept_name) ?> (<?= esc_html($dept_code) ?>)</a><?php endif; ?>
+        <?php if ($city_name): ?><span>›</span><a href="<?= esc_url($city_url) ?>"><?= esc_html($city_name) ?><?= $zip ? ' (' . esc_html($zip) . ')' : '' ?></a><?php endif; ?>
+        <?php if ($cat_name): ?><span>›</span><a href="<?= esc_url($cat_url) ?>"><?= esc_html($cat_name) ?></a><?php endif; ?>
+        <span>›</span><span class="sc2-breadcrumb-current"><?= esc_html($company['title']) ?></span>
+      </nav>
 
       <!-- HERO -->
       <div class="sc2-hero">
@@ -1778,11 +1857,18 @@ add_shortcode('societies_fiche', function($atts) {
 
     /* Q&A ANALYSE */
     .sc2-card--analysis{padding:0;overflow:hidden}
+    .sc2-breadcrumb{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:13px;margin-bottom:16px;padding:10px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px}
+    .sc2-breadcrumb a{color:#1e3a8a;text-decoration:none;font-weight:500;transition:color .15s}
+    .sc2-breadcrumb a:hover{color:#F97316;text-decoration:underline}
+    .sc2-breadcrumb span{color:#9ca3af;font-size:12px}
+    .sc2-breadcrumb-current{color:#1f2937;font-weight:700}
+
     .sc2-analysis-header{background:#f8fafc;border-bottom:3px solid #3b82f6;padding:18px 24px}
     .sc2-analysis-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a}
-    .sc2-card--analysis .sc2-qa-grid{padding:24px;grid-template-columns:repeat(2,1fr);gap:24px}
+    .sc2-card--analysis .sc2-qa-grid{padding:24px;display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
     .sc2-qa-card{border:1.5px solid #e8edf5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 12px;padding:18px 20px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
-    .sc2-qa-card:nth-child(even){border-left-color:#3b82f6}
+    .sc2-qa-card:nth-child(2){border-left-color:#8b5cf6}
+    .sc2-qa-card:nth-child(3){grid-column:1 / -1;border-left-color:#3b82f6}
     .sc2-qa-card:hover{box-shadow:0 6px 20px rgba(59,130,246,.1);transform:translateY(-2px)}
     .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px;line-height:1.5}
     .sc2-qa-a{color:#374151;font-size:13px;line-height:1.8}
@@ -1821,6 +1907,8 @@ add_shortcode('societies_fiche', function($atts) {
       .sc2-faq-item{padding:12px 14px}
       .sc2-faq-body{padding-left:34px}
       .sc2-qa-grid{grid-template-columns:1fr}
+      .sc2-qa-card:nth-child(3){grid-column:1}
+      .sc2-breadcrumb{font-size:11px;padding:8px 12px}
     }
     </style>
     <?php
