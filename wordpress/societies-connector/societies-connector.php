@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.45
+ * Version:      2.5.46
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.45');
+define('SC_VERSION', '2.5.46');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1321,6 +1321,94 @@ add_shortcode('societies_categories', function($atts) {
     }
     return $html;
 });
+
+// =============================================================================
+// CRÉATION DE PAGE À LA DEMANDE — 404 → cherche l'entreprise → crée la page
+// =============================================================================
+add_action('template_redirect', function() {
+    if (!is_404()) return;
+
+    $path = trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '', '/');
+    if (!$path || pathinfo($path, PATHINFO_EXTENSION)) return; // skip fichiers statiques
+
+    $segments = array_values(array_filter(explode('/', $path)));
+    if (empty($segments) || count($segments) > 5) return;
+
+    $slug = end($segments);
+    if (strlen($slug) < 3 || strlen($slug) > 200) return;
+
+    // Cache négatif : évite de re-interroger l'API pour un slug inconnu
+    $cache_key = 'sc_404_' . md5($slug);
+    if (get_transient($cache_key) === 'miss') return;
+
+    // Vérifier d'abord si une page WP existe déjà avec ce slug
+    $by_slug = get_page_by_path($slug, OBJECT, 'page');
+    if ($by_slug && get_post_status($by_slug->ID) === 'publish') {
+        wp_redirect(get_permalink($by_slug->ID), 301);
+        exit;
+    }
+
+    // Chercher via meta _sc_company_title (slug → titre exact)
+    $slug_as_title = str_replace('-', ' ', rawurldecode($slug));
+    $meta_match    = get_posts([
+        'post_type'   => 'page',
+        'post_status' => 'publish',
+        'meta_key'    => '_sc_company_title',
+        'meta_value'  => $slug_as_title,
+        'numberposts' => 1,
+        'fields'      => 'ids',
+    ]);
+    if ($meta_match) {
+        wp_redirect(get_permalink($meta_match[0]), 301);
+        exit;
+    }
+
+    // Interroger l'API backend
+    $data        = sc_api('/api/search?q=' . rawurlencode($slug_as_title) . '&per_page=5');
+    $found_title = null;
+    foreach ($data['results'] ?? [] as $r) {
+        if (!empty($r['title']) && sanitize_title($r['title']) === $slug) {
+            $found_title = $r['title'];
+            break;
+        }
+    }
+
+    if (!$found_title) {
+        set_transient($cache_key, 'miss', HOUR_IN_SECONDS);
+        return;
+    }
+
+    // Vérifier une dernière fois via meta avec le titre exact trouvé
+    $meta2 = get_posts([
+        'post_type'   => 'page',
+        'post_status' => 'publish',
+        'meta_key'    => '_sc_company_title',
+        'meta_value'  => $found_title,
+        'numberposts' => 1,
+        'fields'      => 'ids',
+    ]);
+    if ($meta2) {
+        wp_redirect(get_permalink($meta2[0]), 301);
+        exit;
+    }
+
+    // Créer la page WP à la demande
+    $page_id = wp_insert_post([
+        'post_title'   => $found_title,
+        'post_status'  => 'publish',
+        'post_type'    => 'page',
+        'post_name'    => $slug,
+        'post_content' => '[societies_fiche title="' . esc_attr($found_title) . '"]',
+    ]);
+
+    if (!$page_id || is_wp_error($page_id)) return;
+
+    update_post_meta($page_id, '_sc_company_title', $found_title);
+    update_post_meta($page_id, '_wp_page_template', 'shortcode-page.php');
+
+    wp_redirect(get_permalink($page_id), 301);
+    exit;
+}, 1);
 
 // AJAX handler — public (nopriv)
 add_action('wp_ajax_sc_search',        'sc_search_ajax_handler');
