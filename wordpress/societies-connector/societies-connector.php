@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.43
+ * Version:      2.5.44
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.43');
+define('SC_VERSION', '2.5.44');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1769,7 +1769,7 @@ add_shortcode('societies_fiche', function($atts) {
 
       </div><!-- .sc2-grid -->
 
-      <div class="sc2-disclaimer">⭐ Note interne basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
+      <div class="sc2-disclaimer">⭐ Note basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
 
       <a href="https://www.topsocietes.com/" target="_blank" rel="noopener" class="sc2-cta-banner">
         <div class="sc2-cta-text">
@@ -1914,11 +1914,11 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-card--analysis .sc2-qa-grid{padding:24px;display:flex;flex-direction:column;gap:20px}
     .sc2-qa-card{border:1.5px solid rgba(249,115,22,.25);border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 12px;padding:18px 20px;background:rgba(249,115,22,.07);box-shadow:0 2px 8px rgba(249,115,22,.06);transition:box-shadow .2s,transform .15s}
     .sc2-qa-card:nth-child(2){border-color:rgba(139,92,246,.25);border-left-color:#8b5cf6;background:rgba(139,92,246,.07);box-shadow:0 2px 8px rgba(139,92,246,.06)}
-    .sc2-qa-card:nth-child(3){border-color:rgba(59,130,246,.25);border-left-color:#3b82f6;background:rgba(59,130,246,.07);box-shadow:0 2px 8px rgba(59,130,246,.06)}
+    .sc2-qa-card:nth-child(3){border-color:rgba(6,182,212,.25);border-left-color:#06B6D4;background:rgba(6,182,212,.07);box-shadow:0 2px 8px rgba(6,182,212,.06)}
     .sc2-qa-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.09)}
     .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--sc-orange);margin-bottom:10px;line-height:1.5}
     .sc2-qa-card:nth-child(2) .sc2-qa-q{color:#8b5cf6}
-    .sc2-qa-card:nth-child(3) .sc2-qa-q{color:#3b82f6}
+    .sc2-qa-card:nth-child(3) .sc2-qa-q{color:#06B6D4}
     .sc2-qa-a{color:#1f2937;font-size:13px;line-height:1.8}
 
     /* FAQ — affichage direct sans accordéon */
@@ -2475,7 +2475,7 @@ add_action('wp_footer', function() {
       <a href="<?= esc_url($l['url'] ?? '#') ?>"><?= esc_html($l['label'] ?? '') ?></a>
       <?php endforeach; ?>
     </div>
-    <div class="sc-site-footer-copy">© <?= $year ?> TOPsocietes.com — Tous droits réservés</div>
+    <div class="sc-site-footer-copy">© 2006–<?= $year ?> TOPsocietes.com — Tous droits réservés</div>
   </div>
 </div>
     <?php
