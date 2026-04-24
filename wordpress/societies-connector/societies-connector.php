@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.36
+ * Version:      2.5.37
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.36');
+define('SC_VERSION', '2.5.37');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1588,7 +1588,7 @@ add_shortcode('societies_fiche', function($atts) {
               <?php if ($half)                       echo '<span class="sc2-star sc2-star--half">★</span>'; ?>
               <?php for ($i = 0; $i < $empty; $i++) echo '<span class="sc2-star sc2-star--empty">★</span>'; ?>
             </div>
-            <div class="sc2-hrb-label"><?= $votes ? number_format($votes, 0, ',', ' ') . ' avis' : 'Note clients' ?></div>
+            <div class="sc2-hrb-label">Note interne</div>
           <?php else: ?>
             <div class="sc2-hrb-nodata">
               <div class="sc2-hrb-nodata-stars">☆☆☆☆☆</div>
@@ -1931,13 +1931,24 @@ add_shortcode('societies_fiche', function($atts) {
       .sc2-grid{grid-template-columns:1fr}
       .sc2-aside{position:static}
       .sc2-hero-name{white-space:normal}
+      /* Hero : info à gauche, rating compact à droite */
+      .sc2-hero{align-items:flex-start}
+      .sc2-hero-rating-box{padding:14px 16px;min-width:120px}
+      .sc2-hrb-score{font-size:34px}
+      .sc2-star{font-size:16px}
     }
     @media(max-width:540px){
-      .sc2-hero{padding:18px 16px}
+      .sc2-hero{padding:16px;flex-direction:column;gap:16px}
+      .sc2-hero-left{width:100%}
       .sc2-hero-name{font-size:20px}
-      .sc2-hero-actions{flex-direction:row}
-      .sc2-hero-rating-box{flex-direction:row;min-width:unset;padding:12px 16px;gap:12px;border-radius:12px;justify-content:center}
-      .sc2-card{padding:18px 16px}
+      /* Rating devient une bande horizontale compacte */
+      .sc2-hero-rating-box{flex-direction:row;width:100%;min-width:unset;padding:12px 16px;gap:14px;border-radius:12px;justify-content:center;align-items:center}
+      .sc2-hrb-score{font-size:28px;line-height:1}
+      .sc2-hrb-stars{gap:1px}
+      .sc2-star{font-size:18px}
+      .sc2-hrb-label{margin-top:0;font-size:10px}
+      .sc2-hrb-nodata{flex-direction:row;gap:10px}
+      .sc2-card{padding:16px}
       .sc2-kpi-grid{grid-template-columns:1fr 1fr}
       .sc2-faq-item{padding:12px 14px}
       .sc2-faq-body{padding-left:34px}
