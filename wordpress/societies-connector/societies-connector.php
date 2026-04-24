@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.39
+ * Version:      2.5.40
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.39');
+define('SC_VERSION', '2.5.40');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1557,7 +1557,6 @@ add_shortcode('societies_fiche', function($atts) {
       <!-- HERO -->
       <div class="sc2-hero">
         <div class="sc2-hero-left">
-          <div class="sc2-hero-badge"><?= esc_html($sc2_init) ?></div>
           <div class="sc2-hero-info">
             <div class="sc2-hero-badges">
               <span class="sc2-badge sc2-badge--active">✓ En activité</span>
@@ -1565,11 +1564,6 @@ add_shortcode('societies_fiche', function($atts) {
               <?php if ($owner_sub): ?><span class="sc2-badge sc2-badge--premium">⭐ PREMIUM</span><?php endif; ?>
             </div>
             <h1 class="sc2-hero-name"><?= esc_html($company['title']) ?></h1>
-            <div class="sc2-hero-meta">
-              <?php if (!empty($company['category'])): ?><span>🏭 <?= esc_html($company['category']) ?></span><?php endif; ?>
-              <?php if ($date_creation): ?><span>📅 Depuis <?= esc_html(substr($date_creation, 0, 4)) ?></span><?php endif; ?>
-              <?php if ($siren): ?><span>🔢 SIREN <?= esc_html($siren) ?></span><?php endif; ?>
-            </div>
             <?php
               $hc_street  = trim($company['addr_street'] ?? '');
               $hc_city    = trim($company['city'] ?? '');
@@ -1579,19 +1573,14 @@ add_shortcode('societies_fiche', function($atts) {
               $hc_address = $hc_street ? $hc_street . ($hc_city ? ', ' . $hc_zip . ' ' . $hc_city : '') : ($hc_city ? $hc_zip . ' ' . $hc_city : '');
               $hc_url     = $hc_domain ? (preg_match('#^https?://#', $hc_domain) ? $hc_domain : 'https://' . $hc_domain) : '';
             ?>
-            <?php if ($hc_address || $hc_phone || $hc_url): ?>
-            <div class="sc2-hero-contact">
-              <?php if ($hc_address): ?>
-              <div class="sc2-hc-item"><span class="sc2-hc-icon">📍</span><span class="sc2-hc-val"><?= esc_html($hc_address) ?></span></div>
-              <?php endif; ?>
-              <?php if ($hc_phone): ?>
-              <div class="sc2-hc-item"><span class="sc2-hc-icon">📞</span><a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $hc_phone)) ?>" class="sc2-hc-link"><?= esc_html($hc_phone) ?></a></div>
-              <?php endif; ?>
-              <?php if ($hc_url): ?>
-              <div class="sc2-hc-item"><span class="sc2-hc-icon">🌐</span><a href="<?= esc_url($hc_url) ?>" target="_blank" rel="noopener" class="sc2-hc-link"><?= esc_html($hc_domain) ?></a></div>
-              <?php endif; ?>
+            <div class="sc2-hero-meta">
+              <?php if (!empty($company['category'])): ?><span>🏭 <?= esc_html($company['category']) ?></span><?php endif; ?>
+              <?php if ($hc_address): ?><span>📍 <?= esc_html($hc_address) ?></span><?php endif; ?>
+              <?php if ($hc_phone): ?><a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $hc_phone)) ?>" class="sc2-hm-link">📞 <?= esc_html($hc_phone) ?></a><?php endif; ?>
+              <?php if ($hc_url): ?><a href="<?= esc_url($hc_url) ?>" target="_blank" rel="noopener" class="sc2-hm-link sc2-hm-link--web">🌐 <?= esc_html($hc_domain) ?></a><?php endif; ?>
+              <?php if ($date_creation): ?><span>📅 Depuis <?= esc_html(substr($date_creation, 0, 4)) ?></span><?php endif; ?>
+              <?php if ($siren): ?><span>🔢 SIREN <?= esc_html($siren) ?></span><?php endif; ?>
             </div>
-            <?php endif; ?>
           </div>
         </div>
         <!-- RATING HERO -->
@@ -1604,15 +1593,15 @@ add_shortcode('societies_fiche', function($atts) {
               $half      = ($r_stars - $full) >= 0.5 ? 1 : 0;
               $empty     = 5 - $full - $half;
             ?>
+            <div class="sc2-hrb-score"><?= $r_display ?>/5</div>
             <div class="sc2-hrb-stars">
               <?php for ($i = 0; $i < $full;  $i++) echo '<span class="sc2-star sc2-star--full">★</span>'; ?>
               <?php if ($half)                       echo '<span class="sc2-star sc2-star--half">★</span>'; ?>
               <?php for ($i = 0; $i < $empty; $i++) echo '<span class="sc2-star sc2-star--empty">★</span>'; ?>
             </div>
-            <div class="sc2-hrb-score-row">
-              <span class="sc2-hrb-score"><?= $r_display ?>/5</span>
-              <?php if ($votes > 0): ?><span class="sc2-hrb-votes">(<?= number_format($votes, 0, ',', "\u{202F}") ?> avis)</span><?php endif; ?>
-            </div>
+            <?php if ($votes > 0): ?>
+            <div class="sc2-hrb-votes">(<?= number_format($votes, 0, ',', "\u{202F}") ?> avis)</div>
+            <?php endif; ?>
             <div class="sc2-hrb-label">Note interne</div>
           <?php else: ?>
             <div class="sc2-hrb-nodata">
@@ -1801,39 +1790,35 @@ add_shortcode('societies_fiche', function($atts) {
     /* HERO */
     .sc2-hero{background:linear-gradient(135deg,#fff8f4 0%,#fdf4ff 60%,#f0f4ff 100%);border-radius:20px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px;flex-wrap:wrap;border:1.5px solid #ede8ff;box-shadow:0 4px 28px rgba(139,92,246,.09);position:relative;overflow:hidden; margin-top: 5%}
     .sc2-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--sc-grad)}
-    .sc2-hero-left{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
-    .sc2-hero-badge{width:60px;height:60px;border-radius:14px;background:var(--sc-grad-btn);color:#fff;font-size:18px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:.5px}
-    .sc2-hero-info{flex:1;min-width:0}
+    .sc2-hero-left{flex:1;min-width:0}
+    .sc2-hero-info{min-width:0}
     .sc2-hero-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
     .sc2-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1.5px solid}
     .sc2-badge--active{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.25);color:#15803d}
     .sc2-badge--forme{background:#f0f4ff;border-color:#c7d2fe;color:#4338ca}
     .sc2-badge--premium{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.25);color:#b45309}
     .sc2-hero-name{margin:0 0 10px;font-size:26px;font-weight:900;color:var(--sc-navy);line-height:1.15;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .sc2-hero-meta{display:flex;flex-wrap:wrap;gap:6px}
-    .sc2-hero-meta span{color:#475569;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid #e8e0ff;font-weight:500}
+    .sc2-hero-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+    .sc2-hero-meta span,.sc2-hm-link{color:#475569;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid #e8e0ff;font-weight:500;text-decoration:none;white-space:nowrap}
+    .sc2-hm-link{color:var(--sc-orange);border-color:#fed7aa}
+    .sc2-hm-link:hover{background:#fff7ed}
+    .sc2-hm-link--web{color:#3b82f6;border-color:#bfdbfe}
+    .sc2-hm-link--web:hover{background:#eff6ff}
     .sc2-hero-actions{display:flex;flex-direction:column;gap:8px;flex-shrink:0;align-items:stretch}
     .sc2-btn-outline{display:inline-block;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;color:#374151;text-decoration:none;transition:border-color .15s;text-align:center}
     .sc2-btn-outline:hover{border-color:#6366f1;color:#4338ca}
-    .sc2-hero-contact{display:flex;flex-direction:column;gap:6px;margin-top:12px}
-    .sc2-hc-item{display:flex;align-items:baseline;gap:6px;font-size:13px;color:#374151;line-height:1.4}
-    .sc2-hc-icon{font-size:13px;flex-shrink:0}
-    .sc2-hc-val{color:#374151;font-weight:500;word-break:break-word}
-    .sc2-hc-link{color:var(--sc-orange);text-decoration:none;font-weight:600;word-break:break-all}
-    .sc2-hc-link:hover{text-decoration:underline}
-    .sc2-hero-rating-box{flex-shrink:0;background:#1a2744;border-radius:16px;padding:16px 20px;text-align:center;min-width:130px;max-width:160px;display:flex;flex-direction:column;align-items:center;gap:5px}
+    .sc2-hero-rating-box{flex-shrink:0;background:#1a2744;border-radius:16px;padding:18px 22px;text-align:center;min-width:130px;max-width:170px;display:flex;flex-direction:column;align-items:center;gap:6px}
+    .sc2-hrb-score{font-size:26px;font-weight:900;color:#fff;line-height:1}
     .sc2-hrb-stars{display:flex;gap:2px;justify-content:center}
     .sc2-star{font-size:18px}
     .sc2-star--full{color:#f59e0b}
     .sc2-star--half{color:#f59e0b;opacity:.65}
     .sc2-star--empty{color:#4b5563}
-    .sc2-hrb-score-row{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;justify-content:center}
-    .sc2-hrb-score{font-size:22px;font-weight:900;color:#fff;line-height:1}
-    .sc2-hrb-votes{font-size:11px;color:#94a3b8;font-weight:500}
-    .sc2-hrb-label{font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+    .sc2-hrb-votes{font-size:12px;color:#94a3b8;font-weight:400}
+    .sc2-hrb-label{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
     .sc2-hrb-nodata{display:flex;flex-direction:column;align-items:center;gap:5px}
     .sc2-hrb-nodata-stars{font-size:18px;color:#4b5563;letter-spacing:2px}
-    .sc2-hrb-nodata-label{font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:center}
+    .sc2-hrb-nodata-label{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
     .sc2-btn-primary-sm{display:inline-block;background:var(--sc-grad-btn);color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;text-decoration:none;text-align:center;box-shadow:0 3px 10px rgba(249,115,22,.3)}
     .sc2-btn-primary-sm:hover{opacity:.88;color:#fff}
 
@@ -1842,7 +1827,7 @@ add_shortcode('societies_fiche', function($atts) {
 
     /* CARDS MAIN */
     .sc2-main{display:flex;flex-direction:column;gap:0}
-    .sc2-card{background:#fff;border:1.5px solid #f0e8ff;border-radius:16px;padding:24px 28px;margin-bottom:18px;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+    .sc2-card{background:#fff;border:1.5px solid #f0e8ff;border-radius:16px;padding:24px 28px;margin-bottom:18px;box-shadow:0 2px 12px rgba(0,0,0,.05);text-align:justify;hyphens:auto}
     .sc2-card-title{font-size:16px;font-weight:800;color:var(--sc-navy);margin:0 0 18px;padding-bottom:12px;border-bottom:2px solid #f5f0ff}
 
     /* ASIDE */
@@ -1964,12 +1949,11 @@ add_shortcode('societies_fiche', function($atts) {
     @media(max-width:600px){
       .sc2-hero{padding:16px;flex-direction:column;gap:14px}
       .sc2-hero-left{width:100%}
-      .sc2-hero-name{font-size:20px}
-      .sc2-hero-rating-box{flex-direction:row;width:100%;max-width:100%;min-width:unset;padding:12px 16px;border-radius:12px;justify-content:center;align-items:center;gap:12px}
+      .sc2-hero-name{font-size:20px;white-space:normal}
+      .sc2-hero-rating-box{flex-direction:row;width:100%;max-width:100%;min-width:unset;padding:12px 16px;border-radius:12px;justify-content:center;align-items:center;gap:14px}
+      .sc2-hrb-score{font-size:20px}
       .sc2-hrb-stars{gap:2px}
       .sc2-star{font-size:16px}
-      .sc2-hrb-score-row{flex-direction:row;gap:4px}
-      .sc2-hrb-score{font-size:18px}
       .sc2-hrb-nodata{flex-direction:row;gap:8px}
       .sc2-card{padding:16px}
       .sc2-kpi-grid{grid-template-columns:1fr 1fr}
