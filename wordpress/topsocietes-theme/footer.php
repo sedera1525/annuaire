@@ -11,7 +11,7 @@
     <div class="ts-container">
         <div class="ts-footer-bottom">
             <?php topsocietes_logo( 28 ); ?>
-            <span class="ts-footer-copyright"><?php echo esc_html( ts_get_option( 'footer_copyright', '© 2006–2026 TOPsocietes.com — Tous droits réservés' ) ); ?></span>
+            <span class="ts-footer-copyright">© 2006–<?php echo date('Y'); ?> TOPsocietes.com — Tous droits réservés</span>
         </div>
     </div>
 </footer>
