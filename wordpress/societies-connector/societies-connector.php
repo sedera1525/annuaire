@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.37
+ * Version:      2.5.38
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.37');
+define('SC_VERSION', '2.5.38');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1577,17 +1577,21 @@ add_shortcode('societies_fiche', function($atts) {
         <div class="sc2-hero-rating-box">
           <?php if ($rating > 0): ?>
             <?php
-              $r      = round($rating * 2) / 2; // arrondi 0.5
-              $full   = floor($r);
-              $half   = ($r - $full) >= 0.5 ? 1 : 0;
-              $empty  = 5 - $full - $half;
+              $r_display = number_format(round($rating, 1), 1, ',', '');
+              $r_stars   = round($rating * 2) / 2;
+              $full      = floor($r_stars);
+              $half      = ($r_stars - $full) >= 0.5 ? 1 : 0;
+              $empty     = 5 - $full - $half;
             ?>
-            <div class="sc2-hrb-score"><?= number_format($r, 1, '.', '') ?></div>
+            <div class="sc2-hrb-score"><?= $r_display ?></div>
             <div class="sc2-hrb-stars">
               <?php for ($i = 0; $i < $full;  $i++) echo '<span class="sc2-star sc2-star--full">★</span>'; ?>
               <?php if ($half)                       echo '<span class="sc2-star sc2-star--half">★</span>'; ?>
               <?php for ($i = 0; $i < $empty; $i++) echo '<span class="sc2-star sc2-star--empty">★</span>'; ?>
             </div>
+            <?php if ($votes > 0): ?>
+            <div class="sc2-hrb-votes"><?= number_format($votes, 0, ',', '\u{202F}') ?> avis</div>
+            <?php endif; ?>
             <div class="sc2-hrb-label">Note interne</div>
           <?php else: ?>
             <div class="sc2-hrb-nodata">
@@ -1800,6 +1804,7 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-star--full{color:#f59e0b}
     .sc2-star--half{color:#f59e0b;opacity:.6}
     .sc2-star--empty{color:#4b5563}
+    .sc2-hrb-votes{font-size:12px;color:#cbd5e1;font-weight:500}
     .sc2-hrb-label{font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
     .sc2-hrb-nodata{display:flex;flex-direction:column;align-items:center;gap:6px}
     .sc2-hrb-nodata-stars{font-size:20px;color:#4b5563;letter-spacing:2px}
