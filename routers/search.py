@@ -12,7 +12,9 @@ import json as _json
 
 from fastapi import APIRouter, Request
 
-from core.config import REDIS_URL
+import sqlite3
+
+from core.config import FICHES_DB, REDIS_URL
 from core.db import db_state, fetch_company, get_conn
 
 router = APIRouter(tags=["search"])
@@ -155,13 +157,14 @@ def search(
     has_website:       Optional[bool] = None,
     no_web_with_email: bool           = False,
     no_web_no_email:   bool           = False,
-    page:     int = 1,
-    per_page: int = 50,
-    sort_by:  str = "rating",
+    page:              int            = 1,
+    per_page:          int            = 50,
+    sort_by:           str            = "rating",
+    only_with_fiche:   bool           = False,
 ):
     cache_key = (
         f"search:{q}:{city}:{zip_code}:{category}:{has_phone}:{has_website}:"
-        f"{no_web_with_email}:{no_web_no_email}:{page}:{per_page}:{sort_by}"
+        f"{no_web_with_email}:{no_web_no_email}:{page}:{per_page}:{sort_by}:{only_with_fiche}"
     )
     cached = _cache_get(cache_key)
     if cached:
@@ -210,25 +213,52 @@ def search(
         "city":   "city ASC",
     }.get(sort_by, _weighted)
 
-    try:
-        total = conn.execute(f"SELECT COUNT(*) FROM companies WHERE {where}", params).fetchone()[0]
-    except Exception:
-        total = 0
-
-    t0   = time.time()
-    rows = conn.execute(f"""
-        SELECT title, category, phone, url, domain,
+    SELECT_COLS = """title, category, phone, url, domain,
                addr_street, city, zip_code, region,
                rating_value, rating_votes,
                contacts, logo, snippet, is_claimed,
-               latitude, longitude, address_full
-        FROM companies WHERE {where}
-        ORDER BY {order}
-        LIMIT {int(per_page)} OFFSET {int(offset)}
-    """, params).fetchall()
-    cols    = [d[0] for d in conn.description]
+               latitude, longitude, address_full"""
+
+    t0 = time.time()
+    if only_with_fiche:
+        # Charge les titres générés depuis fiches.db (SQLite)
+        try:
+            fdb  = sqlite3.connect(FICHES_DB)
+            done = {r[0] for r in fdb.execute(
+                "SELECT company_title FROM fiches WHERE status='done' AND deleted_at IS NULL"
+            ).fetchall()}
+            fdb.close()
+        except Exception:
+            done = set()
+
+        # Surcharge pour avoir assez de candidats après filtrage
+        candidate_limit = max(per_page * 8, 200)
+        rows_all = conn.execute(f"""
+            SELECT {SELECT_COLS}
+            FROM companies WHERE {where}
+            ORDER BY {order}
+            LIMIT {candidate_limit} OFFSET {offset}
+        """, params).fetchall()
+        cols = [d[0] for d in conn.description]
+        conn.close()
+
+        rows     = [r for r in rows_all if r[0] in done][:per_page]
+        total    = len(done)  # approximation : nb total de fiches générées
+    else:
+        try:
+            total = conn.execute(f"SELECT COUNT(*) FROM companies WHERE {where}", params).fetchone()[0]
+        except Exception:
+            total = 0
+        rows = conn.execute(f"""
+            SELECT {SELECT_COLS}
+            FROM companies WHERE {where}
+            ORDER BY {order}
+            LIMIT {int(per_page)} OFFSET {int(offset)}
+        """, params).fetchall()
+        cols = [d[0] for d in conn.description]
+        conn.close()
+
     elapsed = round(time.time() - t0, 3)
-    conn.close()
 
     results = []
     for row in rows:

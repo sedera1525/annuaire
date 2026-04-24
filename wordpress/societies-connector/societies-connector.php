@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.46
+ * Version:      2.5.47
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.46');
+define('SC_VERSION', '2.5.47');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1424,9 +1424,9 @@ function sc_search_ajax_handler() {
         wp_send_json_error(['message' => 'Query trop courte']);
     }
 
-    $qs  = 'q=' . rawurlencode($q) . '&page=' . $page . '&per_page=' . $per_page;
+    $qs  = 'q=' . rawurlencode($q) . '&page=' . $page . '&per_page=' . $per_page . '&only_with_fiche=true';
     if ($city)   $qs .= '&city='     . rawurlencode($city);
-    if ($sector) $qs .= '&category=' . rawurlencode($sector); // l'API attend "category", pas "sector"
+    if ($sector) $qs .= '&category=' . rawurlencode($sector);
     $data = sc_api('/api/search?' . $qs);
     if (isset($data['error'])) {
         error_log('[SC Search] Erreur API: ' . $data['error'] . ' | qs=' . $qs);
