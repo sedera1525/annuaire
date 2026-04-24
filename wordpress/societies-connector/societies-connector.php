@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.44
+ * Version:      2.5.45
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.44');
+define('SC_VERSION', '2.5.45');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -2466,7 +2466,6 @@ add_action('wp_footer', function() {
         ]);
     }
     $links = json_decode($links_raw, true) ?: [];
-    $year  = date('Y');
     ?>
 <div class="sc-site-footer">
   <div class="sc-site-footer-inner">
@@ -2475,7 +2474,6 @@ add_action('wp_footer', function() {
       <a href="<?= esc_url($l['url'] ?? '#') ?>"><?= esc_html($l['label'] ?? '') ?></a>
       <?php endforeach; ?>
     </div>
-    <div class="sc-site-footer-copy">© 2006–<?= $year ?> TOPsocietes.com — Tous droits réservés</div>
   </div>
 </div>
     <?php
