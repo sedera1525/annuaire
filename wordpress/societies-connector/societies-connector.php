@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.40
+ * Version:      2.5.41
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.40');
+define('SC_VERSION', '2.5.41');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1780,6 +1780,14 @@ add_shortcode('societies_fiche', function($atts) {
 
       <div class="sc2-disclaimer">⭐ Note interne basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
 
+      <a href="https://www.topsocietes.com/" target="_blank" rel="noopener" class="sc2-cta-banner">
+        <div class="sc2-cta-text">
+          <strong>Créez votre société — 0 impôt société</strong>
+          <span>Europe · Asie · USA &nbsp;|&nbsp; + Introduction bancaire incluse</span>
+        </div>
+        <div class="sc2-cta-btn">Découvrir TOPsocietes.com →</div>
+      </a>
+
     </div><!-- .sc2-wrap -->
     <style>
     :root{--sc-grad:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%);--sc-grad-btn:linear-gradient(135deg,#F97316,#EC4899);--sc-navy:#1e2d5a;--sc-orange:#F97316;--sc-purple:#8B5CF6}
@@ -1939,6 +1947,13 @@ add_shortcode('societies_fiche', function($atts) {
 
     /* DISCLAIMER */
     .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:12px;margin-top:8px;margin-bottom:16px}
+    .sc2-cta-banner{display:flex;align-items:center;justify-content:space-between;gap:24px;background:linear-gradient(135deg,#0f172a 0%,#1e2d5a 60%,#1e3a8a 100%);border-radius:16px;padding:24px 32px;margin-top:24px;text-decoration:none;transition:opacity .2s}
+    .sc2-cta-banner:hover{opacity:.92}
+    .sc2-cta-text{display:flex;flex-direction:column;gap:6px}
+    .sc2-cta-text strong{font-size:20px;font-weight:800;color:#fff;line-height:1.2}
+    .sc2-cta-text span{font-size:13px;color:#94a3b8}
+    .sc2-cta-btn{flex-shrink:0;background:linear-gradient(135deg,#3b5bdb,#4c6ef5);color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:10px;white-space:nowrap;box-shadow:0 4px 16px rgba(59,91,219,.4)}
+    @media(max-width:600px){.sc2-cta-banner{flex-direction:column;align-items:flex-start;padding:20px;gap:16px}.sc2-cta-text strong{font-size:17px}.sc2-cta-btn{width:100%;text-align:center;padding:12px}}
 
     @media(max-width:860px){
       .sc2-grid{grid-template-columns:1fr}
