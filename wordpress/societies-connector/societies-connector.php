@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.41
+ * Version:      2.5.43
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.41');
+define('SC_VERSION', '2.5.43');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1602,7 +1602,6 @@ add_shortcode('societies_fiche', function($atts) {
             <?php if ($votes > 0): ?>
             <div class="sc2-hrb-votes">(<?= number_format($votes, 0, ',', "\u{202F}") ?> avis)</div>
             <?php endif; ?>
-            <div class="sc2-hrb-label">Note interne</div>
           <?php else: ?>
             <div class="sc2-hrb-nodata">
               <div class="sc2-hrb-nodata-stars">☆☆☆☆☆</div>
@@ -1763,15 +1762,7 @@ add_shortcode('societies_fiche', function($atts) {
               <li>✓ Contrôler votre présentation</li>
               <li>✓ Booster votre business</li>
             </ul>
-            <span class="sc2-aside-cta-btn">Gérer gratuitement ma fiche</span>
-          </div>
-
-          <!-- Revendiquer -->
-          <div class="sc2-aside-card" style="text-align:center">
-            <div style="font-size:13px;font-weight:700;color:var(--sc-navy);margin-bottom:6px">Revendiquer cette fiche</div>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:14px;line-height:1.5">Reprenez le contrôle de votre image en ligne.</div>
-            <a href="<?= esc_url($claim_url) ?>" class="sc2-btn-primary-sm" style="display:block;text-align:center">Revendiquer cette fiche →</a>
-            <div style="font-size:11px;color:#9ca3af;margin-top:10px">Créer gratuitement votre page entreprise TOPsocietes.com</div>
+            <a href="<?= esc_url($claim_url) ?>" class="sc2-aside-cta-btn">Gérer gratuitement ma fiche</a>
           </div>
 
         </aside><!-- .sc2-aside -->
@@ -1920,13 +1911,15 @@ add_shortcode('societies_fiche', function($atts) {
 
     .sc2-analysis-header{background:#f8fafc;border-bottom:3px solid #3b82f6;padding:18px 24px}
     .sc2-analysis-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1e3a8a}
-    .sc2-card--analysis .sc2-qa-grid{padding:24px;display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
-    .sc2-qa-card{border:1.5px solid #e8edf5;border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 12px;padding:18px 20px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:box-shadow .2s,transform .15s}
-    .sc2-qa-card:nth-child(2){border-left-color:#8b5cf6}
-    .sc2-qa-card:nth-child(3){grid-column:1 / -1;border-left-color:#3b82f6}
-    .sc2-qa-card:hover{box-shadow:0 6px 20px rgba(59,130,246,.1);transform:translateY(-2px)}
-    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;background:var(--sc-grad-btn);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px;line-height:1.5}
-    .sc2-qa-a{color:#374151;font-size:13px;line-height:1.8}
+    .sc2-card--analysis .sc2-qa-grid{padding:24px;display:flex;flex-direction:column;gap:20px}
+    .sc2-qa-card{border:1.5px solid rgba(249,115,22,.25);border-left:4px solid var(--sc-orange);border-radius:0 12px 12px 12px;padding:18px 20px;background:rgba(249,115,22,.07);box-shadow:0 2px 8px rgba(249,115,22,.06);transition:box-shadow .2s,transform .15s}
+    .sc2-qa-card:nth-child(2){border-color:rgba(139,92,246,.25);border-left-color:#8b5cf6;background:rgba(139,92,246,.07);box-shadow:0 2px 8px rgba(139,92,246,.06)}
+    .sc2-qa-card:nth-child(3){border-color:rgba(59,130,246,.25);border-left-color:#3b82f6;background:rgba(59,130,246,.07);box-shadow:0 2px 8px rgba(59,130,246,.06)}
+    .sc2-qa-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.09)}
+    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--sc-orange);margin-bottom:10px;line-height:1.5}
+    .sc2-qa-card:nth-child(2) .sc2-qa-q{color:#8b5cf6}
+    .sc2-qa-card:nth-child(3) .sc2-qa-q{color:#3b82f6}
+    .sc2-qa-a{color:#1f2937;font-size:13px;line-height:1.8}
 
     /* FAQ — affichage direct sans accordéon */
     .sc2-faq-wrap{border:1px solid #f0e8ff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.04)}
@@ -1974,8 +1967,6 @@ add_shortcode('societies_fiche', function($atts) {
       .sc2-kpi-grid{grid-template-columns:1fr 1fr}
       .sc2-faq-item{padding:12px 14px}
       .sc2-faq-body{padding-left:34px}
-      .sc2-qa-grid{grid-template-columns:1fr}
-      .sc2-qa-card:nth-child(3){grid-column:1}
       .sc2-breadcrumb{font-size:11px;padding:8px 12px}
     }
     </style>
