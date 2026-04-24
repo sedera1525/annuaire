@@ -201,12 +201,14 @@ def search(
 
     where  = " AND ".join(conditions) if conditions else "1=1"
     offset = (page - 1) * per_page
+    # Score bayésien : (note × avis) / (avis + 10) — pénalise les entreprises avec peu d'avis
+    _weighted = "(CASE WHEN rating_votes > 0 THEN (rating_value * rating_votes) / (CAST(rating_votes AS FLOAT) + 10) ELSE 0 END) DESC NULLS LAST, rating_votes DESC NULLS LAST"
     order  = {
-        "rating": "rating_value DESC NULLS LAST, rating_votes DESC NULLS LAST",
+        "rating": _weighted,
         "votes":  "rating_votes DESC NULLS LAST",
         "name":   "title ASC",
         "city":   "city ASC",
-    }.get(sort_by, "rating_value DESC NULLS LAST")
+    }.get(sort_by, _weighted)
 
     try:
         total = conn.execute(f"SELECT COUNT(*) FROM companies WHERE {where}", params).fetchone()[0]
