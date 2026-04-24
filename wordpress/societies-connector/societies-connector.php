@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.35
+ * Version:      2.5.36
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.35');
+define('SC_VERSION', '2.5.36');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1573,11 +1573,32 @@ add_shortcode('societies_fiche', function($atts) {
             </div>
           </div>
         </div>
-        <?php if (!empty($company['website'])): ?>
-        <div class="sc2-hero-actions">
-          <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-btn-outline">🌐 Visiter le site</a>
+        <!-- RATING HERO -->
+        <div class="sc2-hero-rating-box">
+          <?php if ($rating > 0): ?>
+            <?php
+              $r      = round($rating * 2) / 2; // arrondi 0.5
+              $full   = floor($r);
+              $half   = ($r - $full) >= 0.5 ? 1 : 0;
+              $empty  = 5 - $full - $half;
+            ?>
+            <div class="sc2-hrb-score"><?= number_format($r, 1, '.', '') ?></div>
+            <div class="sc2-hrb-stars">
+              <?php for ($i = 0; $i < $full;  $i++) echo '<span class="sc2-star sc2-star--full">★</span>'; ?>
+              <?php if ($half)                       echo '<span class="sc2-star sc2-star--half">★</span>'; ?>
+              <?php for ($i = 0; $i < $empty; $i++) echo '<span class="sc2-star sc2-star--empty">★</span>'; ?>
+            </div>
+            <div class="sc2-hrb-label"><?= $votes ? number_format($votes, 0, ',', ' ') . ' avis' : 'Note clients' ?></div>
+          <?php else: ?>
+            <div class="sc2-hrb-nodata">
+              <div class="sc2-hrb-nodata-stars">☆☆☆☆☆</div>
+              <div class="sc2-hrb-nodata-label">Pas d'avis disponibles</div>
+            </div>
+          <?php endif; ?>
+          <?php if (!empty($company['website'])): ?>
+          <a href="<?= esc_url($company['website']) ?>" target="_blank" rel="noopener" class="sc2-hrb-site">🌐 Visiter le site</a>
+          <?php endif; ?>
         </div>
-        <?php endif; ?>
       </div>
 
       <!-- GRILLE DEUX COLONNES -->
@@ -1772,6 +1793,19 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-hero-actions{display:flex;flex-direction:column;gap:8px;flex-shrink:0;align-items:stretch}
     .sc2-btn-outline{display:inline-block;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;color:#374151;text-decoration:none;transition:border-color .15s;text-align:center}
     .sc2-btn-outline:hover{border-color:#6366f1;color:#4338ca}
+    .sc2-hero-rating-box{flex-shrink:0;background:#1a2744;border-radius:16px;padding:18px 24px;text-align:center;min-width:140px;display:flex;flex-direction:column;align-items:center;gap:6px}
+    .sc2-hrb-score{font-size:42px;font-weight:900;color:#ef4444;line-height:1}
+    .sc2-hrb-stars{display:flex;gap:2px;justify-content:center}
+    .sc2-star{font-size:20px}
+    .sc2-star--full{color:#f59e0b}
+    .sc2-star--half{color:#f59e0b;opacity:.6}
+    .sc2-star--empty{color:#4b5563}
+    .sc2-hrb-label{font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+    .sc2-hrb-nodata{display:flex;flex-direction:column;align-items:center;gap:6px}
+    .sc2-hrb-nodata-stars{font-size:20px;color:#4b5563;letter-spacing:2px}
+    .sc2-hrb-nodata-label{font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;text-align:center}
+    .sc2-hrb-site{margin-top:8px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600}
+    .sc2-hrb-site:hover{color:#fff}
     .sc2-btn-primary-sm{display:inline-block;background:var(--sc-grad-btn);color:#fff;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;text-decoration:none;text-align:center;box-shadow:0 3px 10px rgba(249,115,22,.3)}
     .sc2-btn-primary-sm:hover{opacity:.88;color:#fff}
 
@@ -1902,6 +1936,7 @@ add_shortcode('societies_fiche', function($atts) {
       .sc2-hero{padding:18px 16px}
       .sc2-hero-name{font-size:20px}
       .sc2-hero-actions{flex-direction:row}
+      .sc2-hero-rating-box{flex-direction:row;min-width:unset;padding:12px 16px;gap:12px;border-radius:12px;justify-content:center}
       .sc2-card{padding:18px 16px}
       .sc2-kpi-grid{grid-template-columns:1fr 1fr}
       .sc2-faq-item{padding:12px 14px}
