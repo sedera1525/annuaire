@@ -5,6 +5,7 @@ Phase C : cache dict+TTL pour les recherches fréquentes
 import csv as csv_mod
 import io
 import json
+import re
 import time
 from typing import Any, Optional
 
@@ -55,20 +56,27 @@ def _cache_get(key: str) -> Any:
 
 def _build_q_conditions(q: str, conditions: list, params: list) -> None:
     """
-    Recherche multi-mots : chaque mot doit être présent dans au moins un champ
-    (title, city, category). Cela permet de trouver "STEF Transport NICE"
-    même si le titre est "STEF TRANSPORT" et la ville est "NICE".
-    Si le texte entier matche le titre exactement, il remonte en priorité via ORDER BY.
+    Recherche multi-mots avec normalisation des apostrophes et tirets.
+    "L'Atelier Locavore" → ["Atelier", "Locavore"] → AND sur chaque mot dans
+    title/city/category. Gère les apostrophes droites et typographiques.
     """
-    words = [w for w in q[:150].split() if len(w) >= 2][:6]
+    # Remplace apostrophes (droit + typographique) et tirets par des espaces
+    normalized = re.sub(r"['''’ʼ\-]", " ", q[:150])
+    words = [w for w in normalized.split() if len(w) >= 2][:6]
+
     if not words:
+        # Fallback : phrase entière si la normalisation a tout supprimé
+        pct = f"%{q[:150]}%"
+        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
+        params.extend([pct, pct, pct])
         return
+
     if len(words) == 1:
         pct = f"%{words[0]}%"
         conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
         params.extend([pct, pct, pct])
     else:
-        # Chaque mot doit matcher dans au moins un des champs
+        # Chaque mot doit matcher dans au moins un des trois champs
         word_conds = []
         for word in words:
             pct = f"%{word}%"
