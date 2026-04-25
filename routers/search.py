@@ -53,6 +53,30 @@ def _cache_get(key: str) -> Any:
     return None
 
 
+def _build_q_conditions(q: str, conditions: list, params: list) -> None:
+    """
+    Recherche multi-mots : chaque mot doit être présent dans au moins un champ
+    (title, city, category). Cela permet de trouver "STEF Transport NICE"
+    même si le titre est "STEF TRANSPORT" et la ville est "NICE".
+    Si le texte entier matche le titre exactement, il remonte en priorité via ORDER BY.
+    """
+    words = [w for w in q[:150].split() if len(w) >= 2][:6]
+    if not words:
+        return
+    if len(words) == 1:
+        pct = f"%{words[0]}%"
+        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
+        params.extend([pct, pct, pct])
+    else:
+        # Chaque mot doit matcher dans au moins un des champs
+        word_conds = []
+        for word in words:
+            pct = f"%{word}%"
+            word_conds.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
+            params.extend([pct, pct, pct])
+        conditions.append("(" + " AND ".join(word_conds) + ")")
+
+
 def _cache_set(key: str, value: Any) -> None:
     if _redis:
         try:
@@ -175,9 +199,7 @@ def search(
     params     = []
 
     if q:
-        pct = f"%{q[:150]}%"
-        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
-        params.extend([pct, pct, pct])
+        _build_q_conditions(q, conditions, params)
     if city:
         conditions.append("UPPER(city) LIKE UPPER(?)")
         params.append(f"%{city[:100]}%")
@@ -362,9 +384,7 @@ def export(
     params     = []
 
     if q:
-        pct = f"%{q[:150]}%"
-        conditions.append("(UPPER(title) LIKE UPPER(?) OR UPPER(city) LIKE UPPER(?) OR UPPER(category) LIKE UPPER(?))")
-        params.extend([pct, pct, pct])
+        _build_q_conditions(q, conditions, params)
     if city:
         conditions.append("UPPER(city) LIKE UPPER(?)")
         params.append(f"%{city[:100]}%")
