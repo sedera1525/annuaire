@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.52
+ * Version:      2.5.53
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.52');
+define('SC_VERSION', '2.5.53');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -24,6 +24,7 @@ add_filter('template_include', function(string $template): string {
         global $post;
         if ($post && (
             has_shortcode($post->post_content, 'societies_fiche') ||
+            has_shortcode($post->post_content, 'societies_creating') ||
             has_shortcode($post->post_content, 'societies_tarifs') ||
             has_shortcode($post->post_content, 'societies_search') ||
             has_shortcode($post->post_content, 'societies_pricing')
@@ -1369,13 +1370,15 @@ add_shortcode('societies_categories', function($atts) {
 });
 
 // =============================================================================
-// CRÉATION DE PAGE À LA DEMANDE — 404 → cherche l'entreprise → crée la page
+// CRÉATION DE PAGE À LA DEMANDE — 404 → page placeholder INSTANTANÉE
+// Les appels API lents sont déportés en AJAX (sc_create_fiche) pour éviter
+// le timeout PHP qui causait une page blanche au premier visiteur.
 // =============================================================================
 add_action('template_redirect', function() {
     if (!is_404()) return;
 
     $path = trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '', '/');
-    if (!$path || pathinfo($path, PATHINFO_EXTENSION)) return; // skip fichiers statiques
+    if (!$path || pathinfo($path, PATHINFO_EXTENSION)) return;
 
     $segments = array_values(array_filter(explode('/', $path)));
     if (empty($segments) || count($segments) > 5) return;
@@ -1383,18 +1386,16 @@ add_action('template_redirect', function() {
     $slug = end($segments);
     if (strlen($slug) < 3 || strlen($slug) > 200) return;
 
-    // Cache négatif (5 min) : évite de re-interroger l'API à chaque visite pour un slug inconnu
     $cache_key = 'sc_404_' . md5($slug);
     if (get_transient($cache_key) === 'miss') return;
 
-    // Vérifier d'abord si une page WP existe déjà avec ce slug
-    $by_slug = get_page_by_path($slug, OBJECT, 'page');
-    if ($by_slug && get_post_status($by_slug->ID) === 'publish') {
-        wp_redirect(get_permalink($by_slug->ID), 301);
+    // ── Redirect si la page WP existe déjà ──────────────────────────────────
+    $existing = get_page_by_path($slug, OBJECT, 'page');
+    if ($existing && get_post_status($existing->ID) === 'publish') {
+        wp_redirect(get_permalink($existing->ID), 301);
         exit;
     }
 
-    // Chercher via meta _sc_company_title (slug → titre exact)
     $slug_as_title = str_replace('-', ' ', rawurldecode($slug));
     $meta_match    = get_posts([
         'post_type'   => 'page',
@@ -1409,9 +1410,52 @@ add_action('template_redirect', function() {
         exit;
     }
 
-    // Essai 1 : recherche textuelle classique (slug avec espaces)
-    $data        = sc_api('/api/search?q=' . rawurlencode($slug_as_title) . '&per_page=10');
-    $found_title = null;
+    // ── Créer une page placeholder IMMÉDIATEMENT (sans appels API bloquants) ─
+    $page_id = wp_insert_post([
+        'post_title'   => ucwords($slug_as_title),
+        'post_status'  => 'publish',
+        'post_type'    => 'page',
+        'post_name'    => $slug,
+        'post_content' => '[societies_creating slug="' . esc_attr($slug) . '"]',
+    ]);
+
+    if (!$page_id || is_wp_error($page_id)) {
+        set_transient($cache_key, 'miss', 5 * MINUTE_IN_SECONDS);
+        return;
+    }
+
+    update_post_meta($page_id, '_sc_slug', $slug);
+    update_post_meta($page_id, '_wp_page_template', 'shortcode-page.php');
+
+    wp_redirect(get_permalink($page_id), 302);
+    exit;
+}, 1);
+
+// =============================================================================
+// AJAX — résolution async du slug → entreprise → mise à jour de la page WP
+// =============================================================================
+add_action('wp_ajax_sc_create_fiche',        'sc_create_fiche_handler');
+add_action('wp_ajax_nopriv_sc_create_fiche', 'sc_create_fiche_handler');
+function sc_create_fiche_handler() {
+    $slug    = sanitize_title($_POST['slug']    ?? '');
+    $page_id = intval($_POST['page_id']         ?? 0);
+
+    if (!$slug || strlen($slug) > 200) {
+        wp_send_json_error(['message' => 'Slug invalide']);
+    }
+
+    // Page déjà mise à jour avec le vrai shortcode ?
+    if ($page_id) {
+        $page = get_post($page_id);
+        if ($page && has_shortcode($page->post_content, 'societies_fiche')) {
+            wp_send_json_success(['ready' => true]);
+        }
+    }
+
+    // Essai 1 : recherche textuelle
+    $slug_as_title = str_replace('-', ' ', rawurldecode($slug));
+    $found_title   = null;
+    $data = sc_api('/api/search?q=' . rawurlencode($slug_as_title) . '&per_page=10');
     foreach ($data['results'] ?? [] as $r) {
         if (!empty($r['title']) && sanitize_title($r['title']) === $slug) {
             $found_title = $r['title'];
@@ -1419,22 +1463,22 @@ add_action('template_redirect', function() {
         }
     }
 
-    // Essai 2 : lookup par slug exact via endpoint dédié
-    // Gère les noms avec &, accents, etc. (ex : 'jack-jones' → 'JACK & JONES')
+    // Essai 2 : endpoint by-slug (gère &, accents, etc.)
     if (!$found_title) {
-        $by_slug_data = sc_api('/api/company/by-slug/' . rawurlencode($slug));
-        if (!empty($by_slug_data['title'])) {
-            $found_title = $by_slug_data['title'];
+        $by_slug = sc_api('/api/company/by-slug/' . rawurlencode($slug));
+        if (!empty($by_slug['title'])) {
+            $found_title = $by_slug['title'];
         }
     }
 
     if (!$found_title) {
-        set_transient($cache_key, 'miss', 5 * MINUTE_IN_SECONDS);
-        return;
+        set_transient('sc_404_' . md5($slug), 'miss', 5 * MINUTE_IN_SECONDS);
+        if ($page_id) wp_delete_post($page_id, true);
+        wp_send_json_error(['message' => 'Entreprise introuvable', 'not_found' => true]);
     }
 
-    // Vérifier une dernière fois via meta avec le titre exact trouvé
-    $meta2 = get_posts([
+    // Fiche WP existante avec ce titre ?
+    $meta_match = get_posts([
         'post_type'   => 'page',
         'post_status' => 'publish',
         'meta_key'    => '_sc_company_title',
@@ -1442,29 +1486,29 @@ add_action('template_redirect', function() {
         'numberposts' => 1,
         'fields'      => 'ids',
     ]);
-    if ($meta2) {
-        wp_redirect(get_permalink($meta2[0]), 301);
-        exit;
+    if ($meta_match && $meta_match[0] !== $page_id) {
+        if ($page_id) wp_delete_post($page_id, true);
+        wp_send_json_success(['redirect' => get_permalink($meta_match[0])]);
     }
 
-    // Créer la page WP à la demande
-    $page_id = wp_insert_post([
-        'post_title'   => $found_title,
-        'post_status'  => 'publish',
-        'post_type'    => 'page',
-        'post_name'    => $slug,
-        'post_content' => '[societies_fiche title="' . esc_attr($found_title) . '"]',
-    ]);
+    // Met à jour la page placeholder avec le vrai shortcode
+    $target_id = $page_id;
+    if (!$target_id) {
+        $p = get_page_by_path($slug, OBJECT, 'page');
+        $target_id = $p ? $p->ID : 0;
+    }
+    if ($target_id) {
+        wp_update_post([
+            'ID'           => $target_id,
+            'post_title'   => $found_title,
+            'post_content' => '[societies_fiche title="' . esc_attr($found_title) . '"]',
+        ]);
+        update_post_meta($target_id, '_sc_company_title', $found_title);
+        delete_post_meta($target_id, '_sc_slug');
+    }
 
-    if (!$page_id || is_wp_error($page_id)) return;
-
-    delete_transient($cache_key); // Supprime le cache négatif éventuel
-    update_post_meta($page_id, '_sc_company_title', $found_title);
-    update_post_meta($page_id, '_wp_page_template', 'shortcode-page.php');
-
-    wp_redirect(get_permalink($page_id), 301);
-    exit;
-}, 1);
+    wp_send_json_success(['ready' => true, 'title' => $found_title]);
+}
 
 // AJAX — vérifie si une fiche est prête (polling depuis la page "en préparation")
 add_action('wp_ajax_sc_fiche_ready',        'sc_fiche_ready_handler');
@@ -1557,6 +1601,102 @@ function sc_search_ajax_handler() {
 }
 
 // =============================================================================
+// =============================================================================
+// SHORTCODE [societies_creating slug="..."] — page de chargement instantanée
+// Affiché pendant que le JS résout le slug → entreprise via AJAX.
+// =============================================================================
+add_shortcode('societies_creating', function($atts) {
+    $atts    = shortcode_atts(['slug' => ''], $atts);
+    $slug    = sanitize_title($atts['slug']);
+    if (!$slug) return '';
+
+    $page    = get_queried_object();
+    $page_id = $page instanceof WP_Post ? $page->ID : 0;
+    $label   = ucwords(str_replace('-', ' ', $slug));
+
+    ob_start(); ?>
+    <div class="sc2-wrap">
+      <nav class="sc2-breadcrumb" aria-label="Fil d'Ariane">
+        <a href="<?= esc_url(home_url('/')) ?>">Accueil</a>
+        <span>›</span><span class="sc2-breadcrumb-current"><?= esc_html($label) ?></span>
+      </nav>
+
+      <div class="sc2-prep-banner">
+        <div class="sc2-prep-spinner" aria-hidden="true"></div>
+        <div class="sc2-prep-info">
+          <strong>Recherche de l'entreprise…</strong>
+          <span>Nous récupérons les informations de cette fiche. La page se met à jour automatiquement.</span>
+        </div>
+      </div>
+      <div class="sc2-prep-progress"><div class="sc2-prep-progress-bar" id="sc2-prep-bar"></div></div>
+      <p class="sc2-prep-status" id="sc2-prep-msg">Connexion au serveur…</p>
+    </div>
+
+    <script>
+    (function() {
+      var slug    = <?= json_encode($slug) ?>;
+      var pageId  = <?= intval($page_id) ?>;
+      var ajaxUrl = <?= json_encode(admin_url('admin-ajax.php')) ?>;
+      var bar     = document.getElementById('sc2-prep-bar');
+      var msg     = document.getElementById('sc2-prep-msg');
+      var msgs    = ['Connexion au serveur…','Recherche de l\'entreprise…','Vérification des données…','Finalisation…'];
+      var attempt = 0;
+
+      function run() {
+        attempt++;
+        if (bar) bar.style.width = Math.min(85, attempt * 28) + '%';
+        if (msg) msg.textContent = msgs[Math.min(attempt - 1, msgs.length - 1)];
+        if (attempt > 4) {
+          if (msg) msg.textContent = 'Entreprise introuvable sur cette plateforme.';
+          return;
+        }
+        var fd = new FormData();
+        fd.append('action',  'sc_create_fiche');
+        fd.append('slug',    slug);
+        fd.append('page_id', pageId);
+        fetch(ajaxUrl, {method: 'POST', body: fd, cache: 'no-store'})
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.success) {
+              if (bar) bar.style.width = '100%';
+              if (msg) msg.textContent = 'Fiche trouvée ! Chargement…';
+              var dest = (d.data && d.data.redirect) ? d.data.redirect : window.location.href;
+              setTimeout(function() { location.replace(dest); }, 600);
+            } else if (d.data && d.data.not_found) {
+              if (msg) msg.textContent = 'Entreprise introuvable sur cette plateforme.';
+            } else {
+              setTimeout(run, 3000);
+            }
+          })
+          .catch(function() { setTimeout(run, 4000); });
+      }
+
+      run();
+    })();
+    </script>
+    <style>
+    :root{--sc-grad:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%);--sc-grad-btn:linear-gradient(135deg,#F97316,#EC4899);--sc-navy:#1e2d5a}
+    .sc2-wrap{max-width:1100px;margin:0 auto;padding:32px 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
+    .sc2-breadcrumb{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:13px;margin-bottom:16px;padding:10px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px}
+    .sc2-breadcrumb a{color:#1e3a8a;text-decoration:none;font-weight:500}
+    .sc2-breadcrumb a:hover{color:#F97316;text-decoration:underline}
+    .sc2-breadcrumb span{color:#9ca3af;font-size:12px}
+    .sc2-breadcrumb-current{color:#1f2937;font-weight:700}
+    .sc2-prep-banner{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#eff6ff,#f0f4ff);border:1.5px solid #bfdbfe;border-radius:14px;padding:20px 24px;margin:0 0 12px}
+    .sc2-prep-spinner{width:36px;height:36px;border-radius:50%;border:3px solid #bfdbfe;border-top-color:#3b82f6;flex-shrink:0;animation:sc2spin 0.9s linear infinite}
+    @keyframes sc2spin{to{transform:rotate(360deg)}}
+    .sc2-prep-info{display:flex;flex-direction:column;gap:5px}
+    .sc2-prep-info strong{font-size:15px;font-weight:700;color:#1e3a8a}
+    .sc2-prep-info span{font-size:13px;color:#3b5bdb;line-height:1.55}
+    .sc2-prep-progress{background:#e2e8f0;border-radius:6px;height:6px;margin:0 0 6px;overflow:hidden}
+    .sc2-prep-progress-bar{height:100%;background:linear-gradient(90deg,#3b82f6,#8B5CF6);border-radius:6px;width:0%;transition:width 0.6s ease}
+    .sc2-prep-status{font-size:12px;color:#6b7280;text-align:center;margin:0;font-style:italic}
+    @media(max-width:640px){.sc2-prep-banner{flex-direction:column;gap:10px;text-align:center}}
+    </style>
+    <?php
+    return ob_get_clean();
+});
+
 // SHORTCODE FICHE COMPLÈTE [societies_fiche title="Nom Entreprise"]
 // =============================================================================
 
