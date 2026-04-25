@@ -240,10 +240,21 @@ def search(
             LIMIT {candidate_limit} OFFSET {offset}
         """, params).fetchall()
         cols = [d[0] for d in conn.description]
-        conn.close()
 
-        rows     = [r for r in rows_all if r[0] in done][:per_page]
-        total    = len(done)  # approximation : nb total de fiches générées
+        # Total précis pour les recherches filtrées (ville/catégorie/zip) — sinon approximation globale
+        if conditions:
+            try:
+                count_rows = conn.execute(
+                    f"SELECT title FROM companies WHERE {where} LIMIT 3000", params
+                ).fetchall()
+                total = sum(1 for r in count_rows if r[0] in done)
+            except Exception:
+                total = len(done)
+        else:
+            total = len(done)
+
+        conn.close()
+        rows = [r for r in rows_all if r[0] in done][:per_page]
     else:
         try:
             total = conn.execute(f"SELECT COUNT(*) FROM companies WHERE {where}", params).fetchone()[0]

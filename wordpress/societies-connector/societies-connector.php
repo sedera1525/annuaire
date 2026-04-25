@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.48
+ * Version:      2.5.49
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.48');
+define('SC_VERSION', '2.5.49');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1129,6 +1129,11 @@ add_shortcode('societies_search', function($atts) {
     </div>
 
    
+    <!-- Filtres cachés — remplis via URL params (navigation breadcrumb) -->
+    <input type="hidden" id="<?= esc_attr($uid) ?>-city-filter" value="">
+    <input type="hidden" id="<?= esc_attr($uid) ?>-cat-filter" value="">
+    <input type="hidden" id="<?= esc_attr($uid) ?>-dept-filter" value="">
+
     <!-- RÉSULTATS -->
     <div class="sc-results-section" id="<?= esc_attr($uid) ?>-results-wrap" style="display:none">
       <div class="sc-results-header">
@@ -1172,14 +1177,14 @@ add_shortcode('societies_search', function($atts) {
       initSt(uid);
       var st=_scState[uid];st.page=page||1;
       var q=(document.getElementById(uid+'-q')||{}).value||'';q=q.trim();
-      var sector=(document.getElementById(uid+'-sector')||{}).value||'';
-      var region=(document.getElementById(uid+'-region')||{}).value||'';
-      var sort='rating';
+      var cityF=(document.getElementById(uid+'-city-filter')||{}).value||'';
+      var catF=(document.getElementById(uid+'-cat-filter')||{}).value||'';
+      var deptF=(document.getElementById(uid+'-dept-filter')||{}).value||'';
       var resEl=document.getElementById(uid+'-results');
       var statEl=document.getElementById(uid+'-status');
       var paginEl=document.getElementById(uid+'-pagination');
       var wrapEl=document.getElementById(uid+'-results-wrap');
-      var hasInput=force||q.length>=2||sector||region||st.form;
+      var hasInput=force||q.length>=2||cityF||catF||deptF||st.form;
       if(!hasInput){wrapEl.style.display='none';return;}
       wrapEl.style.display='block';
       if(page===1)resEl.innerHTML='<div class="sc-loader"><div class="sc-spinner"></div></div>';
@@ -1191,9 +1196,14 @@ add_shortcode('societies_search', function($atts) {
       xhr.onload=function(){
         var d=JSON.parse(xhr.responseText||'{}');
         if(!d.success){resEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">⚠️</div><div class="sc-empty-title">'+(d.data&&d.data.error?scEsc(d.data.error):'Erreur connexion')+'</div></div>';return;}
-        var items=d.data.results||[],total=d.data.total||0,off=(page-1)*{$pp};
+        var items=d.data.results||[],total=d.data.total||0;
         if(!items.length&&page===1){resEl.innerHTML='<div class="sc-empty"><div class="sc-empty-icon">🔍</div><div class="sc-empty-title">Aucun résultat</div><p style="color:#9ca3af">Essayez un autre terme ou filtre.</p></div>';statEl.innerHTML='';return;}
-        statEl.innerHTML='<strong>'+total.toLocaleString('fr-FR')+'</strong> résultat'+(total>1?'s':'');
+        var ctx='';
+        if(cityF&&catF)ctx='<strong>'+scEsc(catF)+'</strong> à '+scEsc(cityF)+' — ';
+        else if(cityF)ctx='Entreprises à <strong>'+scEsc(cityF)+'</strong> — ';
+        else if(catF)ctx='<strong>'+scEsc(catF)+'</strong> — ';
+        else if(deptF)ctx='Département <strong>'+scEsc(deptF)+'</strong> — ';
+        statEl.innerHTML=ctx+'<strong>'+total.toLocaleString('fr-FR')+'</strong> résultat'+(total>1?'s':'');
         resEl.innerHTML=items.map(function(c){
           var d2=dept(c.zip_code||'');
           var rat=c.rating_value&&c.rating_value>0?'<span class="sc-card-rat"><span style="color:#f59e0b">★</span> '+parseFloat(c.rating_value).toFixed(1)+(c.rating_votes?' ('+c.rating_votes+')':'')+'</span>':'';
@@ -1223,10 +1233,29 @@ add_shortcode('societies_search', function($atts) {
           paginEl.innerHTML=b;
         }
       };
-      xhr.send('action=sc_search&q='+encodeURIComponent(qFull)+'&city='+encodeURIComponent(region)+'&sector='+encodeURIComponent(sector)+'&page='+page+'&per_page={$pp}');
+      xhr.send('action=sc_search&q='+encodeURIComponent(qFull)+'&city='+encodeURIComponent(cityF)+'&sector='+encodeURIComponent(catF)+'&dept='+encodeURIComponent(deptF)+'&page='+page+'&per_page={$pp}');
     };
     window.scEsc=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
   }
+  // Auto-trigger depuis les params URL (navigation breadcrumb)
+  (function(uid){
+    if(typeof URLSearchParams==='undefined')return;
+    var p=new URLSearchParams(window.location.search);
+    var city=p.get('city')||'';
+    var cat=p.get('category')||'';
+    var d2=p.get('dept')||'';
+    var q2=p.get('q')||'';
+    if(!city&&!cat&&!d2&&!q2)return;
+    var cEl=document.getElementById(uid+'-city-filter');
+    var tEl=document.getElementById(uid+'-cat-filter');
+    var dEl=document.getElementById(uid+'-dept-filter');
+    var qEl=document.getElementById(uid+'-q');
+    if(cEl)cEl.value=city;
+    if(tEl)tEl.value=cat;
+    if(dEl)dEl.value=d2;
+    if(qEl&&q2)qEl.value=q2;
+    scSearch(uid,1,true);
+  })('{$uid}');
 })();
 JSCODE;
     static $sc_search_js_done = false;
@@ -1434,16 +1463,18 @@ function sc_search_ajax_handler() {
     $q        = sanitize_text_field($_POST['q'] ?? '');
     $city     = sanitize_text_field($_POST['city'] ?? '');
     $sector   = sanitize_text_field($_POST['sector'] ?? '');
+    $dept     = sanitize_text_field($_POST['dept'] ?? '');
     $page     = max(1, intval($_POST['page'] ?? 1));
     $per_page = min(50, max(6, intval($_POST['per_page'] ?? 24)));
 
-    if (strlen($q) < 2 && strlen($city) < 2 && strlen($sector) < 2) {
+    if (strlen($q) < 2 && strlen($city) < 2 && strlen($sector) < 2 && strlen($dept) < 1) {
         wp_send_json_error(['message' => 'Query trop courte']);
     }
 
     $qs  = 'q=' . rawurlencode($q) . '&page=' . $page . '&per_page=' . $per_page . '&only_with_fiche=true';
     if ($city)   $qs .= '&city='     . rawurlencode($city);
     if ($sector) $qs .= '&category=' . rawurlencode($sector);
+    if ($dept)   $qs .= '&zip_code=' . rawurlencode($dept);
     $data = sc_api('/api/search?' . $qs);
     if (isset($data['error'])) {
         error_log('[SC Search] Erreur API: ' . $data['error'] . ' | qs=' . $qs);
@@ -1641,10 +1672,116 @@ add_shortcode('societies_fiche', function($atts) {
     $region    = $depts[$dept_code][1] ?? '';
     $city_name = $company['city'] ?? '';
     $cat_name  = $company['category'] ?? '';
-    $city_url  = $city_name ? home_url('/' . sanitize_title($city_name) . '/') : '';
-    $cat_url   = ($city_name && $cat_name) ? home_url('/' . sanitize_title($city_name) . '/' . sanitize_title($cat_name) . '/') : '';
-    $region_url = $region ? home_url('/recherche-entreprises/?region=' . urlencode($region)) : '';
-    $dept_url   = $dept_name ? home_url('/recherche-entreprises/?dept=' . urlencode($dept_code)) : '';
+    $search_page = '/recherche-entreprises/';
+    $city_url   = $city_name ? home_url($search_page . '?city='     . urlencode($city_name)) : '';
+    $cat_url    = ($city_name && $cat_name) ? home_url($search_page . '?city=' . urlencode($city_name) . '&category=' . urlencode($cat_name)) : '';
+    $region_url = $region     ? home_url($search_page . '?region='  . urlencode($region))    : '';
+    $dept_url   = $dept_name  ? home_url($search_page . '?dept='    . urlencode($dept_code)) : '';
+
+    // ── Fiche non générée : page "en préparation" ────────────────────────────
+    if ($status !== 'done') {
+        ob_start(); ?>
+        <div class="sc2-wrap">
+
+          <nav class="sc2-breadcrumb" aria-label="Fil d'Ariane">
+            <a href="<?= esc_url(home_url('/')) ?>">Accueil</a>
+            <?php if ($region): ?><span>›</span><a href="<?= esc_url($region_url) ?>"><?= esc_html($region) ?></a><?php endif; ?>
+            <?php if ($dept_name): ?><span>›</span><a href="<?= esc_url($dept_url) ?>"><?= esc_html($dept_name) ?> (<?= esc_html($dept_code) ?>)</a><?php endif; ?>
+            <?php if ($city_name): ?><span>›</span><a href="<?= esc_url($city_url) ?>"><?= esc_html($city_name) ?><?= $zip ? ' (' . esc_html($zip) . ')' : '' ?></a><?php endif; ?>
+            <?php if ($cat_name): ?><span>›</span><a href="<?= esc_url($cat_url) ?>"><?= esc_html($cat_name) ?></a><?php endif; ?>
+            <span>›</span><span class="sc2-breadcrumb-current"><?= esc_html($company['title']) ?></span>
+          </nav>
+
+          <div class="sc2-prep-banner">
+            <div class="sc2-prep-icon">⏳</div>
+            <div class="sc2-prep-info">
+              <strong>Fiche en cours de préparation</strong>
+              <span>Nos équipes analysent cette entreprise. La fiche complète sera disponible très prochainement.</span>
+            </div>
+          </div>
+
+          <div class="sc2-hero">
+            <div class="sc2-hero-left">
+              <div class="sc2-hero-info">
+                <div class="sc2-hero-badges">
+                  <span class="sc2-badge sc2-badge--active">✓ En activité</span>
+                  <?php if ($forme_jur): ?><span class="sc2-badge sc2-badge--forme"><?= esc_html($forme_jur) ?></span><?php endif; ?>
+                </div>
+                <h1 class="sc2-hero-name"><?= esc_html($company['title']) ?></h1>
+                <?php
+                  $hc_street  = trim($company['addr_street'] ?? '');
+                  $hc_city    = trim($city_name);
+                  $hc_zip     = trim($zip);
+                  $hc_phone   = trim($company['phone'] ?? '');
+                  $hc_domain  = trim($company['domain'] ?? '');
+                  $hc_address = $hc_street ? $hc_street . ($hc_city ? ', ' . $hc_zip . ' ' . $hc_city : '') : ($hc_city ? $hc_zip . ' ' . $hc_city : '');
+                  $hc_url     = $hc_domain ? (preg_match('#^https?://#', $hc_domain) ? $hc_domain : 'https://' . $hc_domain) : '';
+                ?>
+                <div class="sc2-hero-meta">
+                  <?php if ($cat_name): ?><span>🏭 <?= esc_html($cat_name) ?></span><?php endif; ?>
+                  <?php if ($hc_address): ?><span>📍 <?= esc_html($hc_address) ?></span><?php endif; ?>
+                  <?php if ($hc_phone): ?><a href="tel:<?= esc_attr(preg_replace('/\s+/', '', $hc_phone)) ?>" class="sc2-hm-link">📞 <?= esc_html($hc_phone) ?></a><?php endif; ?>
+                  <?php if ($hc_url): ?><a href="<?= esc_url($hc_url) ?>" target="_blank" rel="noopener" class="sc2-hm-link sc2-hm-link--web">🌐 <?= esc_html($hc_domain) ?></a><?php endif; ?>
+                  <?php if ($date_creation): ?><span>📅 Depuis <?= esc_html(substr($date_creation, 0, 4)) ?></span><?php endif; ?>
+                </div>
+              </div>
+            </div>
+            <div class="sc2-hero-rating-box">
+              <?php if ($rating > 0): ?>
+                <?php
+                  $r_display = number_format(round($rating, 1), 1, ',', '');
+                  $r_stars   = round($rating * 2) / 2;
+                  $full      = floor($r_stars);
+                  $half      = ($r_stars - $full) >= 0.5 ? 1 : 0;
+                  $empty     = 5 - $full - $half;
+                ?>
+                <div class="sc2-hrb-score"><?= $r_display ?>/5</div>
+                <div class="sc2-hrb-stars">
+                  <?php for ($i = 0; $i < $full;  $i++) echo '<span class="sc2-star sc2-star--full">★</span>'; ?>
+                  <?php if ($half)                       echo '<span class="sc2-star sc2-star--half">★</span>'; ?>
+                  <?php for ($i = 0; $i < $empty; $i++) echo '<span class="sc2-star sc2-star--empty">★</span>'; ?>
+                </div>
+                <?php if ($votes > 0): ?>
+                <div class="sc2-hrb-votes">(<?= number_format($votes, 0, ',', "\u{202F}") ?> avis)</div>
+                <?php endif; ?>
+              <?php else: ?>
+                <div class="sc2-hrb-nodata">
+                  <div class="sc2-hrb-nodata-stars">☆☆☆☆☆</div>
+                  <div class="sc2-hrb-nodata-label">Pas d'avis disponibles</div>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <div class="sc2-prep-claim">
+            <p>Cette entreprise vous appartient ? Prenez le contrôle de votre fiche et améliorez votre visibilité.</p>
+            <a href="<?= esc_url($claim_url) ?>" class="sc2-prep-claim-btn">Gérer gratuitement ma fiche →</a>
+          </div>
+
+          <a href="https://www.topsocietes.com/" target="_blank" rel="noopener" class="sc2-cta-banner">
+            <div class="sc2-cta-text">
+              <strong>Créez votre société — 0 impôt société</strong>
+              <span>Europe · Asie · USA &nbsp;|&nbsp; + Introduction bancaire incluse</span>
+            </div>
+            <div class="sc2-cta-btn">Découvrir TOPsocietes.com →</div>
+          </a>
+
+        </div>
+        <style>
+        .sc2-prep-banner{display:flex;align-items:center;gap:16px;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:14px;padding:20px 24px;margin:0 0 20px}
+        .sc2-prep-icon{font-size:32px;flex-shrink:0}
+        .sc2-prep-info{display:flex;flex-direction:column;gap:5px}
+        .sc2-prep-info strong{font-size:15px;font-weight:700;color:#92400e}
+        .sc2-prep-info span{font-size:13px;color:#78350f;line-height:1.55}
+        .sc2-prep-claim{background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:28px 24px;margin:24px 0;text-align:center}
+        .sc2-prep-claim p{font-size:14px;color:#64748b;margin:0 0 18px;line-height:1.6}
+        .sc2-prep-claim-btn{display:inline-block;background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:#fff;font-size:14px;font-weight:700;padding:13px 30px;border-radius:10px;text-decoration:none;transition:opacity .2s}
+        .sc2-prep-claim-btn:hover{opacity:.88;color:#fff;text-decoration:none}
+        @media(max-width:640px){.sc2-prep-banner{flex-direction:column;gap:10px;text-align:center}}
+        </style>
+        <?php
+        return ob_get_clean();
+    }
 
     ob_start(); ?>
     <div class="sc2-wrap">
