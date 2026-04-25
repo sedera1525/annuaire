@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.50
+ * Version:      2.5.52
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.50');
+define('SC_VERSION', '2.5.52');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1466,6 +1466,18 @@ add_action('template_redirect', function() {
     exit;
 }, 1);
 
+// AJAX — vérifie si une fiche est prête (polling depuis la page "en préparation")
+add_action('wp_ajax_sc_fiche_ready',        'sc_fiche_ready_handler');
+add_action('wp_ajax_nopriv_sc_fiche_ready', 'sc_fiche_ready_handler');
+function sc_fiche_ready_handler() {
+    $title = sanitize_text_field($_GET['title'] ?? '');
+    if (!$title || strlen($title) > 300) {
+        wp_send_json(['ready' => false]);
+    }
+    $fiche = sc_api('/api/fiche/' . rawurlencode($title));
+    wp_send_json(['ready' => (($fiche['status'] ?? '') === 'done')]);
+}
+
 // AJAX handler — public (nopriv)
 add_action('wp_ajax_sc_search',        'sc_search_ajax_handler');
 add_action('wp_ajax_nopriv_sc_search', 'sc_search_ajax_handler');
@@ -1703,12 +1715,16 @@ add_shortcode('societies_fiche', function($atts) {
           </nav>
 
           <div class="sc2-prep-banner">
-            <div class="sc2-prep-icon">⏳</div>
+            <div class="sc2-prep-spinner" aria-hidden="true"></div>
             <div class="sc2-prep-info">
-              <strong>Fiche en cours de préparation</strong>
-              <span>Nos équipes analysent cette entreprise. La fiche complète sera disponible très prochainement.</span>
+              <strong>Fiche en cours de génération…</strong>
+              <span>Nous analysons cette entreprise. La page se mettra à jour automatiquement dans quelques instants.</span>
             </div>
           </div>
+          <div class="sc2-prep-progress" id="sc2-prep-bar-wrap">
+            <div class="sc2-prep-progress-bar" id="sc2-prep-bar"></div>
+          </div>
+          <p class="sc2-prep-status" id="sc2-prep-msg">Analyse en cours…</p>
 
           <div class="sc2-hero">
             <div class="sc2-hero-left">
@@ -1777,17 +1793,115 @@ add_shortcode('societies_fiche', function($atts) {
           </a>
 
         </div>
+        <script>
+        (function() {
+          var title    = <?= json_encode($company['title']) ?>;
+          var ajaxUrl  = <?= json_encode(admin_url('admin-ajax.php')) ?>;
+          var attempts = 0;
+          var maxAttempts = 40;
+          var bar      = document.getElementById('sc2-prep-bar');
+          var msg      = document.getElementById('sc2-prep-msg');
+          var msgs     = [
+            'Analyse en cours…',
+            'Récupération des informations…',
+            'Génération du contenu…',
+            'Finalisation de la fiche…',
+            'Presque prêt…',
+          ];
+          function check() {
+            attempts++;
+            if (bar) bar.style.width = Math.min(90, attempts * 2.5) + '%';
+            if (msg)  msg.textContent = msgs[Math.min(attempts - 1, msgs.length - 1)];
+            if (attempts > maxAttempts) {
+              if (msg) msg.textContent = 'La génération prend plus de temps que prévu. Actualisez dans quelques minutes.';
+              return;
+            }
+            fetch(ajaxUrl + '?action=sc_fiche_ready&title=' + encodeURIComponent(title), {cache: 'no-store'})
+              .then(function(r) { return r.json(); })
+              .then(function(d) {
+                if (d.ready) {
+                  if (bar) bar.style.width = '100%';
+                  if (msg) msg.textContent = 'Fiche prête ! Chargement…';
+                  setTimeout(function() { location.reload(); }, 600);
+                } else {
+                  setTimeout(check, 4000);
+                }
+              })
+              .catch(function() { setTimeout(check, 6000); });
+          }
+          setTimeout(check, 3000);
+        })();
+        </script>
         <style>
-        .sc2-prep-banner{display:flex;align-items:center;gap:16px;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:14px;padding:20px 24px;margin:0 0 20px}
-        .sc2-prep-icon{font-size:32px;flex-shrink:0}
+        :root{--sc-grad:linear-gradient(135deg,#F97316 0%,#EC4899 40%,#8B5CF6 70%,#06B6D4 100%);--sc-grad-btn:linear-gradient(135deg,#F97316,#EC4899);--sc-navy:#1e2d5a;--sc-orange:#F97316}
+        .sc2-wrap{max-width:1100px;margin:0 auto;padding:32px 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937}
+        /* BREADCRUMB */
+        .sc2-breadcrumb{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:13px;margin-bottom:16px;padding:10px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px}
+        .sc2-breadcrumb a{color:#1e3a8a;text-decoration:none;font-weight:500;transition:color .15s}
+        .sc2-breadcrumb a:hover{color:#F97316;text-decoration:underline}
+        .sc2-breadcrumb span{color:#9ca3af;font-size:12px}
+        .sc2-breadcrumb-current{color:#1f2937;font-weight:700}
+        /* HERO */
+        .sc2-hero{background:linear-gradient(135deg,#fff8f4 0%,#fdf4ff 60%,#f0f4ff 100%);border-radius:20px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px;flex-wrap:wrap;border:1.5px solid #ede8ff;box-shadow:0 4px 28px rgba(139,92,246,.09);position:relative;overflow:hidden;margin-top:5%}
+        .sc2-hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--sc-grad)}
+        .sc2-hero-left{flex:1;min-width:0}
+        .sc2-hero-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+        .sc2-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1.5px solid}
+        .sc2-badge--active{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.25);color:#15803d}
+        .sc2-badge--forme{background:#f0f4ff;border-color:#c7d2fe;color:#4338ca}
+        .sc2-hero-name{margin:0 0 10px;font-size:26px;font-weight:900;color:var(--sc-navy);line-height:1.15;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .sc2-hero-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+        .sc2-hero-meta span,.sc2-hm-link{color:#475569;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid #e8e0ff;font-weight:500;text-decoration:none;white-space:nowrap}
+        .sc2-hm-link{color:var(--sc-orange);border-color:#fed7aa}
+        .sc2-hm-link:hover{background:#fff7ed}
+        .sc2-hm-link--web{color:#3b82f6;border-color:#bfdbfe}
+        .sc2-hm-link--web:hover{background:#eff6ff}
+        .sc2-hero-rating-box{flex-shrink:0;background:#1a2744;border-radius:16px;padding:18px 22px;text-align:center;min-width:130px;max-width:170px;display:flex;flex-direction:column;align-items:center;gap:6px}
+        .sc2-hrb-score{font-size:26px;font-weight:900;color:#fff;line-height:1}
+        .sc2-hrb-stars{display:flex;gap:2px;justify-content:center}
+        .sc2-star{font-size:18px}
+        .sc2-star--full{color:#f59e0b}
+        .sc2-star--half{color:#f59e0b;opacity:.65}
+        .sc2-star--empty{color:#4b5563}
+        .sc2-hrb-votes{font-size:12px;color:#94a3b8;font-weight:400}
+        .sc2-hrb-nodata{display:flex;flex-direction:column;align-items:center;gap:5px}
+        .sc2-hrb-nodata-stars{font-size:18px;color:#4b5563;letter-spacing:2px}
+        .sc2-hrb-nodata-label{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
+        /* PREP */
+        .sc2-prep-banner{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#eff6ff,#f0f4ff);border:1.5px solid #bfdbfe;border-radius:14px;padding:20px 24px;margin:0 0 12px}
+        .sc2-prep-spinner{width:36px;height:36px;border-radius:50%;border:3px solid #bfdbfe;border-top-color:#3b82f6;flex-shrink:0;animation:sc2spin 0.9s linear infinite}
+        @keyframes sc2spin{to{transform:rotate(360deg)}}
         .sc2-prep-info{display:flex;flex-direction:column;gap:5px}
-        .sc2-prep-info strong{font-size:15px;font-weight:700;color:#92400e}
-        .sc2-prep-info span{font-size:13px;color:#78350f;line-height:1.55}
+        .sc2-prep-info strong{font-size:15px;font-weight:700;color:#1e3a8a}
+        .sc2-prep-info span{font-size:13px;color:#3b5bdb;line-height:1.55}
+        .sc2-prep-progress{background:#e2e8f0;border-radius:6px;height:6px;margin:0 0 6px;overflow:hidden}
+        .sc2-prep-progress-bar{height:100%;background:linear-gradient(90deg,#3b82f6,#8B5CF6);border-radius:6px;width:0%;transition:width 0.8s ease}
+        .sc2-prep-status{font-size:12px;color:#6b7280;text-align:center;margin:0 0 20px;font-style:italic}
         .sc2-prep-claim{background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:28px 24px;margin:24px 0;text-align:center}
         .sc2-prep-claim p{font-size:14px;color:#64748b;margin:0 0 18px;line-height:1.6}
         .sc2-prep-claim-btn{display:inline-block;background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:#fff;font-size:14px;font-weight:700;padding:13px 30px;border-radius:10px;text-decoration:none;transition:opacity .2s}
         .sc2-prep-claim-btn:hover{opacity:.88;color:#fff;text-decoration:none}
+        /* CTA BANNER */
+        .sc2-cta-banner{display:flex;align-items:center;justify-content:space-between;gap:24px;background:linear-gradient(135deg,#0f172a 0%,#1e2d5a 60%,#1e3a8a 100%);border-radius:16px;padding:24px 32px;margin-top:24px;text-decoration:none;transition:opacity .2s}
+        .sc2-cta-banner:hover{opacity:.92}
+        .sc2-cta-text{display:flex;flex-direction:column;gap:6px}
+        .sc2-cta-text strong{font-size:20px;font-weight:800;color:#fff;line-height:1.2}
+        .sc2-cta-text span{font-size:13px;color:#94a3b8}
+        .sc2-cta-btn{flex-shrink:0;background:linear-gradient(135deg,#3b5bdb,#4c6ef5);color:#fff;font-size:14px;font-weight:700;padding:12px 24px;border-radius:10px;white-space:nowrap;box-shadow:0 4px 16px rgba(59,91,219,.4)}
+        /* RESPONSIVE */
         @media(max-width:640px){.sc2-prep-banner{flex-direction:column;gap:10px;text-align:center}}
+        @media(max-width:600px){
+          .sc2-hero{padding:16px;flex-direction:column;gap:14px}
+          .sc2-hero-left{width:100%}
+          .sc2-hero-name{font-size:20px;white-space:normal}
+          .sc2-hero-rating-box{flex-direction:row;width:100%;max-width:100%;min-width:unset;padding:12px 16px;border-radius:12px;justify-content:center;align-items:center;gap:14px}
+          .sc2-hrb-score{font-size:20px}
+          .sc2-hrb-nodata{flex-direction:row;gap:8px}
+          .sc2-breadcrumb{font-size:11px;padding:8px 12px}
+          .sc2-cta-banner{flex-direction:column;align-items:flex-start;padding:20px;gap:16px}
+          .sc2-cta-text strong{font-size:17px}
+          .sc2-cta-btn{width:100%;text-align:center;padding:12px}
+        }
         </style>
         <?php
         return ob_get_clean();
