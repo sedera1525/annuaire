@@ -434,14 +434,19 @@ async def sync_wp_pages_start(data: dict = Body(default={})):
     if _sync_wp_state["running"]:
         return {"status": "already_running", **_sync_wp_state}
 
-    concurrency = min(int(data.get("concurrency", 10)), 30)
+    concurrency = min(int(data.get("concurrency", 5)), 20)
 
     async def _run():
+        import asyncio as _aio
+        import httpx as _httpx
+        from core.db import get_conn as _get_conn
+
         _sync_wp_state.update({"running": True, "done": 0, "errors": 0, "total": 0, "finished": False})
+
         conn = sqlite3.connect(FICHES_DB)
         try:
             rows = conn.execute(
-                "SELECT company_title FROM fiches WHERE status='done' ORDER BY id ASC"
+                "SELECT company_title FROM fiches WHERE status='done' AND deleted_at IS NULL ORDER BY id ASC"
             ).fetchall()
         finally:
             conn.close()
@@ -449,29 +454,80 @@ async def sync_wp_pages_start(data: dict = Body(default={})):
         titles = [r[0] for r in rows if r[0]]
         _sync_wp_state["total"] = len(titles)
 
-        sem = _aio.Semaphore(concurrency)
+        wp_url    = os.getenv("WP_SITE_URL", "").rstrip("/")
+        wp_secret = os.getenv("WP_API_PASSWORD", "")
+        if not wp_url or not wp_secret:
+            _sync_wp_state.update({"running": False, "finished": True})
+            return
 
-        async def _sync_one(title: str):
-            async with sem:
-                try:
-                    import httpx as _httpx
-                    wp_url    = os.getenv("WP_SITE_URL", "").rstrip("/")
-                    wp_secret = os.getenv("WP_API_PASSWORD", "")
-                    if not wp_url or not wp_secret:
-                        return
-                    r = await _httpx.AsyncClient(timeout=10).post(
-                        f"{wp_url}/wp-json/sc/v1/sync-fiche",
-                        json={"title": title},
-                        headers={"X-SC-Secret": wp_secret},
-                    )
-                    if r.status_code in (200, 201):
-                        _sync_wp_state["done"] += 1
-                    else:
-                        _sync_wp_state["errors"] += 1
-                except Exception:
-                    _sync_wp_state["errors"] += 1
+        # Pre-fetch city + category from DuckDB so WP doesn't need to call back to the API
+        # for every single company (eliminates N×2 MySQL queries from sc_resolve_page_parent).
+        meta: dict[str, dict] = {}
+        try:
+            titles_set = set(titles)
+            dconn = _get_conn()
+            try:
+                cursor = dconn.execute("SELECT title, city, category FROM companies")
+                while True:
+                    batch = cursor.fetchmany(50_000)
+                    if not batch:
+                        break
+                    for r in batch:
+                        if r[0] in titles_set:
+                            meta[r[0]] = {"city": r[1] or "", "category": r[2] or ""}
+            finally:
+                dconn.close()
+            logger.info(f"sync-wp-pages : {len(meta)} entreprises trouvées dans DuckDB")
+        except Exception as e:
+            logger.warning(f"sync-wp-pages : DuckDB meta fetch échoué ({e}) — ville/catégorie non transmises")
 
-        await _aio.gather(*[_sync_one(t) for t in titles])
+        queue: _aio.Queue = _aio.Queue()
+        for t in titles:
+            queue.put_nowait(t)
+
+        # Shared client — one TCP connection pool for all workers, properly closed at the end.
+        limits = _httpx.Limits(max_connections=concurrency + 4, max_keepalive_connections=concurrency)
+        async with _httpx.AsyncClient(timeout=25, limits=limits) as client:
+            async def _worker():
+                while True:
+                    try:
+                        title = queue.get_nowait()
+                    except Exception:
+                        break
+                    payload = {"title": title, **meta.get(title, {})}
+                    for attempt in range(3):
+                        try:
+                            r = await client.post(
+                                f"{wp_url}/wp-json/sc/v1/sync-fiche",
+                                json=payload,
+                                headers={"X-SC-Secret": wp_secret},
+                            )
+                            if r.status_code in (200, 201):
+                                _sync_wp_state["done"] += 1
+                            elif r.status_code >= 500 and attempt < 2:
+                                await _aio.sleep(2.0 * (attempt + 1))
+                                continue
+                            else:
+                                _sync_wp_state["errors"] += 1
+                                logger.warning(
+                                    f"WP sync '{title[:60]}' → HTTP {r.status_code}: {r.text[:200]}"
+                                )
+                            break
+                        except _httpx.TimeoutException:
+                            if attempt < 2:
+                                await _aio.sleep(3.0 * (attempt + 1))
+                            else:
+                                _sync_wp_state["errors"] += 1
+                                logger.warning(f"WP sync '{title[:60]}' → timeout (3 tentatives)")
+                        except Exception as e:
+                            _sync_wp_state["errors"] += 1
+                            logger.warning(f"WP sync '{title[:60]}' → {e}")
+                            break
+                    queue.task_done()
+
+            workers = [_aio.create_task(_worker()) for _ in range(concurrency)]
+            await _aio.gather(*workers)
+
         _sync_wp_state.update({"running": False, "finished": True})
         logger.info(f"sync-wp-pages terminé : {_sync_wp_state['done']} ok / {_sync_wp_state['errors']} erreurs")
 

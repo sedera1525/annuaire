@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.47
+ * Version:      2.5.48
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.47');
+define('SC_VERSION', '2.5.48');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -93,6 +93,9 @@ add_filter('auto_update_plugin', function($update, $item) {
 
 // Trouve ou crée une page WP (ville ou métier) sous un parent donné.
 function sc_get_or_create_parent_page(string $slug, string $display_title, int $parent_id = 0): int {
+    static $cache = [];
+    $key = "{$parent_id}:{$slug}";
+    if (isset($cache[$key])) return $cache[$key];
     $existing = get_posts([
         'post_type'   => 'page',
         'post_status' => ['publish'],
@@ -100,7 +103,10 @@ function sc_get_or_create_parent_page(string $slug, string $display_title, int $
         'name'        => $slug,
         'numberposts' => 1,
     ]);
-    if ($existing) return (int) $existing[0]->ID;
+    if ($existing) {
+        $cache[$key] = (int) $existing[0]->ID;
+        return $cache[$key];
+    }
     $post_id = wp_insert_post([
         'post_title'  => sanitize_text_field($display_title),
         'post_name'   => $slug,
@@ -108,7 +114,8 @@ function sc_get_or_create_parent_page(string $slug, string $display_title, int $
         'post_type'   => 'page',
         'post_parent' => $parent_id,
     ]);
-    return is_wp_error($post_id) ? 0 : (int) $post_id;
+    $cache[$key] = is_wp_error($post_id) ? 0 : (int) $post_id;
+    return $cache[$key];
 }
 
 // Résout le post_parent pour la structure /[ville]/[metier]/[nom]/.
@@ -213,7 +220,9 @@ add_action('rest_api_init', function() {
 });
 
 function sc_rest_sync_fiche(WP_REST_Request $request): WP_REST_Response {
-    $title = sanitize_text_field($request->get_param('title') ?? '');
+    $title    = sanitize_text_field($request->get_param('title')    ?? '');
+    $city     = sanitize_text_field($request->get_param('city')     ?? '');
+    $category = sanitize_text_field($request->get_param('category') ?? '');
     if (!$title) return new WP_REST_Response(['error' => 'title required'], 400);
 
     $existing = get_posts([
@@ -227,7 +236,15 @@ function sc_rest_sync_fiche(WP_REST_Request $request): WP_REST_Response {
         return new WP_REST_Response(['status' => 'exists', 'id' => $existing[0]->ID, 'url' => get_permalink($existing[0]->ID)], 200);
     }
 
-    $parent_id = sc_resolve_page_parent($title);
+    // If city + category are provided in the payload, resolve parent directly without
+    // calling back to the API (avoids N×HTTP round-trips during bulk sync).
+    if ($city && $category) {
+        $city_id   = sc_get_or_create_parent_page(sanitize_title($city), $city, 0);
+        $parent_id = $city_id ? (sc_get_or_create_parent_page(sanitize_title($category), $category, $city_id) ?: 0) : 0;
+    } else {
+        $parent_id = sc_resolve_page_parent($title);
+    }
+
     $post_id   = wp_insert_post([
         'post_title'   => sanitize_text_field($title),
         'post_name'    => sanitize_title($title),
