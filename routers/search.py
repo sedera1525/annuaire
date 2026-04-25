@@ -293,6 +293,48 @@ def search(
     return result
 
 
+@router.get("/company/by-slug/{slug:path}")
+def get_company_by_slug(slug: str):
+    """
+    Trouve une entreprise par son slug WP (sanitize_title).
+    Utilisé par le handler 404 → création de page à la demande.
+    Gère les noms avec &, accents, tirets multiples, etc.
+    Ex : 'jack-jones' → 'JACK & JONES', 'cafe-de-la-paix' → 'Café de la Paix'
+    """
+    import re
+    import unicodedata as _ud
+
+    if not slug or len(slug) < 2 or len(slug) > 200:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Slug invalide")
+
+    def to_slug(s: str) -> str:
+        """Approximation de WordPress sanitize_title en Python."""
+        s = s.lower().strip()
+        s = _ud.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+        s = re.sub(r"[^a-z0-9]+", "-", s)
+        return s.strip("-")
+
+    # Construit le pattern LIKE depuis le slug :
+    # 'jack-jones' → '%jack%jones%'  /  'cafe-de-la-paix' → '%cafe%de%la%paix%'
+    parts   = [p for p in re.split(r"-+", slug) if p]
+    pattern = "%" + "%".join(parts) + "%"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT title, city, category, zip_code FROM companies "
+            "WHERE LOWER(title) LIKE LOWER(?) LIMIT 30",
+            [pattern]
+        ).fetchall()
+        for row in rows:
+            if to_slug(row[0]) == slug:
+                return {"title": row[0], "city": row[1], "category": row[2], "zip_code": row[3]}
+        return None
+    finally:
+        conn.close()
+
+
 @router.get("/company/{title:path}")
 def get_company(title: str):
     company = fetch_company(title)

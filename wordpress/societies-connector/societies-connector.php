@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.49
+ * Version:      2.5.50
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.49');
+define('SC_VERSION', '2.5.50');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -1383,7 +1383,7 @@ add_action('template_redirect', function() {
     $slug = end($segments);
     if (strlen($slug) < 3 || strlen($slug) > 200) return;
 
-    // Cache négatif : évite de re-interroger l'API pour un slug inconnu
+    // Cache négatif (5 min) : évite de re-interroger l'API à chaque visite pour un slug inconnu
     $cache_key = 'sc_404_' . md5($slug);
     if (get_transient($cache_key) === 'miss') return;
 
@@ -1409,8 +1409,8 @@ add_action('template_redirect', function() {
         exit;
     }
 
-    // Interroger l'API backend
-    $data        = sc_api('/api/search?q=' . rawurlencode($slug_as_title) . '&per_page=5');
+    // Essai 1 : recherche textuelle classique (slug avec espaces)
+    $data        = sc_api('/api/search?q=' . rawurlencode($slug_as_title) . '&per_page=10');
     $found_title = null;
     foreach ($data['results'] ?? [] as $r) {
         if (!empty($r['title']) && sanitize_title($r['title']) === $slug) {
@@ -1419,8 +1419,17 @@ add_action('template_redirect', function() {
         }
     }
 
+    // Essai 2 : lookup par slug exact via endpoint dédié
+    // Gère les noms avec &, accents, etc. (ex : 'jack-jones' → 'JACK & JONES')
     if (!$found_title) {
-        set_transient($cache_key, 'miss', HOUR_IN_SECONDS);
+        $by_slug_data = sc_api('/api/company/by-slug/' . rawurlencode($slug));
+        if (!empty($by_slug_data['title'])) {
+            $found_title = $by_slug_data['title'];
+        }
+    }
+
+    if (!$found_title) {
+        set_transient($cache_key, 'miss', 5 * MINUTE_IN_SECONDS);
         return;
     }
 
@@ -1449,6 +1458,7 @@ add_action('template_redirect', function() {
 
     if (!$page_id || is_wp_error($page_id)) return;
 
+    delete_transient($cache_key); // Supprime le cache négatif éventuel
     update_post_meta($page_id, '_sc_company_title', $found_title);
     update_post_meta($page_id, '_wp_page_template', 'shortcode-page.php');
 
