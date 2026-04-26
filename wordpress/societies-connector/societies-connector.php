@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.54
+ * Version:      2.5.55
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.54');
+define('SC_VERSION', '2.5.55');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -440,6 +440,39 @@ function sc_user_has_subscription(int $user_id = 0): bool {
         'limit'    => 1,
     ]);
     return !empty($orders);
+}
+
+/**
+ * Retourne le slug du pack souscrit par le propriétaire d'une fiche.
+ * '' = aucun abonnement actif.
+ * Slugs possibles : 'pack-essentiel', 'pack-visibilite', 'pack-premium', 'pack-master'
+ */
+function sc_get_owner_pack(string $company_title): string {
+    if (!$company_title || !function_exists('wc_get_orders')) return '';
+    $users = get_users(['meta_key' => 'sc_company_title', 'meta_value' => $company_title, 'number' => 1]);
+    if (empty($users)) return '';
+    $orders = wc_get_orders([
+        'customer' => $users[0]->ID,
+        'status'   => ['completed', 'processing'],
+        'limit'    => 10,
+        'orderby'  => 'date',
+        'order'    => 'DESC',
+    ]);
+    $known = ['pack-master', 'pack-premium', 'pack-visibilite', 'pack-essentiel'];
+    foreach ($orders as $order) {
+        foreach ($order->get_items() as $item) {
+            $product = $item->get_product();
+            if (!$product) continue;
+            $slug = $product->get_slug();
+            if (in_array($slug, $known, true)) return $slug;
+            // Fallback : cherche dans le nom du produit
+            $name = strtolower($product->get_name());
+            foreach ($known as $k) {
+                if (str_contains($name, str_replace('pack-', '', $k))) return $k;
+            }
+        }
+    }
+    return '';
 }
 
 /**
@@ -1755,9 +1788,11 @@ add_shortcode('societies_fiche', function($atts) {
     $ch_raw      = $company['ca_history'] ?? [];
     $ca_history  = is_array($ch_raw) ? $ch_raw : (json_decode((string)$ch_raw, true) ?: []);
 
-    // Vérifie si le propriétaire de cette fiche a un abonnement actif
-    $owner_users   = get_users(['meta_key' => 'sc_company_title', 'meta_value' => $company['title'], 'number' => 1]);
-    $owner_sub     = !empty($owner_users) && sc_user_has_subscription($owner_users[0]->ID);
+    // Pack souscrit par le propriétaire de cette fiche
+    $owner_pack         = sc_get_owner_pack($company['title']);
+    $owner_sub          = !empty($owner_pack); // compatibilité ascendante
+    $has_confiance      = in_array($owner_pack, ['pack-visibilite', 'pack-premium'], true);
+    $has_verifie_premium= ($owner_pack === 'pack-master');
 
     // Badge initiales + score affiché même sans donnée
     $sc2_init = '';
@@ -2067,7 +2102,8 @@ add_shortcode('societies_fiche', function($atts) {
             <div class="sc2-hero-badges">
               <span class="sc2-badge sc2-badge--active">✓ En activité</span>
               <?php if ($forme_jur): ?><span class="sc2-badge sc2-badge--forme"><?= esc_html($forme_jur) ?></span><?php endif; ?>
-              <?php if ($owner_sub): ?><span class="sc2-badge sc2-badge--premium">⭐ PREMIUM</span><?php endif; ?>
+              <?php if ($has_confiance): ?><span class="sc2-badge sc2-badge--confiance">🏆 Confiance &amp; Transparence</span><?php endif; ?>
+              <?php if ($has_verifie_premium): ?><span class="sc2-badge sc2-badge--verifie">🛡️ Profil Vérifié Premium</span><?php endif; ?>
             </div>
             <h1 class="sc2-hero-name"><?= esc_html($company['title']) ?></h1>
             <?php
@@ -2090,8 +2126,12 @@ add_shortcode('societies_fiche', function($atts) {
           </div>
         </div>
         <!-- RATING HERO -->
-        <div class="sc2-hero-rating-box">
-          <?php if ($rating > 0): ?>
+        <div class="sc2-hero-rating-box<?= $has_verifie_premium ? ' sc2-hero-rating-box--verifie' : '' ?>">
+          <?php if ($has_verifie_premium): ?>
+            <div class="sc2-verifie-icon">🛡️</div>
+            <div class="sc2-verifie-label">Profil Vérifié<br>Premium</div>
+            <div class="sc2-verifie-sub">Identité confirmée</div>
+          <?php elseif ($rating > 0): ?>
             <?php
               $r_display = number_format(round($rating, 1), 1, ',', '');
               $r_stars   = round($rating * 2) / 2;
@@ -2275,6 +2315,11 @@ add_shortcode('societies_fiche', function($atts) {
 
       </div><!-- .sc2-grid -->
 
+      <?php if ($has_confiance || $has_verifie_premium): ?>
+      <div class="sc2-report-wrap">
+        <a href="<?= esc_url(home_url('/signaler/?entreprise=' . rawurlencode($company['title']))) ?>" class="sc2-report-link">Signaler un problème avec cette entreprise</a>
+      </div>
+      <?php endif; ?>
       <div class="sc2-disclaimer">⭐ Note basée sur notre perception du profil de l'entreprise, calculée en fonction des éléments positifs et négatifs identifiés.</div>
 
       <a href="https://www.topsocietes.com/" target="_blank" rel="noopener" class="sc2-cta-banner">
@@ -2301,6 +2346,8 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1.5px solid}
     .sc2-badge--active{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.25);color:#15803d}
     .sc2-badge--forme{background:#f0f4ff;border-color:#c7d2fe;color:#4338ca}
+    .sc2-badge--confiance{background:rgba(249,115,22,.08);border-color:rgba(249,115,22,.3);color:#C2410C}
+    .sc2-badge--verifie{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.3);color:#6D28D9}
     .sc2-badge--premium{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.25);color:#b45309}
     .sc2-hero-name{margin:0 0 10px;font-size:26px;font-weight:900;color:var(--sc-navy);line-height:1.15;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .sc2-hero-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
@@ -2445,6 +2492,15 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-bonus-text{margin:0;color:#1e2d5a;font-size:14px;line-height:1.85}
 
     /* DISCLAIMER */
+    /* BADGE VÉRIFIÉ PREMIUM (rating box) */
+    .sc2-hero-rating-box--verifie{background:linear-gradient(135deg,#2e1065,#4c1d95);border:2px solid #7C3AED}
+    .sc2-verifie-icon{font-size:32px;line-height:1}
+    .sc2-verifie-label{font-size:13px;font-weight:800;color:#fff;text-align:center;line-height:1.3;margin-top:4px}
+    .sc2-verifie-sub{font-size:10px;color:#c4b5fd;font-weight:500;margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+    /* LIEN SIGNALER */
+    .sc2-report-wrap{text-align:center;margin:16px 0 4px}
+    .sc2-report-link{font-size:11px;color:#9ca3af;text-decoration:none;border-bottom:1px dashed #d1d5db;transition:color .15s}
+    .sc2-report-link:hover{color:#ef4444;border-bottom-color:#ef4444}
     .sc2-disclaimer{font-size:11px;color:#94a3b8;font-style:italic;text-align:center;padding:12px;margin-top:8px;margin-bottom:16px}
     .sc2-cta-banner{display:flex;align-items:center;justify-content:space-between;gap:24px;background:linear-gradient(135deg,#0f172a 0%,#1e2d5a 60%,#1e3a8a 100%);border-radius:16px;padding:24px 32px;margin-top:24px;text-decoration:none;transition:opacity .2s}
     .sc2-cta-banner:hover{opacity:.92}
