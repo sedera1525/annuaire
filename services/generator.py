@@ -46,14 +46,141 @@ def _cb_reset() -> None:
     _cb_errors = 0
 
 
-OPEN_QUESTIONS_TEMPLATE = [
+# Questions génériques (fallback)
+_QUESTIONS_GENERIC = [
     "Comment fonctionne réellement le service client de l'entreprise {nom} en cas de problème ?",
     "Les clients fidèles de l'entreprise {nom} recommandent-ils vraiment ses services ?",
     "Les tarifs de l'entreprise {nom} sont-ils transparents ?",
     "Les délais annoncés par l'entreprise {nom} sont-ils respectés ?",
     "Le rapport qualité-prix de l'entreprise {nom} est-il intéressant ?",
     "L'entreprise {nom} propose-t-elle des garanties à ses clients ?",
+    "Est-il facile de contacter l'entreprise {nom} avant de passer commande ?",
+    "Les avis clients de l'entreprise {nom} reflètent-ils la réalité du service ?",
+    "L'entreprise {nom} gère-t-elle bien les réclamations et litiges ?",
+    "Peut-on faire confiance aux informations communiquées par l'entreprise {nom} ?",
+    "La réputation de l'entreprise {nom} est-elle à la hauteur de ses promesses ?",
+    "Comment l'entreprise {nom} se distingue-t-elle de ses concurrents ?",
 ]
+
+# Questions par secteur — tirées aléatoirement selon un hash du titre (stable par entreprise)
+_QUESTIONS_BY_SECTOR: dict[str, list[str]] = {
+    "restauration": [
+        "La qualité des plats de l'entreprise {nom} justifie-t-elle les prix pratiqués ?",
+        "Les délais d'attente chez {nom} sont-ils raisonnables ?",
+        "L'accueil et l'ambiance chez {nom} correspondent-ils aux descriptions ?",
+        "Les portions servies par {nom} sont-elles généreuses ?",
+        "Les allergies alimentaires sont-elles bien gérées par {nom} ?",
+        "Le rapport qualité-prix du menu de {nom} est-il compétitif ?",
+        "Les clients reviennent-ils régulièrement manger chez {nom} ?",
+        "La fraîcheur des produits utilisés par {nom} est-elle au rendez-vous ?",
+    ],
+    "artisan_btp": [
+        "Les délais de chantier annoncés par {nom} sont-ils respectés ?",
+        "Les devis de {nom} correspondent-ils à la facture finale ?",
+        "La propreté du chantier est-elle respectée par les équipes de {nom} ?",
+        "Les travaux réalisés par {nom} nécessitent-ils souvent des reprises ?",
+        "Les artisans de {nom} sont-ils ponctuels et professionnels ?",
+        "L'entreprise {nom} dispose-t-elle des certifications nécessaires ?",
+        "Les garanties proposées par {nom} sont-elles claires et respectées ?",
+        "La communication avec {nom} est-elle fluide tout au long du chantier ?",
+        "Le service après-vente de {nom} est-il réactif en cas de malfaçon ?",
+    ],
+    "sante": [
+        "L'accueil et l'écoute des praticiens de {nom} sont-ils appréciés des patients ?",
+        "Les délais d'attente pour obtenir un rendez-vous chez {nom} sont-ils acceptables ?",
+        "Les explications données par les professionnels de {nom} sont-elles claires ?",
+        "L'environnement et la propreté des locaux de {nom} sont-ils irréprochables ?",
+        "La prise en charge par {nom} répond-elle aux attentes des patients ?",
+        "Les tarifs pratiqués par {nom} sont-ils cohérents avec le secteur ?",
+        "Le suivi après consultation chez {nom} est-il satisfaisant ?",
+    ],
+    "commerce": [
+        "Le choix de produits proposé par {nom} est-il suffisamment varié ?",
+        "Les prix de {nom} sont-ils compétitifs par rapport à la concurrence ?",
+        "Le service en magasin chez {nom} est-il agréable et efficace ?",
+        "Les délais de livraison ou de retrait de {nom} sont-ils respectés ?",
+        "La politique de retour et d'échange de {nom} est-elle satisfaisante ?",
+        "Les produits vendus par {nom} correspondent-ils aux descriptions ?",
+        "Le personnel de {nom} est-il compétent pour conseiller les clients ?",
+        "L'expérience d'achat chez {nom} incite-t-elle à revenir ?",
+    ],
+    "immobilier": [
+        "Les biens proposés par {nom} correspondent-ils aux annonces publiées ?",
+        "La réactivité des agents de {nom} est-elle satisfaisante ?",
+        "Les frais d'agence pratiqués par {nom} sont-ils justifiés ?",
+        "L'accompagnement proposé par {nom} couvre-t-il toutes les étapes du projet ?",
+        "Les estimations de valeur faites par {nom} sont-elles fiables ?",
+        "La transparence de {nom} sur les défauts du bien est-elle appréciée ?",
+        "Les délais de vente ou location avec {nom} sont-ils raisonnables ?",
+    ],
+    "transport": [
+        "La ponctualité du service de {nom} est-elle au rendez-vous ?",
+        "Les véhicules de {nom} sont-ils propres et en bon état ?",
+        "Le professionnalisme des chauffeurs ou livreurs de {nom} est-il reconnu ?",
+        "Les tarifs de {nom} sont-ils transparents et sans surprise ?",
+        "La réactivité de {nom} en cas de retard ou d'incident est-elle satisfaisante ?",
+        "La ponctualité de {nom} est-elle fiable même en période chargée ?",
+        "Le suivi de livraison proposé par {nom} est-il suffisamment précis ?",
+    ],
+}
+
+# Mapping mots-clés de catégorie → clé secteur
+_SECTOR_KEYWORDS: list[tuple[str, str]] = [
+    ("restaur", "restauration"), ("traiteur", "restauration"), ("boulang", "restauration"),
+    ("boucherie", "restauration"), ("pâtisserie", "restauration"), ("alimentation", "restauration"),
+    ("food", "restauration"), ("bakery", "restauration"), ("coffee", "restauration"),
+    ("artisan", "artisan_btp"), ("plomb", "artisan_btp"), ("électric", "artisan_btp"),
+    ("menuisier", "artisan_btp"), ("maçon", "artisan_btp"), ("peintre", "artisan_btp"),
+    ("couvreur", "artisan_btp"), ("chauffage", "artisan_btp"), ("construction", "artisan_btp"),
+    ("btp", "artisan_btp"), ("architecte", "artisan_btp"), ("rénov", "artisan_btp"),
+    ("plumb", "artisan_btp"), ("carpenter", "artisan_btp"), ("electric", "artisan_btp"),
+    ("médecin", "sante"), ("médical", "sante"), ("pharmacie", "sante"), ("dentiste", "sante"),
+    ("vétérin", "sante"), ("optique", "sante"), ("santé", "sante"), ("clinique", "sante"),
+    ("hôpital", "sante"), ("doctor", "sante"), ("health", "sante"), ("dental", "sante"),
+    ("magasin", "commerce"), ("boutique", "commerce"), ("commerce", "commerce"),
+    ("store", "commerce"), ("shop", "commerce"), ("vente", "commerce"),
+    ("immobilier", "immobilier"), ("agence immo", "immobilier"), ("real estate", "immobilier"),
+    ("transport", "transport"), ("déménag", "transport"), ("taxi", "transport"),
+    ("logistique", "transport"), ("livraison", "transport"), ("truck", "transport"),
+    ("moving", "transport"),
+]
+
+
+def _pick_questions(title: str, category: str) -> list[str]:
+    """
+    Sélectionne 6 questions adaptées à la catégorie de l'entreprise.
+    La sélection est déterministe par titre (même entreprise = mêmes questions).
+    """
+    cat_lower = (category or "").lower()
+    sector_key = None
+    for keyword, key in _SECTOR_KEYWORDS:
+        if keyword in cat_lower:
+            sector_key = key
+            break
+
+    pool = _QUESTIONS_BY_SECTOR.get(sector_key, []) if sector_key else []
+
+    # Complète avec des questions génériques si le pool sectoriel est insuffisant
+    generic_needed = max(0, 6 - len(pool))
+    combined = pool + _QUESTIONS_GENERIC[:generic_needed + 3]  # marge pour la rotation
+
+    # Rotation déterministe par hash du titre — même entreprise = mêmes questions
+    seed = abs(hash(title)) % max(1, len(combined) - 5)
+    selected = combined[seed:seed + 6]
+    if len(selected) < 6:
+        selected += combined[:6 - len(selected)]
+
+    return selected[:6]
+
+
+def get_open_questions(title: str, category: str = "") -> list[str]:
+    """Retourne 6 questions ouvertes adaptées à la catégorie, avec {nom} remplacé."""
+    questions = _pick_questions(title, category)
+    return [q.replace("{nom}", title) for q in questions]
+
+
+# Conservé pour compatibilité avec le code existant qui l'importe directement
+OPEN_QUESTIONS_TEMPLATE = _QUESTIONS_GENERIC[:6]
 
 GENERATION_PROMPT = """Tu es un analyste de réputation spécialisé dans les entreprises françaises, au style journalistique.
 

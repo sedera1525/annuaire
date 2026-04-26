@@ -21,10 +21,10 @@ from services.fiches import get_fiche, get_openai_key, save_fiche
 from core.utils import is_excluded_category
 from services.generator import (
     GENERATION_PROMPT,
-    OPEN_QUESTIONS_TEMPLATE,
     build_prompt,
     call_openai,
     get_active_prompt,
+    get_open_questions,
     validate_qa,
 )
 from services.fiches import get_setting, set_setting
@@ -126,7 +126,7 @@ async def stream_generate(title: str, company_data: dict):
         qa_answered    = parsed["qa_answered"]
         intro          = parsed.get("intro", "")
         bonus          = parsed.get("bonus", "")
-        open_questions = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
+        open_questions = [{"q": q, "r": ""} for q in get_open_questions(title, category or "")]
         date_fr        = format_date_fr(datetime.now().strftime("%Y-%m-%d"))
 
         yield sse("stage", message="Sauvegarde...", percent=95)
@@ -183,9 +183,6 @@ def get_fiche_endpoint(title: str):
             pass
         if fiche.get("generated_at"):
             fiche["date_fr"] = format_date_fr(fiche["generated_at"])
-        fiche["open_questions"] = [
-            q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE
-        ]
     company = fetch_company(title)
     if company:
         fiche["company_info"] = {
@@ -200,6 +197,10 @@ def get_fiche_endpoint(title: str):
         }
     else:
         fiche["company_info"] = None
+    if fiche["status"] == "done":
+        fiche["open_questions"] = get_open_questions(
+            title, (fiche["company_info"] or {}).get("category", "")
+        )
     return fiche
 
 
@@ -238,7 +239,7 @@ async def generate_fiche(request: Request, data: GenerateRequest):
         validate_qa(parsed)
         intro = parsed.get("intro", "")
         bonus = parsed.get("bonus", "")
-        open_qs = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
+        open_qs = [{"q": q, "r": ""} for q in get_open_questions(title, category or "")]
         save_fiche(title, "done",
                    qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
                    qa_open=json.dumps(open_qs, ensure_ascii=False),
@@ -253,7 +254,7 @@ async def generate_fiche(request: Request, data: GenerateRequest):
             "qa_answered":       parsed["qa_answered"],
             "intro_text":        intro,
             "bonus_text":        bonus,
-            "open_questions":    [q.replace("{nom}", title) for q in OPEN_QUESTIONS_TEMPLATE],
+            "open_questions":    get_open_questions(title, category or ""),
             "date_fr":           format_date_fr(datetime.now().strftime("%Y-%m-%d")),
             "model":             result["model"],
             "completion_tokens": result["completion_tokens"],
@@ -297,7 +298,7 @@ async def generate_batch(request: Request, data: BatchRequest):
                 parsed = json.loads(result["text"])
                 if not isinstance(parsed, dict) or "qa_answered" not in parsed:
                     raise ValueError("Format inattendu")
-                open_qs = [{"q": q.replace("{nom}", title), "r": ""} for q in OPEN_QUESTIONS_TEMPLATE]
+                open_qs = [{"q": q, "r": ""} for q in get_open_questions(title, company.category or "")]
                 save_fiche(title, "done",
                            qa_answered=json.dumps(parsed["qa_answered"], ensure_ascii=False),
                            qa_open=json.dumps(open_qs, ensure_ascii=False),

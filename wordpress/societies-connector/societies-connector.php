@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.53
+ * Version:      2.5.54
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.53');
+define('SC_VERSION', '2.5.54');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -927,7 +927,7 @@ add_shortcode('societies_pricing', function($atts) {
           </div>
           <p class="scp-desc"><?= $desc ?></p>
           <?php if ($has_star_offer): ?>
-          <div class="scp-star-offer">⭐ <span><strong>Option gratuite valable 30 jours :</strong> Badge Note 5⭐<br>Si vous souhaitez ce badge en permanence, souscrivez au Pack Master.</span></div>
+          <div class="scp-star-offer">🏆 <span><strong>Badge Confiance et Transparence offert</strong> avec votre abonnement.</span></div>
           <?php endif; ?>
           <a class="scp-btn" href="<?= $buy_url ?>">Commencer →</a>
           <hr class="scp-divider">
@@ -2422,10 +2422,10 @@ add_shortcode('societies_fiche', function($atts) {
     .sc2-qa-card:nth-child(2){border-color:rgba(139,92,246,.25);border-left-color:#8b5cf6;background:rgba(139,92,246,.07);box-shadow:0 2px 8px rgba(139,92,246,.06)}
     .sc2-qa-card:nth-child(3){border-color:rgba(6,182,212,.25);border-left-color:#06B6D4;background:rgba(6,182,212,.07);box-shadow:0 2px 8px rgba(6,182,212,.06)}
     .sc2-qa-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.09)}
-    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--sc-orange);margin-bottom:10px;line-height:1.5}
-    .sc2-qa-card:nth-child(2) .sc2-qa-q{color:#8b5cf6}
-    .sc2-qa-card:nth-child(3) .sc2-qa-q{color:#06B6D4}
-    .sc2-qa-a{color:#1f2937;font-size:13px;line-height:1.8}
+    .sc2-qa-q{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#C2410C;margin-bottom:10px;line-height:1.5}
+    .sc2-qa-card:nth-child(2) .sc2-qa-q{color:#7C3AED}
+    .sc2-qa-card:nth-child(3) .sc2-qa-q{color:#0891B2}
+    .sc2-qa-a{color:#1f2937;font-size:13px;line-height:1.8;text-align:justify;hyphens:auto}
 
     /* FAQ — affichage direct sans accordéon */
     .sc2-faq-wrap{border:1px solid #f0e8ff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.04)}
@@ -4933,8 +4933,7 @@ add_shortcode('societies_revendiquer', function() {
           <p class="scr-card-desc"><?= $desc ?></p>
           <?php if ($has_star): ?>
           <div class="scr-star-offer">
-            <strong>⭐ Option gratuite valable 30 jours :</strong>
-            Badge Note 5⭐ — si vous souhaitez ce badge en permanence, souscrivez au Pack Master.
+            🏆 <strong>Badge Confiance et Transparence offert</strong> avec votre abonnement.
           </div>
           <?php endif; ?>
           <a href="<?= $buy_url ?>" class="scr-btn <?= $btn_cls[$idx] ?>">Commencer →</a>
