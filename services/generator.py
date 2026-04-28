@@ -148,8 +148,10 @@ _SECTOR_KEYWORDS: list[tuple[str, str]] = [
 
 def _pick_questions(title: str, category: str) -> list[str]:
     """
-    Sélectionne 6 questions adaptées à la catégorie de l'entreprise.
-    La sélection est déterministe par titre (même entreprise = mêmes questions).
+    Sélectionne 6 questions uniques par fiche, sans appel API.
+    Algorithme : hash du titre → indices répartis dans le pool par pas premier.
+    Même entreprise = mêmes questions toujours (déterministe).
+    Deux entreprises différentes → presque toujours des questions différentes.
     """
     cat_lower = (category or "").lower()
     sector_key = None
@@ -158,19 +160,35 @@ def _pick_questions(title: str, category: str) -> list[str]:
             sector_key = key
             break
 
-    pool = _QUESTIONS_BY_SECTOR.get(sector_key, []) if sector_key else []
+    sector_pool = _QUESTIONS_BY_SECTOR.get(sector_key, []) if sector_key else []
+    # Pool complet = questions sectorielles + toutes les génériques (sans doublons)
+    combined = sector_pool + [q for q in _QUESTIONS_GENERIC if q not in sector_pool]
+    n = len(combined)
 
-    # Complète avec des questions génériques si le pool sectoriel est insuffisant
-    generic_needed = max(0, 6 - len(pool))
-    combined = pool + _QUESTIONS_GENERIC[:generic_needed + 3]  # marge pour la rotation
+    # Hash stable (indépendant de PYTHONHASHSEED) via MD5
+    import hashlib
+    digest = int(hashlib.md5(title.encode("utf-8")).hexdigest(), 16)
+    start = digest % n          # point de départ dans le pool
+    step  = (digest % 5) + 2    # pas entre 2 et 6
+    picked, seen = [], set()
+    for i in range(n * 3):
+        idx = (start + i * step) % n
+        if idx not in seen:
+            seen.add(idx)
+            picked.append(combined[idx])
+        if len(picked) == 6:
+            break
+    # Fallback séquentiel si le pas crée un cycle court (gcd(step,n) > 1)
+    if len(picked) < 6:
+        for i in range(n):
+            idx = (start + i) % n
+            if idx not in seen:
+                seen.add(idx)
+                picked.append(combined[idx])
+            if len(picked) == 6:
+                break
 
-    # Rotation déterministe par hash du titre — même entreprise = mêmes questions
-    seed = abs(hash(title)) % max(1, len(combined) - 5)
-    selected = combined[seed:seed + 6]
-    if len(selected) < 6:
-        selected += combined[:6 - len(selected)]
-
-    return selected[:6]
+    return picked
 
 
 def get_open_questions(title: str, category: str = "") -> list[str]:
