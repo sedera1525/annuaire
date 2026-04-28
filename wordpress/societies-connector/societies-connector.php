@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.55
+ * Version:      2.5.56
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.55');
+define('SC_VERSION', '2.5.56');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -650,6 +650,11 @@ add_shortcode('societies_owner_dashboard', function() {
         }
     }
 
+    // ── Activer / désactiver badge Profil Vérifié Premium ────────────────────
+    if (isset($_POST['sc_toggle_verifie']) && check_admin_referer('sc_toggle_verifie') && $company_title) {
+        update_user_meta($user_id, 'sc_verifie_premium', !empty($_POST['sc_verifie_premium']) ? '1' : '0');
+    }
+
     // ── Soumettre réponses ouvertes en modération (abonnement requis) ─────────
     if (isset($_POST['sc_save_answers']) && check_admin_referer('sc_save_answers') && $company_title && $has_sub) {
         $raw_answers    = $_POST['sc_open_answers'] ?? [];
@@ -797,6 +802,33 @@ add_shortcode('societies_owner_dashboard', function() {
             </button>
           </form>
           <?php endif; ?>
+          <?php endif; ?>
+
+          <?php
+          $dashboard_owner_pack   = sc_get_owner_pack($company_title);
+          $dashboard_is_master    = ($dashboard_owner_pack === 'pack-master');
+          $dashboard_verifie_on   = get_user_meta($user_id, 'sc_verifie_premium', true) === '1';
+          if ($dashboard_is_master): ?>
+          <hr style="margin:24px 0">
+          <h3>🛡️ Badge Profil Vérifié Premium
+            <span style="font-size:11px;color:#8B5CF6;font-weight:normal;margin-left:6px">Pack Master</span>
+          </h3>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 14px">
+            Ce badge remplace votre note globale par la mention <strong>Profil Vérifié Premium</strong> sur votre fiche.
+          </p>
+          <form method="post">
+            <?php wp_nonce_field('sc_toggle_verifie'); ?>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:600;color:#1f2937">
+              <input type="checkbox" name="sc_verifie_premium" value="1"
+                <?= $dashboard_verifie_on ? 'checked' : '' ?>
+                style="width:18px;height:18px;accent-color:#8B5CF6;cursor:pointer">
+              Activer le badge 🛡️ Profil Vérifié Premium (remplace ma note globale)
+            </label>
+            <button type="submit" name="sc_toggle_verifie" value="1"
+              style="margin-top:14px;background:#8B5CF6;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+              Enregistrer
+            </button>
+          </form>
           <?php endif; ?>
 
           <hr style="margin:24px 0">
@@ -1753,10 +1785,16 @@ add_shortcode('societies_fiche', function($atts) {
     $intro       = $fiche['intro_text'] ?? '';
     $gen_date    = $fiche['generated_at'] ?? '';
     $qa_answered = $fiche['qa_answered'] ?? [];
-    $qa_open     = $fiche['qa_open'] ?? [];
-    // Fallback : utilise les questions templates si qa_open n'est pas encore stocké
-    if (empty($qa_open) && !empty($fiche['open_questions'])) {
-        $qa_open = array_map(fn($q) => ['q' => $q, 'r' => ''], $fiche['open_questions']);
+    $qa_open_stored = $fiche['qa_open'] ?? [];
+    // Utilise toujours les questions fraîches (variées par catégorie) — préserve les réponses existantes par index
+    $open_questions_fresh = $fiche['open_questions'] ?? [];
+    if (!empty($open_questions_fresh)) {
+        $qa_open = [];
+        foreach ($open_questions_fresh as $i => $q) {
+            $qa_open[] = ['q' => $q, 'r' => $qa_open_stored[$i]['r'] ?? ''];
+        }
+    } else {
+        $qa_open = $qa_open_stored;
     }
     $bonus_text  = $fiche['bonus_text'] ?? '';
     $status      = $fiche['status'] ?? 'none';
@@ -1789,10 +1827,16 @@ add_shortcode('societies_fiche', function($atts) {
     $ca_history  = is_array($ch_raw) ? $ch_raw : (json_decode((string)$ch_raw, true) ?: []);
 
     // Pack souscrit par le propriétaire de cette fiche
-    $owner_pack         = sc_get_owner_pack($company['title']);
-    $owner_sub          = !empty($owner_pack); // compatibilité ascendante
-    $has_confiance      = in_array($owner_pack, ['pack-visibilite', 'pack-premium'], true);
-    $has_verifie_premium= ($owner_pack === 'pack-master');
+    $owner_pack    = sc_get_owner_pack($company['title']);
+    $owner_sub     = !empty($owner_pack);
+    $has_confiance = in_array($owner_pack, ['pack-visibilite', 'pack-premium'], true);
+    // Badge Profil Vérifié Premium : Pack Master + case cochée par le propriétaire
+    $has_verifie_premium = false;
+    if ($owner_pack === 'pack-master') {
+        $_vp_users = get_users(['meta_key' => 'sc_company_title', 'meta_value' => $company['title'], 'number' => 1]);
+        $has_verifie_premium = !empty($_vp_users)
+            && get_user_meta($_vp_users[0]->ID, 'sc_verifie_premium', true) === '1';
+    }
 
     // Badge initiales + score affiché même sans donnée
     $sc2_init = '';
