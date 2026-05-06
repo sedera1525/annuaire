@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.57
+ * Version:      2.5.58
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.57');
+define('SC_VERSION', '2.5.58');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -5049,6 +5049,124 @@ add_shortcode('societies_revendiquer', function() {
       <p style="text-align:center;color:#6b7280">Offres temporairement indisponibles.</p>
       <?php endif; ?>
 
+    </div>
+    <?php return ob_get_clean();
+});
+
+// =============================================================================
+// SHORTCODE CONTACT
+// =============================================================================
+add_shortcode('societies_contact', function() {
+    $to      = 'ressources1@gmail.com';
+    $sent    = false;
+    $error   = '';
+
+    if (
+        isset($_POST['sc_contact_nonce']) &&
+        wp_verify_nonce($_POST['sc_contact_nonce'], 'sc_contact_form')
+    ) {
+        $name    = sanitize_text_field($_POST['sc_name']    ?? '');
+        $email   = sanitize_email($_POST['sc_email']        ?? '');
+        $subject = sanitize_text_field($_POST['sc_subject'] ?? '');
+        $message = sanitize_textarea_field($_POST['sc_message'] ?? '');
+
+        if (!$name || !$email || !$subject || !$message) {
+            $error = 'Veuillez remplir tous les champs.';
+        } elseif (!is_email($email)) {
+            $error = 'Adresse email invalide.';
+        } else {
+            $headers = [
+                'Content-Type: text/plain; charset=UTF-8',
+                'Reply-To: ' . $name . ' <' . $email . '>',
+            ];
+            $body  = "Nom : {$name}\nEmail : {$email}\n\n{$message}";
+            $sent  = wp_mail($to, '[Contact] ' . $subject, $body, $headers);
+            if (!$sent) $error = 'Erreur lors de l\'envoi. Veuillez réessayer.';
+        }
+    }
+
+    ob_start(); ?>
+    <div class="sc-contact-wrap">
+      <style>
+        .sc-contact-wrap{max-width:860px;margin:0 auto;padding:40px 20px;font-family:inherit}
+        .sc-contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
+        @media(max-width:640px){.sc-contact-grid{grid-template-columns:1fr;gap:32px}}
+        .sc-contact-info h2{font-size:22px;font-weight:700;color:#111827;margin:0 0 6px}
+        .sc-contact-info .sc-contact-company{font-size:15px;font-weight:600;color:#F97316;margin-bottom:20px}
+        .sc-contact-detail{display:flex;align-items:center;gap:12px;margin-bottom:14px;font-size:15px;color:#374151}
+        .sc-contact-detail svg{flex-shrink:0;color:#F97316}
+        .sc-contact-detail a{color:#374151;text-decoration:none}
+        .sc-contact-detail a:hover{color:#F97316}
+        .sc-contact-form-box h2{font-size:20px;font-weight:700;color:#111827;margin:0 0 20px}
+        .sc-contact-field{margin-bottom:16px}
+        .sc-contact-field label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+        .sc-contact-field input,.sc-contact-field textarea{width:100%;padding:10px 14px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;color:#111827;background:#fff;transition:border .15s;box-sizing:border-box}
+        .sc-contact-field input:focus,.sc-contact-field textarea:focus{outline:none;border-color:#F97316}
+        .sc-contact-field textarea{resize:vertical;min-height:120px}
+        .sc-contact-btn{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#F97316,#EA580C);color:#fff;font-weight:700;font-size:15px;padding:12px 28px;border:none;border-radius:8px;cursor:pointer;transition:opacity .15s}
+        .sc-contact-btn:hover{opacity:.9}
+        .sc-contact-success{background:#f0fdf4;border:1.5px solid #86efac;color:#166534;padding:14px 18px;border-radius:8px;font-size:14px;margin-bottom:20px}
+        .sc-contact-error{background:#fef2f2;border:1.5px solid #fca5a5;color:#991b1b;padding:14px 18px;border-radius:8px;font-size:14px;margin-bottom:20px}
+      </style>
+
+      <div class="sc-contact-grid">
+
+        <!-- Infos contact -->
+        <div class="sc-contact-info">
+          <h2>Nous contacter</h2>
+          <div class="sc-contact-company">McCarthy Holdings</div>
+
+          <div class="sc-contact-detail">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Contact francophone — Teddy Standford
+          </div>
+
+          <div class="sc-contact-detail">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/></svg>
+            <a href="tel:+33667992804">+33 6 67 99 28 04</a>
+          </div>
+
+          <div class="sc-contact-detail">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            <a href="mailto:ressources1@gmail.com">ressources1@gmail.com</a>
+          </div>
+        </div>
+
+        <!-- Formulaire -->
+        <div class="sc-contact-form-box">
+          <h2>Envoyer un message</h2>
+
+          <?php if ($sent): ?>
+            <div class="sc-contact-success">✅ Votre message a bien été envoyé. Nous vous répondrons dans les plus brefs délais.</div>
+          <?php elseif ($error): ?>
+            <div class="sc-contact-error">⚠️ <?= esc_html($error) ?></div>
+          <?php endif; ?>
+
+          <?php if (!$sent): ?>
+          <form method="post">
+            <?php wp_nonce_field('sc_contact_form', 'sc_contact_nonce'); ?>
+            <div class="sc-contact-field">
+              <label for="sc_name">Nom complet</label>
+              <input type="text" id="sc_name" name="sc_name" placeholder="Votre nom" value="<?= esc_attr($_POST['sc_name'] ?? '') ?>" required>
+            </div>
+            <div class="sc-contact-field">
+              <label for="sc_email">Email</label>
+              <input type="email" id="sc_email" name="sc_email" placeholder="votre@email.com" value="<?= esc_attr($_POST['sc_email'] ?? '') ?>" required>
+            </div>
+            <div class="sc-contact-field">
+              <label for="sc_subject">Sujet</label>
+              <input type="text" id="sc_subject" name="sc_subject" placeholder="Objet de votre message" value="<?= esc_attr($_POST['sc_subject'] ?? '') ?>" required>
+            </div>
+            <div class="sc-contact-field">
+              <label for="sc_message">Message</label>
+              <textarea id="sc_message" name="sc_message" placeholder="Votre message..." required><?= esc_textarea($_POST['sc_message'] ?? '') ?></textarea>
+            </div>
+            <button type="submit" class="sc-contact-btn">Envoyer le message →</button>
+          </form>
+          <?php endif; ?>
+        </div>
+
+      </div>
     </div>
     <?php return ob_get_clean();
 });
