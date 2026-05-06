@@ -809,6 +809,11 @@
         <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Fonctionnalités (une par ligne)</label>
         <textarea id="packFeatures" rows="6" placeholder="Réponses aux 6 questions clés&#10;Fiche entreprise complète&#10;..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:13px;resize:vertical;font-family:inherit"></textarea>
       </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">🔗 Lien Stripe Checkout</label>
+        <input id="packCheckoutUrl" type="url" placeholder="https://buy.stripe.com/..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:13px;font-family:monospace">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Colle ici le lien de paiement Stripe — utilisé par le bouton "Commencer"</div>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:20px">
       <button onclick="savePack()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;flex:1">💾 Enregistrer</button>
@@ -2446,20 +2451,22 @@ function openPackModal(id) {
     const p = _packs.find(x => x.id === id);
     if (!p) return;
     document.getElementById('packModalTitle').textContent = 'Modifier le pack';
-    document.getElementById('packName').value     = p.name;
-    document.getElementById('packSlug').value     = p.slug;
-    document.getElementById('packPrice').value    = p.price_ht;
-    document.getElementById('packColor').value    = p.color || '#10b981';
-    document.getElementById('packDesc').value     = p.description || '';
-    document.getElementById('packFeatures').value = (p.features||[]).join('\n');
+    document.getElementById('packName').value        = p.name;
+    document.getElementById('packSlug').value        = p.slug;
+    document.getElementById('packPrice').value       = p.price_ht;
+    document.getElementById('packColor').value       = p.color || '#10b981';
+    document.getElementById('packDesc').value        = p.description || '';
+    document.getElementById('packFeatures').value    = (p.features||[]).join('\n');
+    document.getElementById('packCheckoutUrl').value = p.checkout_url || '';
   } else {
     document.getElementById('packModalTitle').textContent = 'Nouveau pack';
-    document.getElementById('packName').value     = '';
-    document.getElementById('packSlug').value     = '';
-    document.getElementById('packPrice').value    = '';
-    document.getElementById('packColor').value    = '#10b981';
-    document.getElementById('packDesc').value     = '';
-    document.getElementById('packFeatures').value = '';
+    document.getElementById('packName').value        = '';
+    document.getElementById('packSlug').value        = '';
+    document.getElementById('packPrice').value       = '';
+    document.getElementById('packColor').value       = '#10b981';
+    document.getElementById('packDesc').value        = '';
+    document.getElementById('packFeatures').value    = '';
+    document.getElementById('packCheckoutUrl').value = '';
   }
 }
 
@@ -2471,12 +2478,13 @@ async function savePack() {
   const id       = document.getElementById('packId').value;
   const features = document.getElementById('packFeatures').value.split('\n').map(s=>s.trim()).filter(Boolean);
   const payload  = {
-    name:        document.getElementById('packName').value.trim(),
-    slug:        document.getElementById('packSlug').value.trim(),
-    price_ht:    parseFloat(document.getElementById('packPrice').value),
-    color:       document.getElementById('packColor').value,
-    description: document.getElementById('packDesc').value.trim(),
+    name:         document.getElementById('packName').value.trim(),
+    slug:         document.getElementById('packSlug').value.trim(),
+    price_ht:     parseFloat(document.getElementById('packPrice').value),
+    color:        document.getElementById('packColor').value,
+    description:  document.getElementById('packDesc').value.trim(),
     features,
+    checkout_url: document.getElementById('packCheckoutUrl').value.trim(),
   };
   const url    = id ? `/api/wc/packs/${id}` : '/api/wc/packs';
   const method = id ? 'PUT' : 'POST';

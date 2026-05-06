@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Societies Connector
  * Description:  Connexion à l'API Societies — fiches entreprises, abonnements et tableau de bord propriétaire.
- * Version:      2.5.58
+ * Version:      2.5.59
  * Author:       Societies
  * Text Domain:  societies
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('SC_VERSION', '2.5.58');
+define('SC_VERSION', '2.5.59');
 
 // Force le rendu du shortcode plugin sur les pages dont le thème posséderait
 // un template page-{slug}.php qui prendrait le dessus sur le_content().
@@ -980,7 +980,7 @@ add_shortcode('societies_pricing', function($atts) {
           $desc     = esc_html($pack['description']);
           $feats    = $pack['features'] ?? [];
           $slug     = $pack['slug'] ?? '';
-          $buy_url  = esc_url($pack['buy_url'] ?? '#');
+          $buy_url  = esc_url($pack['checkout_url'] ?? $pack['buy_url'] ?? '#');
           $featured = ($slug === 'pack-premium');
           $has_star_offer = in_array($slug, ['pack-visibilite', 'pack-premium']);
       ?>
@@ -5022,7 +5022,7 @@ add_shortcode('societies_revendiquer', function() {
             $desc     = esc_html($pack['description'] ?? '');
             $feats    = $pack['features'] ?? [];
             $slug     = $pack['slug'] ?? '';
-            $buy_url  = esc_url($pack['buy_url'] ?? '#');
+            $buy_url  = esc_url($pack['checkout_url'] ?? $pack['buy_url'] ?? '#');
             $featured = ($slug === 'pack-premium');
             $has_star = in_array($slug, ['pack-visibilite','pack-premium']);
         ?>

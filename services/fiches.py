@@ -106,6 +106,7 @@ _MIGRATIONS: list[tuple[int, str]] = [
         UPDATE subscription_packs SET description='Inspirez confiance et démarquez-vous clairement',features='["Tout le Pack Visibilité","Entreprise conseillée par TOPsocietes.com","Dépannage urgent","Devis gratuit","Artisan ponctuel et soigneux","Certifié RGE","Types de projets","Marques (jusqu''à 10)","Compteur de visites","Note 5 étoiles offerte 30 jours"]' WHERE slug='pack-premium';
         INSERT OR IGNORE INTO subscription_packs (name,slug,price_ht,color,description,features) VALUES ('Pack Master','pack-master',89.0,'#7c3aed','Le maximum pour votre e-réputation','["Tout le Pack Premium","Note 5 étoiles en permanence","Note basée sur nos critères internes d''e-réputation"]');
     """),
+    (11, "ALTER TABLE subscription_packs ADD COLUMN checkout_url TEXT;"),
     (10, """
         CREATE TABLE IF NOT EXISTS collected_emails (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,

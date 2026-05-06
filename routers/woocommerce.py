@@ -57,12 +57,13 @@ class WcSettingsRequest(BaseModel):
 
 
 class PackRequest(BaseModel):
-    name:        str
-    slug:        str
-    price_ht:    float
-    color:       Optional[str] = "#10b981"
-    description: Optional[str] = ""
-    features:    Optional[list] = []
+    name:         str
+    slug:         str
+    price_ht:     float
+    color:        Optional[str] = "#10b981"
+    description:  Optional[str] = ""
+    features:     Optional[list] = []
+    checkout_url: Optional[str] = ""
 
 
 # =============================================================================
@@ -142,10 +143,10 @@ def create_pack(data: PackRequest):
     conn = sqlite3.connect(FICHES_DB)
     try:
         conn.execute(
-            "INSERT INTO subscription_packs (name, slug, price_ht, color, description, features) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO subscription_packs (name, slug, price_ht, color, description, features, checkout_url) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             [data.name, data.slug, data.price_ht, data.color, data.description,
-             json.dumps(data.features, ensure_ascii=False)],
+             json.dumps(data.features, ensure_ascii=False), data.checkout_url or ""],
         )
         conn.commit()
         return {"ok": True}
@@ -161,9 +162,9 @@ def update_pack(pack_id: int, data: PackRequest):
     try:
         affected = conn.execute(
             "UPDATE subscription_packs SET name=?, slug=?, price_ht=?, color=?, description=?, "
-            "features=?, updated_at=datetime('now') WHERE id=?",
+            "features=?, checkout_url=?, updated_at=datetime('now') WHERE id=?",
             [data.name, data.slug, data.price_ht, data.color, data.description,
-             json.dumps(data.features, ensure_ascii=False), pack_id],
+             json.dumps(data.features, ensure_ascii=False), data.checkout_url or "", pack_id],
         ).rowcount
         conn.commit()
     finally:
