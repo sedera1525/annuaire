@@ -6,11 +6,6 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// Stub de compatibilité — évite un fatal si un plugin Apus enregistre ce hook sans que la fonction soit définie
-if ( ! function_exists( 'findus_child_enqueue_styles' ) ) {
-    function findus_child_enqueue_styles() {}
-}
-
 define( 'TS_VERSION', '1.2.0' );
 define( 'TS_DIR', get_template_directory() );
 define( 'TS_URI', get_template_directory_uri() );

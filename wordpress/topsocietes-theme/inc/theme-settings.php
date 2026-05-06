@@ -160,7 +160,7 @@ function ts_sanitize_options( mixed $input ): array {
     }
     foreach ( $url_fields as $f ) {
         $raw = $input[ $f ] ?? '';
-        $clean[ $f ] = strpos( $raw, '/' ) === 0
+        $clean[ $f ] = str_starts_with( $raw, '/' )
             ? '/' . ltrim( sanitize_text_field( $raw ), '/' )
             : esc_url_raw( $raw );
     }
