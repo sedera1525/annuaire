@@ -32,6 +32,11 @@ export type SearchResponse = z.infer<typeof searchResponseSchema>;
 
 // Fiche complète renvoyée par /api/company/{title} — superset tolérant
 export const companySchema = companySearchResultSchema.extend({
+  description: z.string().nullish().transform((v) => v ?? ""),
+  main_image: z.string().nullish().transform((v) => v ?? ""),
+  country_code: z.string().nullish().transform((v) => v ?? ""),
+  phones_extra: z.array(z.string()).nullish().transform((v) => v ?? []),
+  total_photos: z.number().nullish().transform((v) => v ?? 0),
   contacts: z.unknown().nullish(),
   latitude: z.number().nullish(),
   longitude: z.number().nullish(),
