@@ -44,12 +44,13 @@ export default async function Home() {
         </p>
 
         <div
-          className="fade-up mt-9 flex justify-center"
+          className="fade-up relative z-30 mt-9 flex justify-center"
           style={{ animationDelay: "240ms" }}
         >
           <SearchAutocomplete />
         </div>
 
+        <div className="relative z-0">
         {catPicks.length > 0 && (
           <section className="fade-up mt-14" style={{ animationDelay: "340ms" }}>
             <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
@@ -89,6 +90,7 @@ export default async function Home() {
             </div>
           </section>
         )}
+        </div>
       </div>
     </main>
   );
