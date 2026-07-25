@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { searchCompanies, getCompanyBySlug, getCompany } from "@/lib/api";
+import { searchCompanies, getCompanyBySlug, getCompany, getCategories, getCities } from "@/lib/api";
 
 const okJson = (body: unknown) =>
   ({ ok: true, status: 200, json: async () => body }) as Response;
@@ -36,5 +36,17 @@ describe("getCompany", () => {
   it("renvoie null sur 404", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404 }) as Response));
     expect(await getCompany("Inconnu")).toBeNull();
+  });
+});
+
+describe("getCategories / getCities", () => {
+  it("parse les catégories", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => okJson([{ category: "Restaurant", count: 84475 }])));
+    const cats = await getCategories();
+    expect(cats[0]).toEqual({ category: "Restaurant", count: 84475 });
+  });
+  it("renvoie [] si l'API échoue", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500 }) as Response));
+    expect(await getCities()).toEqual([]);
   });
 });

@@ -1,8 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf7f1;   /* papier crème chaud */
+  --foreground: #1b1a17;   /* encre profonde */
+  --muted: #6f6a60;
+  --accent: #0f5d3f;       /* vert forêt */
+  --accent-strong: #0c4a32;
+  --card: #fffdf9;
+  --border: #e8e2d6;
+  --glow: rgba(15, 93, 63, 0.12);
 }
 
 @theme inline {
@@ -10,17 +16,89 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0e0f0d;
+    --foreground: #ece8df;
+    --muted: #9a958a;
+    --accent: #54c793;
+    --accent-strong: #74d7ab;
+    --card: #171814;
+    --border: #2a2b25;
+    --glow: rgba(84, 199, 147, 0.16);
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Ambiance du hero : halo radial + grille pointillée en fondu ── */
+.hero-bg {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.hero-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(55rem 34rem at 50% -8%, var(--glow), transparent 62%),
+    radial-gradient(34rem 26rem at 82% 12%, var(--glow), transparent 60%);
+}
+.hero-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: var(--border);
+  background-image: radial-gradient(currentColor 1px, transparent 1.4px);
+  background-size: 24px 24px;
+  opacity: 0.6;
+  -webkit-mask-image: radial-gradient(72% 60% at 50% 26%, #000, transparent 78%);
+  mask-image: radial-gradient(72% 60% at 50% 26%, #000, transparent 78%);
+}
+
+/* ── Puces catégories / villes ── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  padding: 0.5rem 0.9rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  line-height: 1;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.chip:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 12px 26px -16px var(--glow);
+}
+.chip-count {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Révélation au chargement ── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fade-up { animation: none; }
 }

@@ -39,6 +39,21 @@ export const companySchema = companySearchResultSchema.extend({
 }).loose();
 export type Company = z.infer<typeof companySchema>;
 
+// /api/categories et /api/cities (stats avec volumes)
+export const categoryStatSchema = z.object({
+  category: z.string(),
+  count: z.number().nullish().transform((v) => v ?? 0),
+});
+export type CategoryStat = z.infer<typeof categoryStatSchema>;
+export const categoriesSchema = z.array(categoryStatSchema);
+
+export const cityStatSchema = z.object({
+  city: z.string(),
+  count: z.number().nullish().transform((v) => v ?? 0),
+});
+export type CityStat = z.infer<typeof cityStatSchema>;
+export const citiesSchema = z.array(cityStatSchema);
+
 // /api/company/by-slug/{slug}
 export const companySlugSchema = z.object({
   title: z.string(),

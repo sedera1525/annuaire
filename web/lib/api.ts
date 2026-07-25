@@ -1,6 +1,8 @@
 import {
   searchResponseSchema, companySchema, companySlugSchema,
+  categoriesSchema, citiesSchema,
   type SearchResponse, type Company, type CompanySlug,
+  type CategoryStat, type CityStat,
 } from "@/lib/types";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8090";
@@ -36,6 +38,25 @@ export async function getCompanyBySlug(slug: string, cookie?: string): Promise<C
   const body = await res.json();
   if (body === null) return null;
   return companySlugSchema.parse(body);
+}
+
+export async function getCategories(): Promise<CategoryStat[]> {
+  const res = await fetch(`${API_URL}/api/categories`, { next: { revalidate: 86400 } });
+  if (!res.ok) return [];
+  return categoriesSchema.parse(await res.json());
+}
+
+export async function getCities(): Promise<CityStat[]> {
+  const res = await fetch(`${API_URL}/api/cities`, { next: { revalidate: 86400 } });
+  if (!res.ok) return [];
+  return citiesSchema.parse(await res.json());
+}
+
+export async function getCompanyCount(): Promise<number | null> {
+  const res = await fetch(`${API_URL}/api/status`, { next: { revalidate: 3600 } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return typeof data?.rows === "number" ? data.rows : null;
 }
 
 export async function getCompany(title: string, cookie?: string): Promise<Company | null> {
