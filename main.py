@@ -41,6 +41,7 @@ from routers import emails as emails_router
 from routers import fiches as fiches_router
 from routers import import_csv as import_csv_router
 from routers import modifications as modifications_router
+from routers import prospection as prospection_router
 from routers import woocommerce as woocommerce_router
 from routers import search
 
@@ -183,6 +184,7 @@ app.include_router(license_router.router,    prefix="/api")
 app.include_router(import_csv_router.router, prefix="/api")
 app.include_router(seo.router,               prefix="/api")
 app.include_router(emails_router.router,     prefix="/api")
+app.include_router(prospection_router.router)  # /prospection + /api/prospection*
 
 # =============================================================================
 # STATIC + SPA FALLBACK
