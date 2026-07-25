@@ -1,7 +1,7 @@
 import { searchCompanies } from "@/lib/api";
 import { CompanyCard } from "@/components/CompanyCard";
 import { Pagination } from "@/components/Pagination";
-import { SearchBar } from "@/components/SearchBar";
+import { SearchAutocomplete } from "@/components/SearchAutocomplete";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -22,21 +22,23 @@ export default async function RecherchePage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const q = sp.q ?? "";
   const city = sp.ville ?? "";
+  const category = sp.categorie ?? "";
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
 
-  const data = await searchCompanies({ q, city, page, per_page: 20, sort_by: "rating" });
+  const data = await searchCompanies({ q, city, category, page, per_page: 20, sort_by: "rating" });
 
   const makeHref = (p: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (city) params.set("ville", city);
+    if (category) params.set("categorie", category);
     params.set("page", String(p));
     return `/recherche?${params.toString()}`;
   };
 
   return (
     <main className="mx-auto max-w-4xl p-6">
-      <SearchBar defaultQuery={q} />
+      <SearchAutocomplete defaultQuery={q} />
       <p className="mt-4 text-sm text-gray-600">
         {data.total.toLocaleString("fr-FR")} résultats ({data.elapsed}s)
       </p>

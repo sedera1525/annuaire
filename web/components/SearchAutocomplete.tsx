@@ -45,8 +45,8 @@ export function SearchAutocomplete({
   // Suggestions d'entreprises (debounce)
   useEffect(() => {
     const q = query.trim();
-    if (!q) { setCompanies([]); return; }
     const id = setTimeout(async () => {
+      if (!q) { setCompanies([]); return; }
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&per_page=${LIMIT}`);
         if (!res.ok) return;
