@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getCompanyBySlug, getCompany } from "@/lib/api";
 import { gateCompany } from "@/lib/freemium";
 import { isAuthenticated } from "@/lib/auth";
-import { Paywall } from "@/components/Paywall";
+import { FullDetailsCTA } from "@/components/FullDetailsCTA";
 import { CompanyJsonLd } from "@/components/CompanyJsonLd";
 import type { Metadata } from "next";
 
@@ -51,24 +51,35 @@ export default async function FichePage({ params }: { params: Promise<{ slug: st
       )}
       {company.snippet && <p className="mt-4">{company.snippet}</p>}
 
-      <section className="mt-6 grid gap-3">
-        <div>
-          <span className="text-sm font-medium">Téléphone : </span>
-          {company.phone ? <span>{company.phone}</span> : <Paywall label="Téléphone" />}
-        </div>
-        <div>
-          <span className="text-sm font-medium">Site web : </span>
-          {company.url ? (
-            <a className="text-blue-600 underline" href={company.url}>{company.url}</a>
-          ) : <Paywall label="Site web" />}
-        </div>
-        <div>
-          <span className="text-sm font-medium">Emails : </span>
-          {company.emails.length > 0 ? (
-            <span>{company.emails.join(", ")}</span>
-          ) : <Paywall label="Emails" />}
-        </div>
-      </section>
+      {authed ? (
+        <section className="mt-6 grid gap-3">
+          <div>
+            <span className="text-sm font-medium">Téléphone : </span>
+            <span>{raw.phone || "—"}</span>
+          </div>
+          <div>
+            <span className="text-sm font-medium">Site web : </span>
+            {raw.url ? (
+              <a className="text-blue-600 underline" href={raw.url}>{raw.url}</a>
+            ) : <span>—</span>}
+          </div>
+          <div>
+            <span className="text-sm font-medium">Emails : </span>
+            <span>{raw.emails.length > 0 ? raw.emails.join(", ") : "—"}</span>
+          </div>
+        </section>
+      ) : (
+        <section className="mt-6">
+          <ul className="grid gap-2 text-gray-400 select-none">
+            <li>Téléphone : ••• •• •• ••</li>
+            <li>Site web : ••••••••••••</li>
+            <li>Emails : ••••••@••••••</li>
+          </ul>
+          <div className="mt-4">
+            <FullDetailsCTA />
+          </div>
+        </section>
+      )}
     </main>
   );
 }

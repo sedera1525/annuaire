@@ -18,6 +18,6 @@ test("fiche connecté : téléphone/site débloqués (pas de paywall)", async ({
   await page.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/entreprise\//);
 
-  // Au moins un champ gated ne doit plus afficher le paywall
-  await expect(page.getByText(/réservé aux membres/)).toHaveCount(0);
+  // Connecté : pas de CTA « Voir les détails complets »
+  await expect(page.getByRole("link", { name: /voir les détails complets/i })).toHaveCount(0);
 });
