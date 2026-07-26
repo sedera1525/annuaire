@@ -352,9 +352,11 @@ def get_company_by_slug(slug: str):
 
     conn = get_conn()
     try:
+        # strip_accents : le slug enlève les accents (café→cafe), la comparaison SQL
+        # doit donc aussi les ignorer, sinon aucun nom accentué n'est jamais retrouvé.
         rows = conn.execute(
             "SELECT title, city, category, zip_code FROM companies "
-            "WHERE LOWER(title) LIKE LOWER(?) LIMIT 30",
+            "WHERE strip_accents(LOWER(title)) LIKE LOWER(?) LIMIT 30",
             [pattern]
         ).fetchall()
         for row in rows:

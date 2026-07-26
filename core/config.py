@@ -35,6 +35,9 @@ COOKIE_NAME   = "societies_session"
 CSRF_ENABLED  = os.getenv("CSRF_ENABLED", "true").lower() == "true"
 REDIS_URL     = os.getenv("REDIS_URL", "")      # Ex: redis://localhost:6379/0
 
+# URL publique du front Next.js (annuaire) — sert à générer les liens de fiche/démo.
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "http://localhost:3100").rstrip("/")
+
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv(

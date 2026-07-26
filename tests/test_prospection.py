@@ -20,7 +20,12 @@ os.environ["TESTING"] = "true"
 from fastapi.testclient import TestClient  # noqa: E402
 
 from main import app  # noqa: E402
-from routers.prospection import _build_conditions, _emails_from_contacts  # noqa: E402
+from routers.prospection import (  # noqa: E402
+    _build_conditions,
+    _demo_url,
+    _emails_from_contacts,
+    _to_slug,
+)
 
 
 def _auth_client() -> TestClient:
@@ -54,6 +59,22 @@ class TestProspectionLogic:
     def test_emails_robust_to_bad_input(self):
         assert _emails_from_contacts(None) == []
         assert _emails_from_contacts("pas du json") == []
+
+    def test_to_slug_matches_frontend(self):
+        # Doit reproduire lib/slug.ts (toSlug) du front Next.js pour que le lien résolve
+        assert _to_slug("Café de la Paix") == "cafe-de-la-paix"
+        assert _to_slug("JACK & JONES") == "jack-jones"
+        assert _to_slug("  Boulangerie  Dupont  ") == "boulangerie-dupont"
+        assert _to_slug("Été 2024 — Éléphant") == "ete-2024-elephant"
+
+    def test_demo_url_is_absolute_fiche_link(self):
+        url = _demo_url("Café de la Paix")
+        assert url.endswith("/entreprise/cafe-de-la-paix")
+        assert url.startswith("http")
+
+    def test_demo_url_empty_title(self):
+        assert _demo_url("") == ""
+        assert _demo_url(None) == ""
 
 
 class TestProspectionRoutes:

@@ -35,6 +35,7 @@
     }
     button.primary, .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
     button:hover, .btn:hover { border-color: var(--accent); }
+    .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
     .count { color: var(--muted); font-size: 14px; margin: 14px 0; }
     table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
     th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
@@ -42,6 +43,12 @@
     tr:last-child td { border-bottom: none; }
     td a { color: var(--accent); text-decoration: none; }
     td a:hover { text-decoration: underline; }
+    a.demo-btn {
+      display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+      padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      background: var(--accent); color: #fff; border: 1px solid var(--accent);
+    }
+    a.demo-btn:hover { text-decoration: none; opacity: .9; }
     .pager { display: flex; gap: 12px; align-items: center; margin-top: 18px; }
     .empty { text-align: center; color: var(--muted); padding: 48px 0; }
     .topbar { display: flex; justify-content: space-between; align-items: center; }
@@ -73,13 +80,14 @@
       <button class="primary" id="filter">Filtrer</button>
       <a class="btn" id="export" href="#">⬇ Exporter CSV</a>
     </div>
+    <p class="hint">Ces entreprises n'ont <strong>pas de site web</strong> et sont joignables par <strong>téléphone</strong>. La colonne <strong>Démo</strong> ouvre leur fiche publique (aperçu de site prêt à montrer) — à envoyer par SMS pour proposer la mise en ligne.</p>
 
     <p class="count" id="count">Chargement…</p>
 
     <table id="table">
       <thead>
         <tr>
-          <th>Nom</th><th>Catégorie</th><th>Téléphone</th><th>Email</th><th>Ville</th>
+          <th>Nom</th><th>Catégorie</th><th>Téléphone</th><th>Email</th><th>Ville</th><th>Démo</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -127,12 +135,16 @@
         const tr = document.createElement("tr");
         const tel = c.phone ? `<a href="tel:${c.phone}">${c.phone}</a>` : "—";
         const mail = c.emails && c.emails.length ? `<a href="mailto:${c.emails[0]}">${c.emails[0]}</a>` : "—";
+        const demo = c.demo_url
+          ? `<a class="demo-btn" href="${escapeHtml(c.demo_url)}" target="_blank" rel="noopener" title="Ouvrir le site de démo dans un nouvel onglet">🌐 Voir la démo ↗</a>`
+          : "—";
         tr.innerHTML =
           `<td>${escapeHtml(c.title || "")}</td>` +
           `<td>${escapeHtml(c.category || "")}</td>` +
           `<td>${tel}</td>` +
           `<td>${mail}</td>` +
-          `<td>${escapeHtml([c.zip_code, c.city].filter(Boolean).join(" "))}</td>`;
+          `<td>${escapeHtml([c.zip_code, c.city].filter(Boolean).join(" "))}</td>` +
+          `<td>${demo}</td>`;
         rows.appendChild(tr);
       }
       document.getElementById("table").style.display = data.results.length ? "" : "none";
