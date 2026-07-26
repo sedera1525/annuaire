@@ -15,10 +15,13 @@ amelioration3.md
 amelioration4.md
 amelioration5.md
 *.gz
+*.csv
+0 copie.csv
+.directory
 docs/
 docker-compose.prod.yml
- .claude/settings.json
- mailpit-smtp.php
+.claude/
+mailpit-smtp.php
 scripts/generate_license.py
 license.key
 design/
